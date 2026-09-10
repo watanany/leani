@@ -181,7 +181,7 @@ RET505 だけ外してある。
 
 ```
 uv sync
-uv run pytest                         # 161 件、2 分半
+uv run pytest                         # 162 件、2 分半
 uv run pytest tests/test_parsing.py   # 純関数だけなら 0.2 秒
 uv run pytest -k 履歴                 # 名前で絞る
 uv run ruff format . && uv run ruff check .

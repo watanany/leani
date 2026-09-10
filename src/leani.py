@@ -1125,6 +1125,17 @@ class Interrupted(Exception):
     """評価中に Ctrl-C が来た。プロトコルがずれているので作り直す。"""
 
 
+class NoEnvironment(Exception):
+    """
+    環境が無いのに環境の上で走らせようとした。呼ぶ側の誤り。
+
+    boot が通らなかったあとの状態を扱い忘れると、以前は repl が Init だけの
+    環境を勝手に作って答えていた (嘘の型、消える宣言)。黙って進むよりは
+    ここで止める。loop が「内部エラー」として 1 行分に留めるので、セッション
+    ごと落ちることはない。
+    """
+
+
 # 起動が駄目になる理由。どれも報告して済ませる (traceback にしない)。
 START_FAILED = (EngineError, EngineDied, Interrupted, OSError)
 
@@ -1299,10 +1310,21 @@ class Engine:
                 return done
 
     def send_cmd(self, src: str, fresh: bool = False) -> Response:
-        req: Json = {"cmd": src}
-        if not fresh and self.env is not None:
-            req["env"] = self.env
-        return self.send(req)
+        """
+        コマンドを 1 つ送る。`fresh` は「新しい環境を作る」という意思表示。
+
+        ここが唯一の関門。`env` キーを落として送ると repl はエラーにせず、
+        Init だけの環境を勝手に作って答えてしまう。だから「環境が無いときに
+        どうするか」は呼ぶ側が必ず決めることにして、決めていない呼び出しは
+        送る前に断る。boot が通らなかった状態を扱い忘れても、嘘の答えでは
+        なく `NoEnvironment` として出る。
+        """
+        if fresh:
+            return self.send({"cmd": src})
+        elif self.env is None:
+            raise NoEnvironment(f"環境が無いのに送ろうとした: {head_line(src)}")
+        else:
+            return self.send({"cmd": src, "env": self.env})
 
     def send_tactic(self, src: str, state: int) -> Response:
         return self.send({"tactic": src, "proofState": state})

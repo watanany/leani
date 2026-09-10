@@ -1189,6 +1189,21 @@ def describe_起点の環境を失ったとき():
         assert "sorry" in repl.feed(":prove")  # 「sorry が無い」と言うだけ
         assert repl.repl.proof is None
 
+    @story("F1")
+    def it_送る前に断る(repl, mocker):
+        _no_env(repl, mocker)
+        eng = repl.repl.eng
+
+        # 環境が無いときにどうするかを決めていない呼び出しは、ここで止まる。
+        # env キーを落として送ると repl は Init だけの環境を作って答えるので、
+        # 通ったように見える宣言が次のリクエストで消える。
+        with pytest.raises(leani.NoEnvironment):
+            eng.send_cmd("def sneaked := 1")
+        assert eng.log == []
+
+        # 新しい環境を作るつもりの呼び出し (boot と :l) はそのまま通す。
+        assert "env" in eng.send_cmd("#check Nat", fresh=True)
+
 
 def describe_解決できない_import_のファイル():
 
