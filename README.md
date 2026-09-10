@@ -1,9 +1,9 @@
 # leani
 
-Lean 4 の対話 REPL。GHCi や ipython のつもりで使える。
+Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
 
-エンジンは leanprover-community/repl。あれは JSON in / JSON out の機械向け
-プロトコルしか持たないので、ここが人間向けの層を足している。
+エンジンは leanprover-community/repl。repl は JSON in / JSON out の機械向け
+プロトコルしか持たないので、leani がその上に人間向けの層を足す。
 
 ```
 λ> 1 + 1
@@ -18,31 +18,37 @@ Lean 4 の対話 REPL。GHCi や ipython のつもりで使える。
 λ> Std.Time.PlainDateT⇥        → Std.Time.PlainDateTime に補完される
 ```
 
-## 入れる
+## インストール
 
-エンジンを clone してビルドしておく。REPL 側に実行時の依存は無いので、
-`bin/leani` に PATH を通せばそれで動く。
+leani は Python の標準ライブラリだけで動くので、`bin/leani` に PATH を通せば
+それで入る。
 
 ```
-git clone https://github.com/leanprover-community/repl ~/sanctum/projects/lean-repl
-cd ~/sanctum/projects/lean-repl && lake build repl
-
 export PATH="$HOME/sanctum/projects/leani/bin:$PATH"
 ```
 
-エンジンの場所は設定の `engine` か `LEANI_ENGINE` で変えられる。エンジンと
-起動する Lake プロジェクトの toolchain がずれていると olean が読めないので、
-違っていたら起動時に警告する。
+必要なものは `elan` (Lean 本体と `lake`) と `git` の 2 つ。どちらかが PATH に
+無ければ起動時に言う。
 
-## 環境を選ぶ
+エンジンは leani が用意する。使う Lean の版ごとに
+`~/.local/state/leani/engine/<版>` へ clone してビルドし、初回の起動だけ
+10 秒ほど余分にかかる。先に済ませておくなら `leani --setup`、自動で用意させたく
+なければ `LEANI_NO_SETUP=1` (手順を出して終わる)。
+
+自分で clone したものを使うなら設定の `engine` か `LEANI_ENGINE` で指す。この
+ときはビルドも版の管理も leani はしない。Lake プロジェクトの外なら、そのエンジンを
+ビルドした版 (`lean-toolchain`) に合わせて起動する。プロジェクトと版が食い違う
+ときは olean が読めず起動直後に落ちるだけなので、建て直す手順を出して断る。
+
+## 環境の設定
 
 「どの Lake プロジェクトの上で何を import して起動するか」を
-`~/.config/leani/config.toml` に置く。ghci の `~/.ghci`、ipython の profile と
+`~/.config/leani/config.toml` に置く。GHCi の `~/.ghci`、IPython の profile と
 同じ位置づけで、プロジェクトの名前はコードではなくここにだけ書く。
 
 ```toml
 default = "global"
-engine = "~/sanctum/projects/lean-repl"   # 省略可
+engine = "~/sanctum/projects/lean-repl"   # 自分で用意したエンジンを使う場合
 
 [env.global]
 project = "~/sanctum/projects/lean-global"
@@ -59,79 +65,54 @@ leani                  # default の環境
 leani -e math          # 名前で選ぶ
 leani -p . -i MyLib    # 設定を使わずその場で指定
 leani foo.lean         # 読み込んで起動
+leani --setup          # エンジンだけ用意して終わる
 ```
 
 設定が無くても動く。cwd から `lakefile.toml` / `lakefile.lean` を持つ一番近い
-親を探し、そこの `lean_lib` を import する。Lake プロジェクトの外なら Lean 本体
-だけで起動する。`LEAN_PATH` は `lake env` を呼んで解決し、`lake-manifest.json`
-より新しいキャッシュがあれば使い回す (`lake env` は 1 秒近くかかる)。
+親ディレクトリを探し、そこの `lean_lib` を import する。Lake プロジェクトの外なら
+Lean 本体だけで起動する。`LEAN_PATH` は `lake env` を呼んで解決し、
+`lake-manifest.json` と `lean-toolchain` のどちらより新しいキャッシュがあれば
+使い回す (`lake env` は 1 秒近くかかる)。`LEAN_PATH` は core の olean も指すので、
+キャッシュは toolchain ごとに分けて持つ。
 
-`import Lean` は設定に関わらず必ず入る。下に書く完結判定と補完のクエリが
+`import Lean` は設定に関わらず必ず入る。完結判定と補完のクエリが
 `Lean.Parser` と `CoreM` を使うため。
 
-## 入力が終わったかを Lean のパーサに聞く
-
-ここが一番効いている。正規表現で「宣言のキーワードで始まるか」「括弧が閉じたか」を
-当てにいくと、想定外の構文が来るたびに早く確定しすぎるか次の行を飲み込む。
-代わりに 1 行ごとに `Parser.runParserCategory` を現在の環境で走らせて、
-`command` / `term` / `tacticSeq` として読めるかを聞く (実行はしないので副作用も
-無く、ユーザ定義の notation も効く。1 往復 60ms 程度)。
-
-* 読めた → その種類で送る。`term` なら `#eval` に包む。
-* `unexpected end of input` → 途中なので次の行を待つ。
-* どちらでもない → そのまま送って Lean 本体にエラーを出させる。自前の推測で
-  エラーを作らない。
-
-ただしパーサだけでは足りない。Lean では `structure P where` も `def f := 1` も
-`induction n with` も、それ自体で完結した構文として通る。にもかかわらず次の
-インデント行は続きになりうる。そこで:
-
-* インデントの続く限り読み、空行かインデントの切れた行で確定する (Python の
-  REPL と同じ)。行頭の `|` も継続扱いにする (`|` で始まる command も tactic も
-  Lean には無いので、必ず前の行の続き)。
-* `where` `with` `do` `by` で終わる行は、完結していても空行を待つ。
-* それでも確定してしまった直後にインデント行が来たら、**直前の入力に遡って
-  続きとして読み直す**。環境も 1 つ戻すので、`structure P where` を送った後に
-  フィールドを書き足せる。
-
-## 落ちても続く
-
-| 事象 | 挙動 |
-| --- | --- |
-| 評価中に Ctrl-C | エンジンを作り直して、通した宣言を replay する。実測 1.4 秒でプロンプトに戻る |
-| エンジンが落ちた | 同じ経路で復帰し、失敗したリクエストを 1 回だけやり直す |
-| エンジンが PANIC | 結果扱いせず `:restart` を促す |
-
-replay の対象は「エラー無く通った宣言」だけ。`#eval` は環境に残らないので記録しない。
+import が 1 つでも解決できないと、エンジンはヘッダを丸ごと捨てて (エラーも
+出さずに) 起動してしまう。`import Lean` ごと落ちて何も通らない環境になるので、
+起動したかを毎回確かめて、駄目なら断る。設定の値の型が違うときも同じで、
+場所を言って断る (`env.math.imports は配列で書く: ["Mathlib"]`)。
 
 ## できること
 
-| 機能 | 中身 |
-| --- | --- |
-| 行編集・履歴 | readline (macOS は libedit)。履歴は `~/.local/state/leani/history` に毎行書く。複数行のブロックは 1 エントリなので Ctrl-P 1 回で丸ごと戻る |
-| 裸の式 | `#eval` に包む。評価できない項 (`Real.pi` など) は `#check` に落ちる |
-| 単体の `do` | 最初の action でモナドが決まるのを避け、失敗したら `IO` として読み直す |
-| 宣言 | コマンドとして送る。エラーなら環境を進めない (GHCi と同じ) |
-| エラー表示 | 該当行とキャレットを添える |
-| 補完 (Tab) | 定数名を prefix 検索。名前空間ごとにまとめて取ってキャッシュするので、mathlib でも同じ名前空間の 2 回目以降は待ちが無い (実測 1.05 秒 → 0.00 秒)。REPL で通した宣言も候補に入る |
-| 証明モード | `sorry` を出したら `:prove` でタクティクを 1 行ずつ試せる。閉じたら `by sorry` を台本で埋め戻して通し直す。`exact?` `simp?` は提案された項に置き換えて台本に入れる (`:save` したファイルで再検索させないため) |
-| init ファイル | `~/.config/leani/init.lean`。base に重ねるので `:reset` しても残る |
+| 機能          | 中身                                                                                                                                                                                                          |
+|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 複数行入力    | 入力が終わったかを Lean のパーサに聞く (正規表現で近似しない)。インデントが続く限り読み、空行で確定。確定した直後にインデント行を書けば、直前の入力に遡って続きとして読み直す                                |
+| 行編集・履歴  | readline (macOS は libedit)。履歴は `~/.local/state/leani/history` に毎行書く。複数行のブロックは 1 エントリなので Ctrl-P 1 回で丸ごと戻る。読めない履歴 (GNU readline のもの等) には書かないので、書き潰さない                                                                    |
+| 裸の式        | `#eval` に包む。評価できない項 (`Real.pi` など) は `#check` に落ちる                                                                                                                                          |
+| 単体の `do`   | 最初の action でモナドが決まるのを避け、失敗したら `IO` として読み直す                                                                                                                                        |
+| 宣言          | コマンドとして送る。エラーなら環境を進めない (GHCi と同じ)                                                                                                                                                    |
+| エラー表示    | 該当行とキャレットを添える                                                                                                                                                                                    |
+| 補完 (Tab)    | 定数名を prefix 検索。名前空間ごとにまとめて取ってキャッシュするので、mathlib でも同じ名前空間の 2 回目以降は待ちが無い (実測 1.05 秒 → 0.00 秒)。REPL で通した宣言も候補に入る                              |
+| 証明モード    | `sorry` を出したら `:prove <n>` でタクティクを 1 行ずつ試せる。閉じたらその `sorry` だけを台本で埋め戻して通し直すので、複数あれば 1 個ずつ埋めていける。`exact?` `simp?` は提案された項に置き換えて台本に入れる (`:save` したファイルで再検索させないため) |
+| init ファイル | `~/.config/leani/init.lean`。base に重ねるので `:reset` しても残る。`:l` は環境を作り直すが、そのあとに重ね直す                                                                                                                                              |
+| 復帰          | 評価中の Ctrl-C、エンジンの異常終了、PANIC のいずれでもエンジンを作り直し、通した宣言を replay する (実測 1.4 秒でプロンプトに戻る)。証明していた宣言は `sorry` を拾い直して `:prove` で入り直せる。replay で落ちたものは名前を挙げて報告し、通らなかったぶんも途中で止まって流せなかったぶんも控えて次の `:restart` で流し直す (環境に無いものは `:save` の本体には書かず、コメントとして添える。`:reset` と `:l` は控えも捨てて、そう言う)                 |
 
-| コマンド | |
-| --- | --- |
-| `:t <expr>` | 型 (`#check`) |
-| `:i <name>` | 型と docstring |
-| `:p <name>` | 定義 (`#print`) |
-| `:l <file>` / `:r` | 読み込み / 読み直し |
-| `:reset` / `:undo [n]` | 環境の操作 |
-| `:env [name]` | 今の環境 / 設定した環境に切り替えて再起動 |
-| `:prove [n]` | `sorry` の証明モードに入る (`:goals` `:script` `:undo` `:done`)。`:goals` は証明モードの外でも残っている `sorry` を出す |
-| `:save <file>` | 通した宣言を `.lean` に書き出す。`:l` でも `lean` でも読める |
-| `:time` | 実行時間の表示を切り替え |
-| `:restart` | エンジンを作り直して宣言を replay |
-| `:{ ... :}` | 複数行を明示的に囲む |
-| `:!<cmd>` | shell |
-| `:q` / `:help` | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` に置き場所 |
+| コマンド               |                                                                                                                         |
+|------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| `:t <expr>`            | 型 (`#check`)                                                                                                           |
+| `:i <name>`            | 型と docstring                                                                                                          |
+| `:p <name>`            | 定義 (`#print`)                                                                                                         |
+| `:l <file>` / `:r`     | 読み込み / 読み直し                                                                                                     |
+| `:reset` / `:undo [n]` | 環境の操作                                                                                                              |
+| `:env [name]`          | 今の環境 / 設定した環境に切り替えて再起動。打った宣言は控えているぶんも含めて切り替え先で流し直す。起動できなければ元の環境に戻る              |
+| `:prove [n]`           | `sorry` の証明モードに入る (`:goals` `:script` `:undo` `:done`)。`:goals` は証明モードの外でも残っている `sorry` を出す |
+| `:save <file>`         | 通した宣言を `.lean` に書き出す (init と `:l` したぶんも入る)。`:l` でも `lean` でも読める (`:l` したファイルの `import` も書く)。既にあるファイルは断る |
+| `:time`                | 実行時間の表示を切り替え                                                                                                |
+| `:restart`             | エンジンを作り直して宣言を replay                                                                                       |
+| `:{ ... :}`            | 複数行を明示的に囲む                                                                                                    |
+| `:!<cmd>`              | shell (Ctrl-C で止めても REPL は続く)                                                                                                                   |
+| `:q` / `:help`         | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` に置き場所                                                          |
 
 証明モードの例:
 
@@ -159,57 +140,58 @@ sorry 1 [proofState 0]
 起動は Lean 本体だけなら 1 秒、中規模の環境で 1.4 秒、mathlib 入りで 6〜11 秒。
 olean をどれだけ OS がキャッシュしているかで変わる。
 
-## 環境の pickle を使っていない理由
-
-repl には `pickleTo` / `unpickleEnvFrom` があり、起動短縮に使えそうに見える。
-pickle は import からの差分しか持たない (1.2KB 程度) ので unpickle でも olean の
-読み込みは同じだけ走り、実測で import 1.3 秒 / unpickle 1.2 秒、mathlib は
-5.3 秒前後で差が無い。さらに戻した環境で `#eval` すると Lean のコンパイラが
-PANIC する。セッションの保存は `:save` でソースとして残すほうが確実で、編集も
-`lean` での実行もできる。
-
-## テスト
-
-pytest。依存は uv で入れる。
-
-```
-uv sync
-uv run pytest              # 45 秒前後
-uv run pytest -k 履歴      # 名前で絞る
-```
-
-Lean 本体だけを import する環境で走るので、Lake プロジェクトは要らない
-(エンジンのビルドだけ要る)。下ほど速く、下ほど数を多く持つ 3 層に分けてある。
-
-| ファイル | 相手 | 1 件あたり |
-| --- | --- | --- |
-| `tests/test_parsing.py` | 純関数だけ (継続判定、提案の取り出し、補完の単位) | ミリ秒 |
-| `tests/test_engine.py` | 本物のエンジン。`Repl.feed()` を直接叩く | 1.5 秒 |
-| `tests/test_completion.py` | 同上。問い合わせ回数は `mocker.spy` で数える | 1.5 秒 |
-| `tests/test_terminal.py` | pty 越しの本物の readline。端末が絡むものだけ | 1.5 秒 |
-
-エンジン層では 1 行食わせるごとに不変条件を全部確認する
-(`tests/conftest.py` の `INVARIANTS`)。
-
-* env のスタックと宣言ログの長さが一致する
-* 環境 id を持っている
-* 持ち越した proofState は現在の環境のもの
-* 証明の台本と巻き戻し用スタックの長さが一致する
-
-この REPL は env のスタックと証明モードを持つ状態機械で、踏んだバグはどれも
-単発の操作ではなく操作の並びで出た。個別の assert とは別に「どの状態でも
-成り立つはずのこと」を毎回見ておくと、想定していない並びでも捕まる。実際
-2 つめの不変条件が「読み込みに失敗すると環境を失う」を見つけた。
-
 ## 置き場所
 
-| | |
-| --- | --- |
-| 設定 | `~/.config/leani/config.toml` (`LEANI_CONFIG`) |
-| init | `~/.config/leani/init.lean` (`LEANI_INIT`) |
-| 履歴 | `~/.local/state/leani/history` (`LEANI_HISTORY`) |
-| `lake env` のキャッシュ | `~/.local/state/leani/lake-env/` |
-| エンジン | `~/sanctum/projects/lean-repl` (`LEANI_ENGINE`) |
+|                         |                                                     |
+|-------------------------|-----------------------------------------------------|
+| 設定                    | `~/.config/leani/config.toml` (`LEANI_CONFIG`)      |
+| init                    | `~/.config/leani/init.lean` (`LEANI_INIT`)          |
+| 履歴                    | `~/.local/state/leani/history` (`LEANI_HISTORY`)    |
+| `lake env` のキャッシュ | `~/.local/state/leani/lake-env/`                    |
+| エンジン                | `~/.local/state/leani/engine/<版>` (`LEANI_ENGINE`) |
 
 `XDG_CONFIG_HOME` / `XDG_STATE_HOME` があればそちらを見る。`leani -V` で実際に
 使っている場所が出る。
+
+
+## 中身を読むとき
+
+| ファイル           | 中身                                                                          |
+|--------------------|-------------------------------------------------------------------------------|
+| `SPEC.md`          | 何ができて、どういう性質を持つかの一覧。テストから生成する (`tools/spec.py`)   |
+| `tests/stories.py` | 誰の何を助けるか。コードから導けないので、ここが出所                          |
+| `DESIGN.md`        | 試して採用しなかった案。同じ案をもう一度思い付いたとき用                      |
+| `src/leani.py`     | なぜこのコードがこうなのか。docstring とコメントに書いてある                  |
+
+`src/leani.py` 1 枚。副作用の有無で節を分けて、見出しに札を付けてある。
+
+| 札       | 意味                                                     |
+|----------|----------------------------------------------------------|
+| 純粋     | 入力だけで出力が決まる。同じ入力なら常に同じ結果         |
+| 読み取り | ファイルや環境変数を見るが、何も書き換えない             |
+| 副作用   | プロセス・端末・ファイルを触る。上から下へ流れとして読む |
+
+判定と整形はすべて純粋な側にある (完結判定・エラー位置の枠・提案の取り出し・
+補完の単位・設定の検査)。状態を持つのは repl プロセスを抱える `Engine` と、
+入力バッファと証明モードを持つ `Repl` の 2 つだけ。分岐は `if` の連続ではなく
+`match` / `case` で書き、`return` のあとも `else` を省かないので、`ruff` の
+RET505 だけ外してある。
+
+## テスト
+
+```
+uv sync
+uv run pytest                         # 161 件、2 分半
+uv run pytest tests/test_parsing.py   # 純関数だけなら 0.2 秒
+uv run pytest -k 履歴                 # 名前で絞る
+uv run ruff format . && uv run ruff check .
+```
+
+Lean 本体だけを import する環境で走るので、Lake プロジェクトは要らない
+(エンジンは初回に自分で用意する)。純関数・エンジン・端末の 3 層で、上ほど速く、
+上ほど件数が多い。層の分け方と、エンジン層で 1 行ごとに確認している不変条件は
+`tests/conftest.py` の先頭と `INVARIANTS` にある。
+
+テストには `@story(...)` でユーザーストーリーの番号が付いていて、`SPEC.md` は
+そこから組む。テストが 0 件のストーリーは `SPEC.md` に空欄として出る (いまは無い。
+機能そのものが無い 2 件だけ「まだ作っていない」と出る)。
