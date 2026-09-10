@@ -201,6 +201,28 @@ def lake_libs(project):
     return re.findall(r"^\s*lean_lib\s+«?([A-Za-z0-9_.\']+)»?", text, re.M)
 
 
+def problem(cfg):
+    """この環境で起動できない理由。無ければ None。
+
+    起動時と :env の切り替え時の両方で使う。切り替えでは今のエンジンを
+    落とす前に呼ぶので、駄目なら何も壊さずに断れる。"""
+    if cfg.project and not os.path.isdir(cfg.project):
+        return f"Lake プロジェクトが無い: {cfg.project}"
+    if cfg.project and not shutil.which("lake"):
+        return "lake が PATH に無い"
+    if not os.path.isdir(cfg.engine):
+        return (f"repl エンジンが無い: {cfg.engine}\n"
+                f"  git clone https://github.com/leanprover-community/repl "
+                f"{cfg.engine}")
+    if not os.path.isfile(f"{cfg.engine}/.lake/build/bin/repl"):
+        return f"repl が未ビルド: cd {cfg.engine} && lake build repl"
+    if not os.path.isfile(f"{cfg.engine}/lean-toolchain"):
+        return f"エンジンの lean-toolchain が無い: {cfg.engine}"
+    if not shutil.which("elan"):
+        return "elan が PATH に無い"
+    return None
+
+
 def resolve(name=None, project=None, imports=None, cfg=None):
     """CLI 引数と設定ファイルから、起動する環境を 1 つ決める。
 
@@ -379,8 +401,12 @@ class Engine:
                 f'printf "{k}=%s\\n" "${{{k}-}}"'
                 for k in ("LEAN_PATH", "LEAN_SRC_PATH",
                           "DYLD_LIBRARY_PATH", "LD_LIBRARY_PATH"))
-            r = subprocess.run(["lake", "env", "sh", "-c", script],
-                               cwd=self.cfg.project, capture_output=True, text=True)
+            try:
+                r = subprocess.run(["lake", "env", "sh", "-c", script],
+                                   cwd=self.cfg.project,
+                                   capture_output=True, text=True)
+            except OSError as e:
+                die(f"lake env を呼べなかった ({self.cfg.project}): {e}")
             if r.returncode != 0:
                 die(f"lake env が失敗した ({self.cfg.project}):\n{r.stderr.strip()}")
             os.makedirs(os.path.dirname(cache), exist_ok=True)
@@ -608,6 +634,21 @@ def render(resp, src, line_off=0, col_off=0):
 
 
 # ------------------------------------------------------------------ フロント
+
+USAGE = f"""\
+leani [オプション] [file.lean]
+
+  -e, --env <name>     設定した環境で起動する
+  -i, --import <Mod>   import を足す (繰り返せる)
+  -p, --project <dir>  Lake プロジェクトを指定する
+  -V, --version        版と置き場所
+  -h, --help           これ
+
+環境は {CONFIG} に書く。無ければ cwd の
+lakefile から Lake プロジェクトと lean_lib を推測し、その外なら Lean 本体だけで
+起動する。init ファイルは {INIT}。
+
+"""
 
 HELP = """\
 式を書くと #eval される。宣言はそのまま通る。入力が終わったかは Lean のパーサが決める。
@@ -1277,6 +1318,9 @@ class Repl:
             target = resolve(name=arg)
         except ConfigError as e:
             return print(red(str(e)))
+        why = problem(target)
+        if why:
+            return print(red(why))
         keep, prev = self.show_time, self.eng.loaded
         self.eng.kill()
         self.__init__(target, preload=prev)
@@ -1353,7 +1397,7 @@ def main(argv=None):
         elif a in ("-p", "--project"):
             project = args.pop(0) if args else die(f"{a} にはディレクトリが要る")
         elif a in ("-h", "--help"):
-            print(HELP, end="")
+            print(USAGE + HELP, end="")
             return 0
         elif a in ("-V", "--version"):
             version = True
@@ -1375,15 +1419,9 @@ def main(argv=None):
         print(f"  init:     {INIT}")
         print(f"  履歴:     {HIST}")
         return 0
-    if cfg.project and not os.path.isdir(cfg.project):
-        die(f"Lake プロジェクトが無い: {cfg.project}")
-    if not os.path.isdir(cfg.engine):
-        die(f"repl エンジンが無い: {cfg.engine}\n"
-            f"  git clone https://github.com/leanprover-community/repl {cfg.engine}")
-    if not os.path.isfile(f"{cfg.engine}/.lake/build/bin/repl"):
-        die(f"repl が未ビルド: cd {cfg.engine} && lake build repl")
-    if not shutil.which("elan"):
-        die("elan が PATH に無い")
+    why = problem(cfg)
+    if why:
+        die(why)
     return Repl(cfg, preload).loop()
 
 

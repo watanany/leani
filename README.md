@@ -131,7 +131,7 @@ replay の対象は「エラー無く通った宣言」だけ。`#eval` は環�
 | `:restart` | エンジンを作り直して宣言を replay |
 | `:{ ... :}` | 複数行を明示的に囲む |
 | `:!<cmd>` | shell |
-| `:q` `:help` `--version` | |
+| `:q` / `:help` | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` に置き場所 |
 
 証明モードの例:
 
@@ -156,7 +156,8 @@ sorry 1 [proofState 0]
 'tt' depends on axioms: [propext]
 ```
 
-起動は Lean 本体だけなら 0.3 秒、中規模の環境で 1.3 秒、mathlib 入りで 6 秒前後。
+起動は Lean 本体だけなら 1 秒、中規模の環境で 1.4 秒、mathlib 入りで 6〜11 秒。
+olean をどれだけ OS がキャッシュしているかで変わる。
 
 ## 環境の pickle を使っていない理由
 
@@ -209,3 +210,6 @@ Lean 本体だけを import する環境で走るので、Lake プロジェク�
 | 履歴 | `~/.local/state/leani/history` (`LEANI_HISTORY`) |
 | `lake env` のキャッシュ | `~/.local/state/leani/lake-env/` |
 | エンジン | `~/sanctum/projects/lean-repl` (`LEANI_ENGINE`) |
+
+`XDG_CONFIG_HOME` / `XDG_STATE_HOME` があればそちらを見る。`leani -V` で実際に
+使っている場所が出る。
