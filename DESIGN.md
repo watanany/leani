@@ -30,7 +30,7 @@
 * インデントが続く限り読み、空行かインデントの切れた行で確定する。
 * `where` `with` `do` `by` で終わる行は、完結していても空行を待つ。
 * それでも確定した直後にインデント行が来たら、直前の入力に遡って読み直し、
-  環境も 1 つ戻す。→ `Repl.feed_line`, `BLOCK_OPEN`
+  環境も 1 つ戻す。→ `Repl.feed`, `Repl.feed_more`, `BLOCK_OPEN`
 
 遡ったぶんは控えておき、書き直さずに抜けたら元に戻す。書き足すつもりで打った
 1 行で宣言を失わせない。
@@ -171,8 +171,9 @@ replay の結果は落としたもの全部を持って返し、環境から消�
 
 `leani` は `:l` で読むときに `import Lean` を足すので、設定の import だけ書いた
 ファイルでも `:l` では通る。`lean` に直接食わせたときだけ通らない。持ち出せる
-形で書き出すのが `:save` の目的なので、起動と同じヘッダ (`boot_header`) を書く。
-→ `Repl.cmd_save`
+形で書き出すのが `:save` の目的なので、起動と同じヘッダを書く。ここには
+`:l` で読んだファイルの `import` も足すことになった (下の「`:save` は起動時の
+ヘッダだけ書く」)。→ `Repl.cmd_save`, `Engine.save_header`
 
 同じ理由で、`:l` は環境を作り直すため `init` は落ちる。`sources()` が
 `init` を並べ続けないよう、読み込みのあとに重ね直す。重ねられなかったら
@@ -379,7 +380,7 @@ boot が投げたら `env` を捨てて (`None`)、`log` は控え (`unplayed`) 
 
 boot が投げたら `env` と `base` を揃えて捨て、`:reset` は `base` が無ければ
 「起点の環境が無い。`:restart` で建て直す」と断る。
-→ `Engine.restart` / `Repl.reset`
+→ `Engine.restart`, `Repl.reset`
 
 ## 証明モードを畳めば持ち越しの `sorry` も消える
 
@@ -402,7 +403,7 @@ boot が投げたら `env` と `base` を揃えて捨て、`:reset` は `base` �
 `env` が無いなら送る前に断る。`replay` は宣言を控えに回して「環境が無いので
 流し直せない」と言い、`query` は `None` を返す (呼び手はもともと「答えられ
 なかった」を扱える)。`Repl.replay_into` も控えたうえで `:restart` を案内する。
-→ `Engine.query` / `Engine.replay` / `Repl.replay_into`
+→ `Engine.query`, `Engine.replay`, `Repl.replay_into`
 
 ## `env` が無ければ `env` キーを落として送る
 
@@ -427,4 +428,4 @@ import が 1 つでも解決できないと、repl はヘッダを丸ごと捨�
 `1 + 1` すら通らない。
 
 読み込んだ環境にも起動時と同じプローブを当てて、駄目なら読み込めなかったと
-言う。→ `Engine.probe_env` / `Engine.load_file`
+言う。→ `Engine.probe_env`, `Engine.load_file`

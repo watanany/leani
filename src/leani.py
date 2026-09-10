@@ -48,7 +48,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, NamedTuple, NoReturn, TypeVar
 
-# --------------------------------------------------------------------- 型
+# ---------------------------------------------------------------- 型 (純粋)
 
 # repl とやりとりする JSON。キーは repl 側の都合で決まるので dict のまま扱い、
 # 別名で意味だけ持たせる。
@@ -70,7 +70,7 @@ ERR: Final[State] = "err"
 
 T = TypeVar("T")
 
-# ------------------------------------------------------------------- 置き場所
+# -------------------------------------------------------- 置き場所 (読み取り)
 
 HOME = os.path.expanduser("~")
 CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME", f"{HOME}/.config")
@@ -1332,9 +1332,9 @@ class Engine:
     def query(self, src: str) -> str | None:
         """info メッセージの中身だけ取る。環境は進めない。"""
         if self.env is None:
-            # env を付けずに送ると repl はエラーにせず Init だけの環境を
-            # 勝手に作って答える。設定の import が無い環境なので、返ってくる
-            # 型も補完候補も嘘になる (「エンジンは健全」に見えてしまう)。
+            # 環境が無いなら「答えられなかった」を返す。送れば send_cmd が
+            # 関門で断るが、型や補完の問い合わせは答えが無くて済む種類の
+            # ものなので、例外にせず None にして呼び手に任せる。
             return None
 
         resp = self.send_cmd(src)
@@ -1539,10 +1539,9 @@ class Engine:
         found: list[Sorry] = []
 
         if self.env is None:
-            # env を付けずに送ると repl は Init だけの環境を勝手に作り、
-            # 宣言はそこに積まれる (設定の import が無い環境)。しかも
-            # advance が stack を伸ばさないので log と対応が 1 つずれ、以後の
-            # :undo が別の宣言を落とす。送らずに控える。
+            # 流し直す先が無い。送れば send_cmd が関門で断つが、ここは
+            # 「何件通ったか」を返す関数なので、例外を上げずに全件を控えへ
+            # 回し、理由を Replay に載せて返す。
             self.unplayed = list(log) + self.unplayed
             return Replay([], [], list(log), ["環境が無いので流し直せない"], [])
 
@@ -1746,7 +1745,7 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
         print(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
 
 
-# ------------------------------------------------------------------ フロント
+# ------------------------------------------------------- フロント (副作用)
 
 USAGE = f"""\
 leani [オプション] [file.lean]
@@ -2129,8 +2128,8 @@ class Repl:
             return
 
         if self.eng.env is None:
-            # 流すと repl が Init だけの環境を勝手に作る。「戻した」と
-            # 報告しながら、設定の import が無い環境に積むことになる。
+            # ここは案内を出す層。関門の例外をそのまま「内部エラー」として
+            # 見せると、控えが残っていることも次の一手も伝わらない。
             print(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
             print(dim("  テキストは控えてある。:restart で建て直せる"))
             self.eng.unplayed = list(log) + self.eng.unplayed
@@ -2427,8 +2426,9 @@ class Repl:
     def submit(self, src: str, kind: Kind | None = None) -> None:
         """完結した入力を送って結果を出す。"""
         if self.eng.env is None:
-            # boot が通らなかったエンジン。このまま送ると import 無しの
-            # 環境に宣言が積まれて、何を書いても通らなくなる。
+            # boot が通らなかったエンジン。送れば send_cmd が関門で断るが、
+            # 打った本人に要るのは例外の名前ではなく次の一手なので、ここで
+            # 案内に変える。
             print(red("エンジンが使えない。:restart で建て直す"))
             return
 
