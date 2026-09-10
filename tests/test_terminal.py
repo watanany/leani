@@ -2,11 +2,13 @@
 
 ここは 1 テスト 1.5 秒かかるので、端末なしで確かめられるものは置かない。
 """
-from conftest import PROMPT, WIDE_PROMPT
+
+from conftest import PROMPT, WIDE_PROMPT, piped, story
 
 
 def describe_行編集():
 
+    @story("C3")
     def it_プロンプトの色を桁として数えない(terminal):
         # 数えていると折り返す位置がずれ、履歴から戻した行を Backspace で
         # 消せなくなる (実際に踏んだバグ)。80 桁でプロンプト 3 桁ぶんが空く。
@@ -16,18 +18,21 @@ def describe_行編集():
         assert "\x1b[80G" not in term.buf, "74 桁で折り返している"
         assert "\n" not in term.screen(), "74 桁で折り返している"
 
+    @story("C3")
     def it_履歴から戻した行を_Backspace_で直せる(terminal):
         term = terminal()
         term.line("1 + 100")
-        term.type("\x10")                        # Ctrl-P
+        term.type("\x10")  # Ctrl-P
         term.wait_for("1 + 100", 10)
-        term.type("\x7f\x7f\x7f" + "1")          # 100 を消して 1 に
+        term.type("\x7f\x7f\x7f" + "1")  # 100 を消して 1 に
         assert "2" in term.line("")
 
-    def it_Ctrl_C_で書きかけを捨てる(terminal):
+    @story("A4", "F4")
+    def it_Ctrl__C_で書きかけを捨てる(terminal):
         term = terminal()
         term.type("def half : Nat")
         term.wait_for("def half", 10)
+        term.settle()
         term.type("\x03")
         # ^C とプロンプトは続けて出る。プロンプトまで待たずに打つと、
         # こちらのエコーが先に届いて同期点を取り違える。
@@ -37,6 +42,7 @@ def describe_行編集():
 
 def describe_履歴():
 
+    @story("C3", "F3")
     def it_複数行のブロックは一件にまとまる(terminal):
         term = terminal()
         term.block("def merged : Nat -> Nat", "  | 0 => 1", "  | _ => 2")
@@ -44,7 +50,8 @@ def describe_履歴():
         assert len(entries) == 1, entries
         assert entries[0].count("\n") == 2, entries[0]
 
-    def it_一回の_Ctrl_P_で丸ごと戻り丸ごと通る(terminal):
+    @story("C3")
+    def it_一回の_Ctrl__P_で丸ごと戻り丸ごと通る(terminal):
         term = terminal()
         term.block("def merged : Nat -> Nat", "  | 0 => 1", "  | _ => 2")
         term.type("\x10")
@@ -52,6 +59,19 @@ def describe_履歴():
         # 行単位で送られていたら 1 行目だけがエラーになる。
         assert "already been declared" in term.line("", timeout=40)
 
+    @story("F3")
+    def it_ディレクトリ成分の無い履歴でも前回のぶんを消さない(terminal):
+        # LEANI_HISTORY=history のように相対名だと dirname が "" になり、
+        # makedirs("") が投げて読み込みごと飛ばされていた。読めていない
+        # 履歴に 1 行目で書き込むので、前回までのぶんが丸ごと消える。
+        term = terminal(
+            history_name="bare-history",
+            seed="_HiStOrY_V2_\ndef\\040old\\040:=\\0401\n",
+        )
+        term.line("1 + 1")
+        assert "def old := 1" in term.saved_history(), "前回の履歴が消えた"
+
+    @story("F3")
     def it_落ちたセッションの履歴も残る(terminal):
         # 毎行書いているので atexit を待たない。
         term = terminal()
@@ -63,8 +83,36 @@ def describe_履歴():
 
 def describe_環境の切り替え():
 
+    @story("G5")
     def it_プロンプトが設定どおりに変わる(terminal):
         term = terminal()
         term.type(":env wide\r")
         term.wait_for(WIDE_PROMPT, 90)
         assert "3.14" in term.line("(3.14 : Float)", wait=WIDE_PROMPT, timeout=60)
+
+
+def describe_外部コマンド():
+
+    @story("F4")
+    def it_Ctrl__C_で外部コマンドを止めてもセッションが残る(terminal):
+        # 子は同じプロセスグループにいるので Ctrl-C はこちらにも来る。
+        # そこで抜けると、それまでに通した宣言を全部失う。
+        term = terminal()
+        term.line("def keepBang : Nat := 41")
+        term.type(":! sleep 30\r")
+        term.settle()
+        term.type("\x03")
+        assert "^C" in term.wait_for(PROMPT, 10)
+        assert "42" in term.line("keepBang + 1"), "セッションが畳まれた"
+
+
+def describe_端末でない入力():
+    """パイプで食わせたとき。入力が strict デコードになるのはここだけ。"""
+
+    @story("F4")
+    def it_UTF__8_で読めないバイトがあっても後続の行を失わない(tmp_path):
+        # strict デコードのままだと UnicodeDecodeError で落ちるうえ、読み込み
+        # 済みのぶんが一緒に消えて後続の行まで無くなる。置き換えて渡し、
+        # Lean の構文エラーとして報告させる。
+        out = piped(b"def keepPipe : Nat := 41\n\xff\xfe\nkeepPipe + 1\n", tmp_path)
+        assert "42" in out, out

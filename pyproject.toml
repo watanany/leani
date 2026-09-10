@@ -17,8 +17,16 @@ only-include = ["src/leani.py"]
 sources = ["src"]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-describe>=2.2", "pytest-mock>=3.14"]
+dev = ["pytest>=8", "pytest-describe>=2.2", "pytest-mock>=3.14", "ruff>=0.16"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff.lint]
+# RET505 (return のあとの elif) は入れない。分岐は明示的に else で書く方針。
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# 定数を読む前に環境変数を決める必要があるので、import が先頭に来ない。
+"tests/conftest.py" = ["E402"]
