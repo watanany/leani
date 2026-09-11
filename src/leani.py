@@ -34,6 +34,7 @@ import atexit
 import codecs
 import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -309,7 +310,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
         return src[:a] + hang(script, pad) + src[b:]
     else:
         # 行の途中 (:= by sorry)。by の下にぶら下げる。
-        deeper = re.match(r"[ \t]*", pad).group() + "  "
+        deeper = pad[: len(pad) - len(pad.lstrip(" \t"))] + "  "
         return src[:a].rstrip(" \t") + "\n" + deeper + hang(script, deeper) + src[b:]
 
 
@@ -336,9 +337,14 @@ def first_response(buf: str) -> Response | None:
         if not head.strip():
             continue
         try:
-            return json.loads(head)
+            got = json.loads(head)
         except json.JSONDecodeError:
             continue
+
+        # repl の返事は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
+        # 次の区切りを試す (呼ぶ側は添字で鍵を引く)。
+        if isinstance(got, dict):
+            return got
 
     return None
 
@@ -1264,13 +1270,19 @@ class Engine:
         if self.proc is None or self.proc.poll() is not None:
             raise EngineDied()
 
+        # spawn は必ず PIPE で開くので None にはならないが、Popen の型は
+        # それを知らない。落とし穴を残すより、死んだのと同じ扱いにする。
+        stdin, stdout = self.proc.stdin, self.proc.stdout
+        if stdin is None or stdout is None:
+            raise EngineDied()
+
         try:
-            self.proc.stdin.write(json.dumps(obj) + "\n\n")
-            self.proc.stdin.flush()
+            stdin.write(json.dumps(obj) + "\n\n")
+            stdin.flush()
         except (BrokenPipeError, ValueError) as e:
             raise EngineDied() from e
 
-        fd = self.proc.stdout.fileno()
+        fd = stdout.fileno()
         dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
         buf = ""
 
@@ -2184,9 +2196,11 @@ class Repl:
             return None
 
         try:
-            return json.loads(out.strip().splitlines()[-1])
+            got = json.loads(out.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError):
             return None
+
+        return got if isinstance(got, dict) else None
 
     def probe(self, src: str) -> tuple[State, Kind]:
         return classify(self.parse(src))
@@ -2283,7 +2297,7 @@ class Repl:
         self._hist_added = 0
         self.restore_undone()
 
-    def feed(self, line: str) -> str | None:
+    def feed(self, line: str) -> Step | None:
         """
         1 行受け取る。"quit" を返したらループを抜ける。
 
@@ -2696,7 +2710,7 @@ class Repl:
 
     # -- メタコマンド -----------------------------------------------------
 
-    def meta(self, line: str) -> str | None:
+    def meta(self, line: str) -> Step | None:
         """`:` で始まる行を捌く。"quit" を返したらループを抜ける。"""
         if line.startswith(":!"):
             try:
@@ -3076,8 +3090,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     # UnicodeDecodeError になる。しかも投げた時点で読み込み済みのぶんが
     # 一緒に落ちるので、後続の行まで消える。置き換えて Lean に渡し、
     # 構文エラーとして普通に報告させる。
-    if not sys.stdin.isatty():
-        with contextlib.suppress(OSError, ValueError, AttributeError):
+    if not sys.stdin.isatty() and isinstance(sys.stdin, io.TextIOWrapper):
+        with contextlib.suppress(OSError, ValueError):
             sys.stdin.reconfigure(errors="replace")
 
     try:

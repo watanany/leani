@@ -22,7 +22,29 @@ only-include = ["src/leani.py"]
 sources = ["src"]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-describe>=2.2", "pytest-mock>=3.14", "ruff>=0.16"]
+dev = [
+    "mypy>=2.3.1",
+    "pytest>=8",
+    "pytest-describe>=2.2",
+    "pytest-mock>=3.14",
+    "pytest-xdist>=3.8.0",
+    "ruff>=0.16",
+]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src", "tools"]
+# tools/spec.py は tests/stories.py を読む (実行時は sys.path に足している)。
+mypy_path = "tests"
+# テストは strict の対象にしない。pytest の fixture ごとに注釈を書くことになり、
+# 得られるものより手間が勝る。落ちれば pytest が教える。
+
+[tool.pyright]
+# エディタ用。.venv と、src / tests への import を解決させる。
+venvPath = "."
+venv = ".venv"
+extraPaths = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

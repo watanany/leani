@@ -30,6 +30,7 @@ import ast
 import glob
 import os
 import sys
+from typing import TypedDict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "tests"))
@@ -78,16 +79,28 @@ def label(name: str, prefix: str) -> str:
 # ------------------------------------------------------------ テストを集める
 
 
+class Test(TypedDict):
+    """テスト 1 件。`what` は it_ の名前、`where` は「層 / describe」。"""
+
+    what: str
+    where: str
+    stories: list[str]
+
+
 def marked(fn: ast.FunctionDef) -> list[str]:
     """`@story(...)` に書かれたストーリー番号。付いていなければ空。"""
-    out = []
+    out: list[str] = []
     for dec in fn.decorator_list:
         if isinstance(dec, ast.Call) and getattr(dec.func, "id", "") == "story":
-            out += [a.value for a in dec.args if isinstance(a, ast.Constant)]
+            out += [
+                a.value
+                for a in dec.args
+                if isinstance(a, ast.Constant) and isinstance(a.value, str)
+            ]
     return out
 
 
-def descend(nodes, layer: str, where: str, out: list[dict]) -> None:
+def descend(nodes: list[ast.stmt], layer: str, where: str, out: list[Test]) -> None:
     """describe を降りながら it を集める。describe は入れ子になれる。"""
     for node in nodes:
         if not isinstance(node, ast.FunctionDef):
@@ -104,9 +117,9 @@ def descend(nodes, layer: str, where: str, out: list[dict]) -> None:
             )
 
 
-def collect() -> list[dict]:
+def collect() -> list[Test]:
     """テストを 1 件 1 件の辞書にして、ファイル順・出現順で返す。"""
-    found: list[dict] = []
+    found: list[Test] = []
     for path in sorted(glob.glob("tests/test_*.py")):
         layer = os.path.basename(path)[len("test_") : -len(".py")]
         with open(path) as f:
@@ -115,9 +128,9 @@ def collect() -> list[dict]:
     return found
 
 
-def complaints(tests: list[dict]) -> list[str]:
+def complaints(tests: list[Test]) -> list[str]:
     """生成する前に止めるべきこと。ストーリーの印の付け忘れと書き間違い。"""
-    out = []
+    out: list[str] = []
     for t in tests:
         if not t["stories"]:
             out.append(f"ストーリーの印が無い: {t['where']} / {t['what']}")
@@ -138,7 +151,7 @@ def render() -> str:
     if bad := complaints(tests):
         raise SystemExit("\n".join(bad))
 
-    by_story = {sid: [] for sid in STORIES}
+    by_story: dict[str, list[Test]] = {sid: [] for sid in STORIES}
     for t in tests:
         for sid in t["stories"]:
             by_story[sid].append(t)

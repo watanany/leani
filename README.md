@@ -188,11 +188,17 @@ RET505 だけ外してある。
 
 ```
 uv sync
-uv run pytest                         # 162 件、2 分半
+uv run pytest                         # 162 件、3 分半
+uv run pytest -n auto                 # 並列で 40 秒
 uv run pytest tests/test_parsing.py   # 純関数だけなら 0.2 秒
 uv run pytest -k 履歴                 # 名前で絞る
 uv run ruff format . && uv run ruff check .
+uv run mypy                           # src と tools を strict で見る
 ```
+
+`-n auto` を既定にはしていない。端末の層は pty を fork するので、xdist の
+worker (スレッドを持つ) の下では forkpty の警告が出る。手元で回す間は速い方が
+効くが、既定は直列のままにしておく。
 
 Lean 本体だけを import する環境で走るので、Lake プロジェクトは要らない
 (エンジンは初回に自分で用意する)。純関数・エンジン・端末の 3 層で、上ほど速い。
