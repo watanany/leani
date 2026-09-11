@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 leani — Lean 4 の対話 REPL。
 

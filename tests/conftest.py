@@ -1,7 +1,7 @@
 """テストの土台。
 
-中身は src/leani.py にある。pty 越しに起動するときだけ、PATH から叩くのと
-同じ bin/leani を使う。
+中身は src/leani.py にある。pty 越しに起動するときも、インストールした leani
+コマンドと同じその 1 枚を子プロセスとして起動する。
 
 テストは 3 層に分かれている。上ほど速い。数はエンジンの層が一番多く、端末の層は
 遅いので絞ってある。
@@ -39,7 +39,7 @@ import time
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPL = os.path.join(ROOT, "bin", "leani")
+REPL = os.path.join(ROOT, "src", "leani.py")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]")
 PROMPT = "λ> "
