@@ -16,33 +16,33 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 ### A1 式の値をすぐ知りたい。ファイルを作って lake env lean を叩く手間を省きたい
 
 - 裸の式は評価されて値が出る (engine / 式の評価)
-- IOの式はそのまま走る (engine / 式の評価)
+- IO の式はそのまま走る (engine / 式の評価)
 - ふつうの行は単独の入力 (parsing / 継続行の判定)
-- commandとして読めたらそのまま送る (parsing / 完結したかの読み分け)
-- termとしてしか読めなければevalに包む (parsing / 完結したかの読み分け)
+- command として読めたらそのまま送る (parsing / 完結したかの読み分け)
+- term としてしか読めなければ eval に包む (parsing / 完結したかの読み分け)
 
 ### A2 評価できないとき、なぜできないのか (noncomputable か Repr 無し) を知りたい
 
 - 評価できない項は型だけ出す (engine / 式の評価)
-- evalで包んだぶんの下駄を引く (parsing / エラー位置の枠)
+- eval で包んだぶんの下駄を引く (parsing / エラー位置の枠)
 - 行の外なら枠を出さない (parsing / エラー位置の枠)
 - 幅は行の長さに収める (parsing / エラー位置の枠)
 
 ### A3 結果が出るまでの時間を知りたい。重い計算を切り分けたい
 
-- timeで実行時間が付く (engine / 実行時間)
+- time で実行時間が付く (engine / 実行時間)
 
 ### A4 重い計算を Ctrl-C で止めて、それまでの宣言は失わずに続けたい
 
 - 中断しても環境と宣言を失わない (engine / 読み込みの中断)
 - 中断しても証明モードに入り直せる (engine / タクティクの途中でエンジンが変わる)
-- Ctrl-Cで書きかけを捨てる (terminal / 行編集)
+- Ctrl-C で書きかけを捨てる (terminal / 行編集)
 
 ## B. スクリプトを育てる
 
 ### B1 do ブロックでファイルを読みプロセスを起動したい (shell script の代わり)
 
-- IOの式はそのまま走る (engine / 式の評価)
+- IO の式はそのまま走る (engine / 式の評価)
 
 ### B2 途中まで書いた処理を関数に切り出し、REPL 上で少しずつ組み立てたい
 
@@ -52,36 +52,36 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### B3 組み立て終わったものを .lean として持ち出し、そのまま実行したい
 
-- saveしたファイルを読み直せる (engine / ファイルの読み書き)
+- save したファイルを読み直せる (engine / ファイルの読み書き)
 - 既にあるファイルは上書きしない (engine / 書き出しの安全側)
 - 自分が書いたものは上書きする (engine / 書き出しの安全側)
 - 書けない先でも落ちない (engine / 書き出しの安全側)
-- initと読み込んだファイルの宣言も書き出す (engine / 書き出しに全部入る)
-- leanでそのまま通るimportを書く (engine / 書き出したファイルのヘッダ)
-- 読み込んだあともinitを重ね直す (engine / initと読み込みが混ざるとき)
+- init と読み込んだファイルの宣言も書き出す (engine / 書き出しに全部入る)
+- lean でそのまま通る import を書く (engine / 書き出したファイルのヘッダ)
+- 読み込んだあとも init を重ね直す (engine / init と読み込みが混ざるとき)
 - 組み立てた順に書き出す (engine / 少しずつ組み立てる)
-- saveはコメントとして添える (engine / 環境に無い宣言の行き先)
-- saveに書き戻す (engine / 読み込んだファイルのimport)
-- saveのヘッダに書かない (engine / コメントに書いたimport)
-- importの行だけを取り出す (parsing / ファイルのimport)
-- importが無ければ空 (parsing / ファイルのimport)
-- コメントの中のimportは数えない (parsing / ファイルのimport)
-- 宣言のあとのimportは数えない (parsing / ファイルのimport)
+- save はコメントとして添える (engine / 環境に無い宣言の行き先)
+- save に書き戻す (engine / 読み込んだファイルの import)
+- save のヘッダに書かない (engine / コメントに書いた import)
+- import の行だけを取り出す (parsing / ファイルの import)
+- import が無ければ空 (parsing / ファイルの import)
+- コメントの中の import は数えない (parsing / ファイルの import)
+- 宣言のあとの import は数えない (parsing / ファイルの import)
 
 ### B4 既にあるファイルを読み込んで中の関数を叩きたい。編集したら読み直したい
 
-- saveしたファイルを読み直せる (engine / ファイルの読み書き)
+- save したファイルを読み直せる (engine / ファイルの読み書き)
 - 読み込みに失敗しても手元の環境を失わない (engine / ファイルの読み書き)
 - 読めないファイルは理由を出す (engine / ファイルの読み書き)
 - 読み込んだら証明モードから出る (engine / 環境が総取り替えになるとき)
-- 読み直せないファイルと消えた宣言を言う (engine / replayで落としたもの)
-- saveに書き戻す (engine / 読み込んだファイルのimport)
-- lが控えを捨てるならそう言う (engine / 控えと環境の乗り換え)
-- saveのヘッダに書かない (engine / コメントに書いたimport)
-- 読み込んだと言わない (engine / 解決できないimportのファイル)
-- importの行だけを取り出す (parsing / ファイルのimport)
-- コメントの中のimportは数えない (parsing / ファイルのimport)
-- 入れ子のコメントを閉じ切る (parsing / ファイルのimport)
+- 読み直せないファイルと消えた宣言を言う (engine / replay で落としたもの)
+- save に書き戻す (engine / 読み込んだファイルの import)
+- l が控えを捨てるならそう言う (engine / 控えと環境の乗り換え)
+- save のヘッダに書かない (engine / コメントに書いた import)
+- 読み込んだと言わない (engine / 解決できない import のファイル)
+- import の行だけを取り出す (parsing / ファイルの import)
+- コメントの中の import は数えない (parsing / ファイルの import)
+- 入れ子のコメントを閉じ切る (parsing / ファイルの import)
 
 ## C. 複数行の宣言を書く
 
@@ -92,14 +92,14 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - インデントした行は前の行の続き (parsing / 継続行の判定)
 - 行頭のパイプは前の行の続き (parsing / 継続行の判定)
 - ふつうの行は単独の入力 (parsing / 継続行の判定)
-- where with do byで終わる行は空行を待つ (parsing / 続きを待つ行)
+- where with do by で終わる行は空行を待つ (parsing / 続きを待つ行)
 - 語の一部として含むだけなら待たない (parsing / 続きを待つ行)
 - 入力の途中なら次の行を待つ (parsing / パーサからの返事)
 - ただのエラーは待たずに送る (parsing / パーサからの返事)
-- commandとして読めたらそのまま送る (parsing / 完結したかの読み分け)
+- command として読めたらそのまま送る (parsing / 完結したかの読み分け)
 - 途中なら次の行を待つ (parsing / 完結したかの読み分け)
 - 深く進めた側をユーザの意図とみなす (parsing / 完結したかの読み分け)
-- 判定できなければLeanに本当のエラーを出させる (parsing / 完結したかの読み分け)
+- 判定できなければ Lean に本当のエラーを出させる (parsing / 完結したかの読み分け)
 - インデントで続いたブロックは空行まで待つ (parsing / 完結したかの読み分け)
 
 ### C2 打ち終わったつもりの宣言に、あとから 1 行足したい
@@ -107,14 +107,14 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 確定した直後のインデント行は前の入力に遡って続きになる (engine / 複数行の宣言)
 - 遡ったまま捨てたら元の宣言が戻る (engine / 書き直しをやめたとき)
 - 書き直しが確定したら戻さない (engine / 書き直しをやめたとき)
-- 死んだ環境idを据え直さない (engine / 控えた宣言とエンジンの世代)
+- 死んだ環境 id を据え直さない (engine / 控えた宣言とエンジンの世代)
 
 ### C3 長い宣言を履歴から 1 回の操作で丸ごと呼び戻したい
 
 - プロンプトの色を桁として数えない (terminal / 行編集)
-- 履歴から戻した行をBackspaceで直せる (terminal / 行編集)
+- 履歴から戻した行を Backspace で直せる (terminal / 行編集)
 - 複数行のブロックは一件にまとまる (terminal / 履歴)
-- 一回のCtrl-Pで丸ごと戻り丸ごと通る (terminal / 履歴)
+- 一回の Ctrl-P で丸ごと戻り丸ごと通る (terminal / 履歴)
 
 ### C4 複雑な複数行はエディタで書きたい
 
@@ -136,8 +136,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### D2 関数の型と docstring を見たい
 
-- iは型とdocstringを出す (engine / 型とdocstring)
-- 無い名前は断る (engine / 型とdocstring)
+- i は型と docstring を出す (engine / 型と docstring)
+- 無い名前は断る (engine / 型と docstring)
 - 型も答えない (engine / 起点の環境を失ったとき)
 
 ### D3 定義の中身を見たい
@@ -154,58 +154,58 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - 複数手の証明で目標と台本を見られる (engine / 証明モード)
 - 証明モードの外で打っても困らせない (engine / 証明モード)
-- undoのあとのproveが手前の宣言を消さない (engine / 証明モード)
+- undo のあとの prove が手前の宣言を消さない (engine / 証明モード)
 - 読み込んだら証明モードから出る (engine / 環境が総取り替えになるとき)
-- 選んだsorryだけを埋め戻す (engine / sorryが複数あるとき)
-- 残ったsorryを続けて証明できる (engine / sorryが複数あるとき)
-- 行頭に寄っているsorryのインデントを崩さない (engine / sorryが複数あるとき)
-- インデントのある宣言でも順に埋められる (engine / sorryが複数あるとき)
+- 選んだ sorry だけを埋め戻す (engine / sorry が複数あるとき)
+- 残った sorry を続けて証明できる (engine / sorry が複数あるとき)
+- 行頭に寄っている sorry のインデントを崩さない (engine / sorry が複数あるとき)
+- インデントのある宣言でも順に埋められる (engine / sorry が複数あるとき)
 - 落ちたら証明モードを畳んで宣言を残す (engine / タクティクの途中でエンジンが変わる)
 - 中断しても証明モードに入り直せる (engine / タクティクの途中でエンジンが変わる)
-- 目標も証明モードの案内も出さない (engine / 通らなかった宣言のsorry)
-- 埋め戻しに失敗しても件数を言い直さない (engine / 通らなかった宣言のsorry)
-- 埋め戻したらsorryAxが消える (engine / 依存している公理)
+- 目標も証明モードの案内も出さない (engine / 通らなかった宣言の sorry)
+- 埋め戻しに失敗しても件数を言い直さない (engine / 通らなかった宣言の sorry)
+- 埋め戻したら sorryAx が消える (engine / 依存している公理)
 - タクティクの行を宣言として送らない (engine / プローブの途中でエンジンが落ちる)
-- 死んだproofStateに座り続けない (engine / 作り直しに失敗したときの証明モード)
-- sorryの持ち越しも捨てる (engine / 起点の環境を失ったとき)
-- 証明モードではtacticSeqだけを見る (parsing / 完結したかの読み分け)
+- 死んだ proofState に座り続けない (engine / 作り直しに失敗したときの証明モード)
+- sorry の持ち越しも捨てる (engine / 起点の環境を失ったとき)
+- 証明モードでは tacticSeq だけを見る (parsing / 完結したかの読み分け)
 
 ### E2 exact? や aesop に探させ、見つかった証明をそのまま使える形で残したい
 
-- exactの提案を台本に入れる (engine / 証明モード)
+- exact の提案を台本に入れる (engine / 証明モード)
 - 折り返した提案でも埋め戻せる (engine / 折り返した提案)
 - 埋め戻しが走らないときも台本を切らない (engine / 折り返した提案)
 - 提案から項だけを取り出す (parsing / タクティクの提案)
 - 折り返した提案を丸ごと取る (parsing / タクティクの提案)
-- Try thisと同じ行に書かれた提案も取る (parsing / タクティクの提案)
+- Try this と同じ行に書かれた提案も取る (parsing / タクティクの提案)
 - 閉じていない提案は読み切れていないと分かる (parsing / タクティクの提案)
 - 提案でなければ何も返さない (parsing / タクティクの提案)
 
 ### E3 証明が通ったら、sorry を埋め戻した本物の宣言として環境に入れたい
 
-- 埋め戻せなければsorry版を残す (engine / 項の位置のsorry)
+- 埋め戻せなければ sorry 版を残す (engine / 項の位置の sorry)
 - 折り返した提案でも埋め戻せる (engine / 折り返した提案)
-- 選んだsorryだけを埋め戻す (engine / sorryが複数あるとき)
-- 残ったsorryを続けて証明できる (engine / sorryが複数あるとき)
-- 行頭に寄っているsorryのインデントを崩さない (engine / sorryが複数あるとき)
-- インデントのある宣言でも順に埋められる (engine / sorryが複数あるとき)
-- 埋め戻せなくても残りを続けられる (engine / sorryが複数あるとき)
-- 目標も証明モードの案内も出さない (engine / 通らなかった宣言のsorry)
-- 埋め戻しに失敗しても件数を言い直さない (engine / 通らなかった宣言のsorry)
-- 埋め戻したらsorryAxが消える (engine / 依存している公理)
-- 通ったのにsorryのままと言わない (engine / 埋め戻しの途中でエンジンが落ちる)
-- 日本語を挟んでも位置で切れる (parsing / sorryの埋め戻し)
-- 行頭に寄っているsorryの桁を動かさない (parsing / sorryの埋め戻し)
-- 複数行の台本はsorryの桁に揃える (parsing / sorryの埋め戻し)
-- 行の途中ならbyの下にぶら下げる (parsing / sorryの埋め戻し)
-- 組の中のsorryに空白を足さない (parsing / sorryの埋め戻し)
-- 位置がsorryを指していなければ諦める (parsing / sorryの埋め戻し)
+- 選んだ sorry だけを埋め戻す (engine / sorry が複数あるとき)
+- 残った sorry を続けて証明できる (engine / sorry が複数あるとき)
+- 行頭に寄っている sorry のインデントを崩さない (engine / sorry が複数あるとき)
+- インデントのある宣言でも順に埋められる (engine / sorry が複数あるとき)
+- 埋め戻せなくても残りを続けられる (engine / sorry が複数あるとき)
+- 目標も証明モードの案内も出さない (engine / 通らなかった宣言の sorry)
+- 埋め戻しに失敗しても件数を言い直さない (engine / 通らなかった宣言の sorry)
+- 埋め戻したら sorryAx が消える (engine / 依存している公理)
+- 通ったのに sorry のままと言わない (engine / 埋め戻しの途中でエンジンが落ちる)
+- 日本語を挟んでも位置で切れる (parsing / sorry の埋め戻し)
+- 行頭に寄っている sorry の桁を動かさない (parsing / sorry の埋め戻し)
+- 複数行の台本は sorry の桁に揃える (parsing / sorry の埋め戻し)
+- 行の途中なら by の下にぶら下げる (parsing / sorry の埋め戻し)
+- 組の中の sorry に空白を足さない (parsing / sorry の埋め戻し)
+- 位置が sorry を指していなければ諦める (parsing / sorry の埋め戻し)
 
 ### E4 その定理が何の公理に依存しているか確かめたい
 
-- print axiomsが通る (engine / 依存している公理)
-- sorryのままならsorryAxに依存する (engine / 依存している公理)
-- 埋め戻したらsorryAxが消える (engine / 依存している公理)
+- print axioms が通る (engine / 依存している公理)
+- sorry のままなら sorryAx に依存する (engine / 依存している公理)
+- 埋め戻したら sorryAx が消える (engine / 依存している公理)
 
 ## F. 壊れない
 
@@ -213,45 +213,45 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - エラーになった宣言は環境を進めない (engine / 複数行の宣言)
 - 読み込みに失敗しても手元の環境を失わない (engine / ファイルの読み書き)
-- エンジンが落ちたら作り直して宣言をreplayする (engine / 落ちても続く)
+- エンジンが落ちたら作り直して宣言を replay する (engine / 落ちても続く)
 - 作り直しに失敗しても報告だけで済む (engine / 作り直せないとき)
 - 失敗しても宣言を捨てない (engine / 作り直せないとき)
-- 作り直してもinitの宣言が残る (engine / initの扱い)
+- 作り直しても init の宣言が残る (engine / init の扱い)
 - 起動できていないエンジンには送らない (engine / 送る前の確認)
 - 中断しても環境と宣言を失わない (engine / 読み込みの中断)
 - 落ちたら証明モードを畳んで宣言を残す (engine / タクティクの途中でエンジンが変わる)
 - 中断しても証明モードに入り直せる (engine / タクティクの途中でエンジンが変わる)
-- 読み直せないファイルと消えた宣言を言う (engine / replayで落としたもの)
-- 流せなかった宣言を環境の並びに混ぜない (engine / replayが途中で止まったとき)
-- 次のrestartで流し直す (engine / replayが途中で止まったとき)
+- 読み直せないファイルと消えた宣言を言う (engine / replay で落としたもの)
+- 流せなかった宣言を環境の並びに混ぜない (engine / replay が途中で止まったとき)
+- 次の restart で流し直す (engine / replay が途中で止まったとき)
 - タクティクの行を宣言として送らない (engine / プローブの途中でエンジンが落ちる)
-- 死んだ環境idを据え直さない (engine / 控えた宣言とエンジンの世代)
+- 死んだ環境 id を据え直さない (engine / 控えた宣言とエンジンの世代)
 - 環境が食い違ったら黙らない (engine / 控えた宣言とエンジンの世代)
 - 戻せなかった宣言のテキストを控える (engine / 環境に無い宣言の行き先)
-- 通ったのにsorryのままと言わない (engine / 埋め戻しの途中でエンジンが落ちる)
-- 死んだproofStateに座り続けない (engine / 作り直しに失敗したときの証明モード)
-- resetは断って控えを残す (engine / 起点の環境を失ったとき)
+- 通ったのに sorry のままと言わない (engine / 埋め戻しの途中でエンジンが落ちる)
+- 死んだ proofState に座り続けない (engine / 作り直しに失敗したときの証明モード)
+- reset は断って控えを残す (engine / 起点の環境を失ったとき)
 - 流し直さずに控える (engine / 起点の環境を失ったとき)
 - 型も答えない (engine / 起点の環境を失ったとき)
-- sorryの持ち越しも捨てる (engine / 起点の環境を失ったとき)
+- sorry の持ち越しも捨てる (engine / 起点の環境を失ったとき)
 - 送る前に断る (engine / 起点の環境を失ったとき)
 - 揃うまでは何も返さない (parsing / レスポンスの切り出し)
 - 空行まで来たら読む (parsing / レスポンスの切り出し)
-- JSONの中の空行では切らない (parsing / レスポンスの切り出し)
+- JSON の中の空行では切らない (parsing / レスポンスの切り出し)
 
 ### F2 環境を 1 つ前に戻したい。起動直後に戻したい
 
-- undoのあとのproveが手前の宣言を消さない (engine / 証明モード)
-- resetしてもinitの宣言が残る (engine / initの扱い)
-- 数でないundoの引数でも落ちない (engine / 引数の受け取り)
-- 流せなかった宣言を環境の並びに混ぜない (engine / replayが途中で止まったとき)
-- 次のrestartで流し直す (engine / replayが途中で止まったとき)
+- undo のあとの prove が手前の宣言を消さない (engine / 証明モード)
+- reset しても init の宣言が残る (engine / init の扱い)
+- 数でない undo の引数でも落ちない (engine / 引数の受け取り)
+- 流せなかった宣言を環境の並びに混ぜない (engine / replay が途中で止まったとき)
+- 次の restart で流し直す (engine / replay が途中で止まったとき)
 - 戻せなかった宣言のテキストを控える (engine / 環境に無い宣言の行き先)
-- saveはコメントとして添える (engine / 環境に無い宣言の行き先)
-- resetしたら控えも捨てる (engine / 環境に無い宣言の行き先)
-- envの切り替えでも控えを連れて行く (engine / 控えと環境の乗り換え)
-- lが控えを捨てるならそう言う (engine / 控えと環境の乗り換え)
-- resetは断って控えを残す (engine / 起点の環境を失ったとき)
+- save はコメントとして添える (engine / 環境に無い宣言の行き先)
+- reset したら控えも捨てる (engine / 環境に無い宣言の行き先)
+- env の切り替えでも控えを連れて行く (engine / 控えと環境の乗り換え)
+- l が控えを捨てるならそう言う (engine / 控えと環境の乗り換え)
+- reset は断って控えを残す (engine / 起点の環境を失ったとき)
 
 ### F3 前回のセッションの履歴を引き継ぎたい。異常終了でも失いたくない
 
@@ -262,41 +262,41 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### F4 外部コマンドやパイプ入力の事故でセッションを失いたくない
 
-- Ctrl-Cで書きかけを捨てる (terminal / 行編集)
-- Ctrl-Cで外部コマンドを止めてもセッションが残る (terminal / 外部コマンド)
-- UTF-8で読めないバイトがあっても後続の行を失わない (terminal / 端末でない入力)
+- Ctrl-C で書きかけを捨てる (terminal / 行編集)
+- Ctrl-C で外部コマンドを止めてもセッションが残る (terminal / 外部コマンド)
+- UTF-8 で読めないバイトがあっても後続の行を失わない (terminal / 端末でない入力)
 
 ## G. 起動と設定
 
 ### G1 mathlib 無しで速く起動したい。必要になったら途中から足したい
 
-- lake envのキャッシュを読む (parsing / 起動前の下ごしらえ)
+- lake env のキャッシュを読む (parsing / 起動前の下ごしらえ)
 
 ### G2 毎回書く補助関数や open を起動時に自動で読ませたい
 
-- 作り直してもinitの宣言が残る (engine / initの扱い)
-- resetしてもinitの宣言が残る (engine / initの扱い)
-- initと読み込んだファイルの宣言も書き出す (engine / 書き出しに全部入る)
-- 読み込んだあともinitを重ね直す (engine / initと読み込みが混ざるとき)
-- initファイルのimport行は落とす (parsing / 起動前の下ごしらえ)
-- importを持つファイルには足さない (parsing / 起動前の下ごしらえ)
+- 作り直しても init の宣言が残る (engine / init の扱い)
+- reset しても init の宣言が残る (engine / init の扱い)
+- init と読み込んだファイルの宣言も書き出す (engine / 書き出しに全部入る)
+- 読み込んだあとも init を重ね直す (engine / init と読み込みが混ざるとき)
+- init ファイルの import 行は落とす (parsing / 起動前の下ごしらえ)
+- import を持つファイルには足さない (parsing / 起動前の下ごしらえ)
 
 ### G3 Lake プロジェクトを用意せずに、エンジンは版ごとに leani が用意してほしい
 
 - 起動に失敗したエンジンのプロセスを残さない (engine / 起動の確かめ)
-- toolchainが動いたらキャッシュを取り直す (parsing / 起動前の下ごしらえ)
-- toolchainから版だけ取る (parsing / エンジンの版)
-- rcは同じ版の正式版より前 (parsing / エンジンの版)
-- 読めない版はNone (parsing / エンジンの版)
+- toolchain が動いたらキャッシュを取り直す (parsing / 起動前の下ごしらえ)
+- toolchain から版だけ取る (parsing / エンジンの版)
+- rc は同じ版の正式版より前 (parsing / エンジンの版)
+- 読めない版は None (parsing / エンジンの版)
 - 同名のタグがあればそれを使う (parsing / エンジンの版)
-- タグの無いpatch版は直前のタグを使う (parsing / エンジンの版)
-- どのタグより古い版ならNone (parsing / エンジンの版)
+- タグの無い patch 版は直前のタグを使う (parsing / エンジンの版)
+- どのタグより古い版なら None (parsing / エンジンの版)
 - 置き場所は版ごとに分かれる (parsing / エンジンの版)
 - 明示された置き場所はそのまま使う (parsing / エンジンの版)
 - 置き場所から外へ出る版名は断る (parsing / エンジンの版)
 - プロジェクトの版が最優先 (parsing / 使う版の決め方)
 - 明示したエンジンの版に倒す (parsing / 使う版の決め方)
-- どちらも無ければelanの既定 (parsing / 使う版の決め方)
+- どちらも無ければ elan の既定 (parsing / 使う版の決め方)
 - タグと版の書き換えまで含む (parsing / 手で用意する手順)
 - タグが分からなければ選び方を書く (parsing / 手で用意する手順)
 - 明示されたエンジンは作り直さない (parsing / エンジンを用意するときの安全側)
@@ -307,15 +307,15 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 ### G4 import や設定を書き間違えたとき、黙って壊れた環境で起動されたくない
 
 - 切り替え先が起動しなければ元の環境に戻る (engine / 環境の切り替え)
-- 解決できないimportでは起動を断る (engine / 起動の確かめ)
+- 解決できない import では起動を断る (engine / 起動の確かめ)
 - 起動に失敗したエンジンのプロセスを残さない (engine / 起動の確かめ)
 - 打った宣言も戻ってくる (engine / 切り替えに失敗したとき)
-- 読み込んだと言わない (engine / 解決できないimportのファイル)
-- toolchainが動いたらキャッシュを取り直す (parsing / 起動前の下ごしらえ)
-- importを文字列で書いたら断る (parsing / 設定の値の型)
+- 読み込んだと言わない (engine / 解決できない import のファイル)
+- toolchain が動いたらキャッシュを取り直す (parsing / 起動前の下ごしらえ)
+- import を文字列で書いたら断る (parsing / 設定の値の型)
 - 文字列で書くべき所が別の型なら断る (parsing / 設定の値の型)
 - 表で書くべき所が別の型なら断る (parsing / 設定の値の型)
-- defaultが文字列でなければ断る (parsing / 設定の値の型)
+- default が文字列でなければ断る (parsing / 設定の値の型)
 - 書き方が正しければそのまま通る (parsing / 設定の値の型)
 - 明示されたエンジンに版が無ければ起動を断る (parsing / エンジンを用意するときの安全側)
 
@@ -326,7 +326,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 切り替え先が起動しなければ元の環境に戻る (engine / 環境の切り替え)
 - 打った宣言も戻ってくる (engine / 切り替えに失敗したとき)
 - 打った宣言も新しい環境に入る (engine / 切り替えが通ったとき)
-- envの切り替えでも控えを連れて行く (engine / 控えと環境の乗り換え)
+- env の切り替えでも控えを連れて行く (engine / 控えと環境の乗り換え)
 - 書き方が正しければそのまま通る (parsing / 設定の値の型)
 - プロンプトが設定どおりに変わる (terminal / 環境の切り替え)
 
@@ -334,4 +334,4 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### X1 ドキュメントがテストとずれない
 
-- SPEC mdがテストと揃っている (parsing / 性質一覧)
+- SPEC md がテストと揃っている (parsing / 性質一覧)

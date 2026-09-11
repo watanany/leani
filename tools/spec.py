@@ -18,9 +18,9 @@
 
 テスト名の読み替えの規則は 3 つだけ。
 
-    __            ハイフン          Ctrl__C   -> Ctrl-C
-    ASCII の間の _  空白             do_by     -> do by
-    それ以外の _    詰める           行を_待つ -> 行を待つ
+    __                     ハイフン   Ctrl__C   -> Ctrl-C
+    どちらかが ASCII の _  空白       do_by     -> do by / IO_の式 -> IO の式
+    それ以外の _           詰める     行を_待つ -> 行を待つ
 
 describe の docstring はここには出さない。ストーリー基準で並べ替えると同じ
 説明が何度も出るので、あれはテストのそばに置いたままにする。
@@ -49,32 +49,30 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 ストーリー {stories} 件、テスト {tests} 件。括弧の中はテストの居場所
 (層 / describe)。
 """
-HYPHEN = "\x00"  # __ の置き場。1 文字ずつ見る前に退避しておく
 
 
 # ---------------------------------------------------------------- 名前を戻す
 
 
-def joinable(left: str, right: str) -> str:
-    """語の継ぎ目に入れるもの。英数字同士なら空白、そうでなければ何も入れない。"""
-    ascii_word = (
-        left[-1:].isascii()
-        and left[-1:].isalnum()
-        and right[:1].isascii()
-        and right[:1].isalnum()
-    )
-    return " " if ascii_word else ""
+def ascii_word(ch: str) -> bool:
+    """ASCII の英数字 1 文字か。名前の端では空文字が来るので、それは False。"""
+    return bool(ch) and ch.isascii() and ch.isalnum()
+
+
+def spaced(part: str) -> str:
+    """`_` を継ぎ目として読む。どちらかの隣が ASCII の英数字なら空白を入れる。"""
+    out = ""
+    for i, ch in enumerate(part):
+        if ch != "_":
+            out += ch
+        elif out and (ascii_word(out[-1:]) or ascii_word(part[i + 1 : i + 2])):
+            out += " "
+    return out
 
 
 def label(name: str, prefix: str) -> str:
     """関数名を仕様の 1 文に戻す。"""
-    body = name[len(prefix) :].replace("__", HYPHEN)
-    out = ""
-    for i, ch in enumerate(body):
-        # 継ぎ目に何を入れるかは前後の文字で決まる。右隣を見ずに "_" 自身を
-        # 渡していたので、英数字の間の空白まで消えていた (do_by -> doby)。
-        out += joinable(out, body[i + 1 : i + 2]) if ch == "_" else ch
-    return out.replace(HYPHEN, "-")
+    return "-".join(spaced(p) for p in name[len(prefix) :].split("__"))
 
 
 # ------------------------------------------------------------ テストを集める

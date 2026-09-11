@@ -84,7 +84,7 @@ def describe_タクティクの提案():
         assert found == "simp only [aaa, bbb,\n  ccc, ddd]"
 
     @story("E2")
-    def it_Try_thisと同じ行に書かれた提案も取る():
+    def it_Try_this_と同じ行に書かれた提案も取る():
         found = leani.try_this([{"data": "Try this: exact Nat.le_refl n"}])
         assert found == "exact Nat.le_refl n"
 
