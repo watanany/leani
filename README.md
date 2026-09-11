@@ -20,15 +20,20 @@ Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
 
 ## インストール
 
-leani は Python の標準ライブラリだけで動くので、`bin/leani` に PATH を通せば
-それで入る。
+```
+uv tool install git+https://github.com/watanany/leani
+```
+
+pipx でもいい。
 
 ```
-export PATH="/path/to/leani/bin:$PATH"
+pipx install git+https://github.com/watanany/leani
 ```
+
+どちらも `leani` コマンドを `~/.local/bin` に置く。
 
 必要なものは `elan` (Lean 本体と `lake`) と `git` の 2 つ。どちらかが PATH に
-無ければ起動時に言う。
+無ければ起動時に言う。Python は 3.11 以上が要る。
 
 エンジンは leani が用意する。使う Lean の版ごとに
 `~/.local/state/leani/engine/<版>` へ clone してビルドし、初回の起動だけ
