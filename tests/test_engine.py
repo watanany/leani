@@ -150,6 +150,7 @@ def describe_落ちても続く():
         assert "1 件を replay" in out, out
         assert "9" in repl.feed("survivor"), "replay されていない"
         assert "3" in repl.feed("afterCrash"), "やり直されていない"
+        assert repl.declarations == ["def survivor := 9", "def afterCrash := 3"]
 
 
 def describe_環境の切り替え():
@@ -673,6 +674,7 @@ def describe_通らなかった宣言の_sorry():
         assert "sorry のまま" in out, out
         assert out.count("sorry 1 [proofState") == 0, out
         assert "sorry 2 個" in out, out
+        assert repl.declarations == ["def nums : Nat × Nat := (sorry, sorry)"]
 
 
 def describe_replay_が途中で止まったとき():
@@ -887,6 +889,7 @@ def describe_プローブの途中でエンジンが落ちる():
         # そのうえ submit_cmd の clear_pending が拾い直した sorry を消すので、
         # 直前に出した「:prove で入り直せる」が嘘になる。
         assert "入り直せる" in out, out
+        assert "sorry" in repl.declarations[-1], repl.declarations
         assert repl.feed(":prove").count("⊢") >= 1, "案内どおりに入り直せない"
 
 
@@ -1051,6 +1054,7 @@ def describe_コメントに書いた_import():
 
         # 書けば repl はヘッダを丸ごと捨てて起動するので、:l でも lean でも
         # 通らないファイルになる。それでも :save は成功を報告する。
+        assert "import Lean" in head, head
         assert "NotAModule" not in head, head
         assert "読み込めなかった" not in repl.feed(f":l {out_path}")
 
@@ -1164,6 +1168,7 @@ def describe_起点の環境を失ったとき():
         # 答えると Init だけの環境からの答えになる。設定の import が無いので
         # 嘘になるうえ、「エンジンは健全」に見えてしまう。
         assert "取れなかった" in repl.feed(":t 1 + 1")
+        assert repl.repl.eng.env is None
 
     @story("F1", "E1")
     def it_sorry_の持ち越しも捨てる(repl, mocker):
