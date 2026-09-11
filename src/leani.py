@@ -160,18 +160,6 @@ def pc(code: str, s: str) -> str:
     return open_ + s if RL_HOIST else open_ + s + "\001\033[0m\002"
 
 
-def reset_sgr() -> None:
-    """副作用。libedit で開いたままにした色を戻す。"""
-    if TTY and RL_HOIST:
-        sys.stdout.write("\033[0m")
-        sys.stdout.flush()
-
-
-def die(msg: str) -> NoReturn:
-    print(f"leani: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-
 # ------------------------------------------------------------- 小道具 (純粋)
 
 
@@ -1697,6 +1685,18 @@ def span(
 
 
 # ---------------------------------------------------- 表示を出す (副作用)
+
+
+def reset_sgr() -> None:
+    """libedit で開いたままにした色を戻す (pc の続き)。"""
+    if TTY and RL_HOIST:
+        sys.stdout.write("\033[0m")
+        sys.stdout.flush()
+
+
+def die(msg: str) -> NoReturn:
+    print(f"leani: {msg}", file=sys.stderr)
+    sys.exit(1)
 
 
 def panic_check(resp: Response) -> bool:
