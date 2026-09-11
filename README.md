@@ -24,7 +24,7 @@ leani は Python の標準ライブラリだけで動くので、`bin/leani` に
 それで入る。
 
 ```
-export PATH="$HOME/sanctum/projects/leani/bin:$PATH"
+export PATH="/path/to/leani/bin:$PATH"
 ```
 
 必要なものは `elan` (Lean 本体と `lake`) と `git` の 2 つ。どちらかが PATH に
@@ -47,16 +47,16 @@ export PATH="$HOME/sanctum/projects/leani/bin:$PATH"
 同じ位置づけで、プロジェクトの名前はコードではなくここにだけ書く。
 
 ```toml
-default = "global"
-engine = "~/sanctum/projects/lean-repl"   # 自分で用意したエンジンを使う場合
+default = "main"
+engine = "~/src/lean-repl"   # 自分で用意したエンジンを使う場合
 
-[env.global]
-project = "~/sanctum/projects/lean-global"
-imports = ["Global"]
+[env.main]
+project = "~/src/my-project"
+imports = ["MyProject"]
 
 [env.math]
-project = "~/sanctum/projects/lean-global"
-imports = ["GlobalMath"]
+project = "~/src/my-project"
+imports = ["MyProject.Analysis"]
 prompt = "λ∀> "
 ```
 
