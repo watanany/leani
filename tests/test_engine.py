@@ -431,26 +431,35 @@ def describe_起動の確かめ():
 
 def describe_履歴の書き出し():
     """
-    write_history_file は毎行ファイルを丸ごと書き直す。読めていないまま
-    書くと、前回までの履歴がその 1 行で消える。
+    履歴は確定した入力を 1 件として、そのつど追記する。丸ごと書き直さないので、
+    読めない形式のファイルがあっても消さない。
     """
 
     @story("F3")
-    def it_読めなかった履歴には書かない(repl, tmp_path, mocker, capsys):
-        # libedit は _HiStOrY_V2_ の無い履歴を読めない。GNU readline の
-        # 履歴を引き継いだ環境がこれになる。中身はあるので、書けば消える。
+    def it_読めない形式の履歴を書き潰さない(tmp_path):
+        # readline や libedit の履歴を引き継いだ環境がこれになる。読み込みでは
+        # 無視されるが、書き込みは追記なので前のぶんは残る。
         hist = tmp_path / "gnu-history"
         hist.write_text("1 + 1\n2 + 2\n")
-        mocker.patch.object(leani, "HIST", str(hist))
-        mocker.patch.object(leani.Repl, "_rl_ready", False)
-        mocker.patch.object(leani.Repl, "_hist_ok", True)
 
-        repl.repl._setup_readline()
-        assert leani.Repl._hist_ok is False, "読めていないのに書きに行く"
-        assert "履歴が読めない" in capsys.readouterr().err
+        leani.BlockHistory(str(hist)).record("3 + 3")
+        assert hist.read_text().startswith("1 + 1\n2 + 2\n"), "前の履歴が消えた"
 
-        repl.repl._save_history()
-        assert hist.read_text() == "1 + 1\n2 + 2\n", "読めない履歴を書き潰した"
+    @story("C3", "F3")
+    def it_複数行を一件として持つ(tmp_path):
+        history = leani.BlockHistory(str(tmp_path / "history"))
+        history.record("def f : Nat -> Nat\n  | 0 => 1")
+        assert list(history.load_history_strings()) == [
+            "def f : Nat -> Nat\n  | 0 => 1"
+        ]
+
+    @story("C3", "F3")
+    def it_行ごとの追加は受け付けない(tmp_path):
+        # prompt_toolkit は prompt() を抜けるたびに 1 行入れようとする。受けると
+        # 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も要る。
+        history = leani.BlockHistory(str(tmp_path / "history"))
+        history.append_string("  | 0 => 1")
+        assert list(history.load_history_strings()) == []
 
 
 def describe_折り返した提案():

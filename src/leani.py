@@ -30,7 +30,6 @@ leani — Lean 4 の対話 REPL。
 
 from __future__ import annotations
 
-import atexit
 import codecs
 import contextlib
 import hashlib
@@ -46,9 +45,16 @@ import sys
 import textwrap
 import time
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final, Literal, NamedTuple, NoReturn, TypeVar
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.document import Document
+from prompt_toolkit.formatted_text import ANSI
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.shortcuts import CompleteStyle
 
 # ---------------------------------------------------------------- 型 (純粋)
 
@@ -128,38 +134,6 @@ def green(s: str) -> str:
 
 def dim(s: str) -> str:
     return c("2", s)
-
-
-# \001 / \002 を解釈するのは readline なので、無いときは埋め込めない。
-# libedit は \001..\002 の中身をプロンプトの先頭にまとめて吐くので、
-# 色のリセットをプロンプトの末尾に置けない (どちらも _setup_readline で立てる)。
-RL_OK = False
-RL_HOIST = False
-
-
-def pc(code: str, s: str) -> str:
-    """
-    プロンプト用の色付け。
-
-    readline (macOS は libedit) はプロンプトの表示幅を数えて折り返し位置と
-    カーソル位置を決める。色コードをそのまま置くとそのバイトまで桁として
-    数えるので、`\x1b[36mλ> \x1b[0m` は 3 桁なのに 13 桁と見なされ、
-    10 桁ずれる。長い行 (履歴から呼び戻した行など) で折り返すと libedit の
-    モデルと実際のカーソルが食い違い、Backspace が別のセルを消して文字が
-    画面に残る。非表示部分は \001 / \002 で囲んで幅から除く。
-
-    libedit は非表示区間を順番どおりに、ただしすべてプロンプトの先頭へ
-    まとめて出す。リセットを末尾に置くと色を出した直後に戻ってしまうので、
-    libedit では開きだけを埋め込み、input() を抜けたところで戻す
-    (read_line)。入力中の行にも色が乗る。
-    """
-    if not TTY:
-        return s
-    if not RL_OK:
-        return c(code, s)
-
-    open_ = f"\001\033[{code}m\002"
-    return open_ + s if RL_HOIST else open_ + s + "\001\033[0m\002"
 
 
 # ------------------------------------------------------------- 小道具 (純粋)
@@ -801,20 +775,6 @@ def read_text(path: str) -> str | None:
             return f.read()
     except OSError:
         return None
-
-
-def history_entries(path: str) -> bool:
-    """
-    履歴ファイルに記録が入っているか。
-
-    readline の読み込みが失敗しただけでは、壊れているのか空なのか分からない
-    (libedit は中身の無いファイルでも errno を返す)。上書きして失うものが
-    あるかどうかは、こちらで直に見て判断する。
-    """
-    raw = read_text(path)
-    if raw is None:
-        return False
-    return any(line.strip() not in ("", "_HiStOrY_V2_") for line in raw.splitlines())
 
 
 # ------------------------------------------------------- 起動の用意 (副作用)
@@ -1700,13 +1660,6 @@ def span(
 # ---------------------------------------------------- 表示を出す (副作用)
 
 
-def reset_sgr() -> None:
-    """libedit で開いたままにした色を戻す (pc の続き)。"""
-    if TTY and RL_HOIST:
-        sys.stdout.write("\033[0m")
-        sys.stdout.flush()
-
-
 def die(msg: str) -> NoReturn:
     print(f"leani: {msg}", file=sys.stderr)
     sys.exit(1)
@@ -1827,6 +1780,46 @@ class Last:
     env_before: int | None = None
 
 
+COMPLETE_DELIMS = ' \t\n(),[]{};"'
+
+
+class BlockHistory(FileHistory):
+    """
+    確定した入力を 1 件として持つ履歴。
+
+    prompt_toolkit は prompt() を抜けるたびにその 1 行を入れようとするが、
+    `def fib` の 4 行が 4 件になると呼び戻すのに Ctrl-P が 4 回要る。何をもって
+    1 件とするかは leani 側が知っている (submit / discard) ので、勝手な追加は
+    捨てて record だけを受ける。
+
+    ファイルへは追記しかしない。読めない形式のファイル (readline や libedit の
+    履歴) があっても、行が無視されるだけで書き潰さない。
+    """
+
+    def append_string(self, string: str) -> None:
+        pass
+
+    def record(self, string: str) -> None:
+        super().append_string(string)
+
+
+class NameCompleter(Completer):
+    """Tab で定数名を補う。候補は Repl が出す。"""
+
+    def __init__(self, names: Callable[[str], list[str]]) -> None:
+        self.names = names
+
+    def get_completions(
+        self, document: Document, complete_event: CompleteEvent
+    ) -> Iterator[Completion]:
+        # Lean の名前は . を含むので区切りにしない。
+        text = document.text_before_cursor
+        head = max(text.rfind(d) for d in COMPLETE_DELIMS)
+        prefix = text[head + 1 :]
+        for name in self.names(prefix):
+            yield Completion(name, start_position=-len(prefix))
+
+
 class Repl:
     """
     端末との対話。副作用の層。
@@ -1837,8 +1830,9 @@ class Repl:
     (buf / ready / explicit)、証明モード (proof / pending)、補完のキャッシュ。
     """
 
-    _rl_ready = False
-    _hist_ok = True  # 履歴を読めたか。読めていないなら書かない
+    # 行編集は 1 セッションを使い回す。:env で Repl を作り直しても履歴は続く。
+    _session: PromptSession[str] | None = None
+    _history: BlockHistory | None = None
 
     def __init__(self, cfg: EnvConfig, preload: str | None = None) -> None:
         self.saved: set[str] = set()  # :save で書いたもの。上書きの判断に使う
@@ -1866,13 +1860,11 @@ class Repl:
 
         # 補完と履歴
         self._comp_cache: dict[tuple[int | None, str], list[str]] = {}
-        self._hits: list[str] = []
         self._own: tuple[int, list[str]] = (-1, [])
-        self._hist_added = 0
 
         self.eng = Engine(cfg)
         try:
-            self._setup_readline()
+            self._setup_prompt()
             t0 = time.time()
             self.eng.boot()
         except BaseException:
@@ -1919,103 +1911,45 @@ class Repl:
             self.eng.init_src = src
             print(dim(f"-- {INIT} を読んだ"))
 
-    # -- readline ---------------------------------------------------------
+    # -- 行編集 -----------------------------------------------------------
 
-    def _setup_readline(self) -> None:
-        try:
-            import readline
-        except ImportError:
-            self.rl = None
-            return
-
-        self.rl = readline
-
-        global RL_OK, RL_HOIST
-        RL_OK = True
-        RL_HOIST = "libedit" in (readline.__doc__ or "")
-        readline.set_completer(self._complete)
-
-        if Repl._rl_ready:
-            return
-        Repl._rl_ready = True
-
-        if os.path.dirname(HIST):
-            with contextlib.suppress(OSError):
-                os.makedirs(os.path.dirname(HIST), exist_ok=True)
-
-        # 読めなかったファイルには書かない。write_history_file は丸ごと
-        # 書き直すので、読めないまま 1 行打つと前回までの履歴が消える。
-        # (makedirs と同じ suppress に入れていたので、LEANI_HISTORY に
-        #  ディレクトリ成分が無いだけで毎回消えていた。)
-        try:
-            readline.read_history_file(HIST)
-        except OSError as e:
-            # libedit は中身の無いファイルでも errno を返すので、失敗した
-            # ことだけでは判断できない。記録が入っていたのに読めなかった
-            # ときだけ手を引く (GNU 形式の履歴がこれになる)。
-            if history_entries(HIST):
-                Repl._hist_ok = False
-                print(
-                    yellow(f"履歴が読めないので今回は書かない ({e.strerror}): {HIST}"),
-                    file=sys.stderr,
-                )
-
-        readline.set_history_length(10000)
-        atexit.register(self._save_history)
-
-        # Lean の名前は . を含むので区切りにしない。
-        readline.set_completer_delims(' \t\n(),[]{};"')
-        if RL_HOIST:
-            readline.parse_and_bind("bind ^I rl_complete")
-        else:
-            readline.parse_and_bind("tab: complete")
-
-    def _save_history(self) -> None:
+    def _setup_prompt(self) -> None:
         """
-        毎行書く。atexit だけだと落ちたセッションの履歴が丸ごと消える。
-        1 万件でもミリ秒なので、書き直しのコストは問題にならない。
+        prompt_toolkit のセッションを用意する。端末でなければ持たない。
+
+        補完は Repl に紐付くので、:env で作り直したらそのつど差し替える。
+        セッションと履歴そのものは使い回して、切り替えても Ctrl-P が続く
+        ようにする。
         """
-        if not self.rl or not Repl._hist_ok:
-            return
-        with contextlib.suppress(OSError):
-            self.rl.write_history_file(HIST)
-
-    def _merge_history(self, src: str | None) -> None:
-        """
-        複数行のブロックを履歴 1 件にまとめる。
-
-        readline は行単位なので `def fib` の 4 行は 4 件になり、呼び戻すのに
-        Ctrl-P が 4 回要る。末尾の n 件がそのブロックそのものだと確認できた
-        ときだけ 1 件に置き換える (数え違いで履歴を壊さないため)。
-        libedit は履歴ファイル上で改行を \012 として往復できる。
-        """
-        n, self._hist_added = self._hist_added, 0
-        if not self.rl or n < 2 or src is None:
+        if not sys.stdin.isatty() or not TTY:
             return
 
-        total = self.rl.get_current_history_length()
-        if total < n:
-            return
+        if Repl._history is None:
+            if os.path.dirname(HIST):
+                with contextlib.suppress(OSError):
+                    os.makedirs(os.path.dirname(HIST), exist_ok=True)
+            Repl._history = BlockHistory(HIST)
 
-        items = [self.rl.get_history_item(i) for i in range(total - n + 1, total + 1)]
-        if any(x is None for x in items):
-            return
-        if "\n".join(items).rstrip() != src.rstrip():
-            return
+        if Repl._session is None:
+            Repl._session = PromptSession(
+                history=Repl._history,
+                # Tab を押したときだけ聞く。打つたびに聞くと mathlib では
+                # 1 打鍵ごとにエンジンへ問い合わせることになる。
+                complete_while_typing=False,
+                # 共通部分まで補いつつ候補を下に並べる。READLINE_LIKE は
+                # 候補の一覧を in_terminal (CPR の往復を待つ) で出すので、
+                # 端末が答えるまで何も出ない。
+                complete_style=CompleteStyle.MULTI_COLUMN,
+            )
 
-        for _ in range(n):
-            self.rl.remove_history_item(self.rl.get_current_history_length() - 1)
+        Repl._session.completer = NameCompleter(self._names)
 
-        self.rl.add_history(src)
-        self._save_history()  # まとめた形をファイルにも反映する
+    def remember(self, src: str) -> None:
+        """履歴に 1 件として入れる。複数行の宣言もこれで丸ごと 1 件になる。"""
+        if Repl._history is not None and src.strip():
+            Repl._history.record(src.rstrip())
 
     # -- 補完 -------------------------------------------------------------
-
-    def _complete(self, text: str, state: int) -> str | None:
-        if state == 0:
-            self._hits = self._names(text)
-        hits = self._hits
-        return hits[state] if state < len(hits) else None
 
     @staticmethod
     def _chunk(prefix: str) -> str:
@@ -2212,28 +2146,28 @@ class Repl:
 
     def prompt(self) -> str:
         if self.proof is not None:
-            return pc("35", "⊢> ")
+            return c("35", "⊢> ")
         else:
-            return pc("36", self.cfg.prompt)
+            return c("36", self.cfg.prompt)
 
     def read_line(self, prompt: str) -> str:
         """
-        1 行読む。Ctrl-C は KeyboardInterrupt として上に返る。
+        1 行読む。Ctrl-C は KeyboardInterrupt、Ctrl-D は EOFError で上に返る。
 
-        macOS の libedit は 1 文字ずつの read() の途中で SIGINT を受けると
-        EINTR を握り潰して読み直すので、そのあいだの Ctrl-C は次の入力が来る
-        まで効かない。打鍵の直後ミリ秒という窓なので指では届かない。
+        端末を握るのは prompt() の中だけなので、評価中の Ctrl-C は今までどおり
+        SIGINT として届く (Engine.send が Interrupted に訳す)。端末でなければ
+        セッションを持たないので、パイプ入力は素の input() を通る。
         """
-        try:
+        if Repl._session is None:
             return input(prompt)
-        finally:
-            reset_sgr()
+        else:
+            return Repl._session.prompt(ANSI(prompt))
 
     def loop(self) -> int:
         while True:
             try:
                 line = self.read_line(
-                    pc("2", " | ") if (self.buf or self.explicit) else self.prompt()
+                    c("2", " | ") if (self.buf or self.explicit) else self.prompt()
                 )
             except EOFError:
                 if self.buf or self.explicit:
@@ -2253,10 +2187,6 @@ class Repl:
                 # 抜けると、それまでに通した宣言ごと落ちる。その行だけ捨てる。
                 print(red(f"UTF-8 として読めない行を飛ばした ({e.reason})"))
                 continue
-
-            if line.strip():
-                self._hist_added += 1
-            self._save_history()
 
             try:
                 if self.feed_line(line) == "quit":
@@ -2278,9 +2208,7 @@ class Repl:
         # まとめた履歴を呼び戻すと改行入りの 1 行として返ってくるので、
         # 打ったときと同じ順に食わせ直す。
         lines = line.split("\n")
-        for n, one in enumerate(lines):
-            if n:
-                self._hist_added += 1
+        for one in lines:
             if self.feed(one) == "quit":
                 return "quit"
 
@@ -2293,8 +2221,10 @@ class Repl:
 
     def discard(self) -> None:
         """入力中のブロックを捨てる。Ctrl-C / Ctrl-D で呼ぶ。"""
+        # 打ったものは履歴に残す。捨てたのは入力バッファであって、打鍵の記録
+        # ではない。長い宣言を打ち間違えたときに Ctrl-P で取り戻せる。
+        self.remember("\n".join(self.buf))
         self.buf, self.ready, self.explicit = [], None, False
-        self._hist_added = 0
         self.restore_undone()
 
     def feed(self, line: str) -> Step | None:
@@ -2331,6 +2261,7 @@ class Repl:
             # "unexpected identifier; expected command" になる。しかも
             # submit_cmd の clear_pending が reattach の成果を消すので、直前に出した
             # 「:prove で入り直せる」まで嘘になる。行は捨てて案内だけ残す。
+            self.remember("\n".join(self.buf))
             self.buf, self.ready = [], None
             print(dim("  打っていた行は送らなかった"))
             return None
@@ -2366,7 +2297,7 @@ class Repl:
             return "done"
         elif s.startswith(":"):
             self.last = None
-            self._hist_added = 0
+            self.remember(s)
             return "quit" if self.meta(s) == "quit" else "done"
         elif continues(line) and self.last is not None:
             # 確定した入力の続きだった。1 つ戻して書き直す。
@@ -2392,6 +2323,7 @@ class Repl:
             if kind is not None:
                 self.submit(src, kind)
             else:
+                self.remember(src)
                 self.restore_undone()
                 print(dim("-- 未完のまま破棄した"))
                 self.last = None
@@ -2440,6 +2372,10 @@ class Repl:
 
     def submit(self, src: str, kind: Kind | None = None) -> None:
         """完結した入力を送って結果を出す。"""
+        # 送れるかを見る前に履歴へ入れる。エンジンが死んでいるときこそ、
+        # 打ったものを呼び戻せないと困る。
+        self.remember(src)
+
         if self.eng.env is None:
             # boot が通らなかったエンジン。送れば send_cmd が関門で断るが、
             # 打った本人に要るのは例外の名前ではなく次の一手なので、ここで
@@ -2448,7 +2384,6 @@ class Repl:
             return
 
         self.undone = None  # 書き直しが確定した。もう戻さない
-        self._merge_history(src)
         if self.proof is not None:
             self.tactic(src)
             return

@@ -9,7 +9,7 @@
   test_parsing.py      純関数と読み取りだけ。端末もエンジンも要らない。ミリ秒。
   test_engine.py       Repl を直接叩く。1 テスト 1.5 秒。
   test_completion.py   同上。問い合わせ回数は mocker で数える。
-  test_terminal.py     pty 越しに本物の readline を相手にする。
+  test_terminal.py     pty 越しに本物の行編集を相手にする。
 
 どのテストも Lean 本体だけを import する環境で走る。特定の Lake プロジェクト
 に依存しないので、このリポジトリの外へ持って行ってもそのまま動く。
@@ -36,14 +36,21 @@ import termios
 import textwrap
 import time
 
+import pyte
 import pytest
+from prompt_toolkit.history import FileHistory
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPL = os.path.join(ROOT, "src", "leani.py")
 sys.path.insert(0, os.path.join(ROOT, "src"))
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]")
-PROMPT = "λ> "
-WIDE_PROMPT = "λ+> "
+# prompt_toolkit は末尾の空白を書かずにカーソルを動かすので、画面上の
+# プロンプトに空白は残らない。
+PROMPT = "λ>"
+WIDE_PROMPT = "λ+>"
+CPR = b"\x1b[6n"  # カーソル位置の問い合わせ
+# 読み終わりで切れたエスケープ列。次に読んだぶんと繋げてから解釈する。
+ESC_TAIL = re.compile(rb"\x1b\[?[0-9;?]*$")
 
 # 設定・履歴・init の場所は import 時に定数になるので、読む前に決める。
 _STATE = tempfile.mkdtemp(prefix="leani-test-")
@@ -184,10 +191,27 @@ def repl():
 
 
 class Terminal:
-    """pty の向こうで動いている leani 1 つ。"""
+    """pty の向こうで動いている leani 1 つ。
+
+    prompt_toolkit は入力行をカーソル移動で描き直すので、受け取ったバイト列から
+    色を落としただけでは画面にならない (プロンプトは末尾の空白を書かずに
+    カーソルを送るだけ、打った文字は消しては書き直される)。そこで pyte で端末を
+    再現し、画面そのものを見る。カーソル位置の問い合わせ (CPR) にも本物の端末と
+    同じように答える。答えないと prompt_toolkit は 2 秒待ってから警告を出す。
+
+    入力待ちに入ったかどうかは、カーソルがプロンプトの行に載っているかで見る
+    (wait_prompt)。leani が print したものは描き直されないので、受け取った順に
+    溜めておいて (raw)、プロンプトまで来たところでまとめて返す。
+    """
+
+    ROWS = 24
 
     def __init__(self, history, cols=80, history_env=None):
         self.history = history
+        self.screen = pyte.Screen(cols, self.ROWS)
+        self.stream = pyte.ByteStream(self.screen)
+        self.raw = ""  # leani が print したもの。色を落として溜める
+        self._pending = b""
         env = dict(
             os.environ,
             TERM="xterm-256color",
@@ -198,9 +222,25 @@ class Terminal:
             # lakefile の無い所から起動して、cwd に依存しないことも兼ねて見る。
             os.chdir(_STATE)
             os.execve(sys.executable, [sys.executable, REPL], env)
-        fcntl.ioctl(self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", 24, cols, 0, 0))
-        self.buf = ""
-        self.wait_for(PROMPT, 90)
+        fcntl.ioctl(
+            self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", self.ROWS, cols, 0, 0)
+        )
+        self.wait_prompt(PROMPT, 90)
+
+    def _feed(self, chunk):
+        """受け取ったバイトを画面に流す。CPR には今のカーソル位置で答える。"""
+        self._pending += chunk
+        cut = ESC_TAIL.search(self._pending)
+        head = self._pending[: cut.start()] if cut else self._pending
+        self._pending = self._pending[cut.start() :] if cut else b""
+
+        for i, part in enumerate(head.split(CPR)):
+            if i:
+                # 直前のぶんを流したあとのカーソル位置で答える。
+                row, col = self.screen.cursor.y + 1, self.screen.cursor.x + 1
+                os.write(self.fd, f"\x1b[{row};{col}R".encode())
+            self.stream.feed(part)
+            self.raw += ANSI.sub("", part.decode("utf-8", "replace")).replace("\r", "")
 
     def _pump(self, budget):
         ready, _, _ = select.select([self.fd], [], [], max(0.0, min(0.2, budget)))
@@ -212,60 +252,67 @@ class Terminal:
             return False
         if not chunk:
             return False
-        self.buf += chunk.decode("utf-8", "replace")
+        self._feed(chunk)
         return True
 
-    def wait_for(self, needle, timeout=30):
-        """needle が出るまで読む。sleep で待たないので速く、かつ決定的。"""
+    def screen_text(self):
+        """今の画面。末尾の空行は落とす。"""
+        return "\n".join(line.rstrip() for line in self.screen.display).rstrip()
+
+    def cursor_line(self):
+        return self.screen.display[self.screen.cursor.y]
+
+    def wait_prompt(self, prompt=PROMPT, timeout=30):
+        """プロンプトが出て入力待ちに入るまで待つ。sleep で待たないので速い。
+
+        溜めていた出力を返して空にする。次に待つときは、その先だけを見る。
+        """
         end = time.time() + timeout
-        while needle not in self.screen():
-            assert time.time() <= end, f"{needle!r} が来ない。受信:\n{self.screen()}"
-            assert self._pump(end - time.time()), (
-                f"{needle!r} の前に切れた。受信:\n{self.screen()}"
+        while True:
+            self.settle()
+            if self.cursor_line().lstrip().startswith(prompt):
+                out, self.raw = self.raw, ""
+                return out
+            assert time.time() <= end, (
+                f"{prompt!r} で止まらない。画面:\n{self.screen_text()}"
             )
-        out, self.buf = self.screen(), ""
-        return out
+            assert self._pump(end - time.time()), (
+                f"{prompt!r} の前に切れた。画面:\n{self.screen_text()}"
+            )
 
     def settle(self, quiet=0.2):
-        """子が打った分を読み終えて、入力待ちに入るまで待つ。
+        """子が打った分を読み終えるまで待つ。
 
-        macOS の libedit は 1 文字ずつの read() の途中で SIGINT を受けると
-        EINTR を握り潰して読み直すので、次の入力が来るまで CPython が割り込みを
-        見に行けない。エコーの直後にミリ秒で Ctrl-C を送るとここに落ちる。
-        人の指では届かない間隔なので、テスト側で静かになるのを待ってから打つ。
+        画面とカーソルで見る。描き直しはカーソルを動かすだけのことがあるので、
+        受け取ったバイト数だけでは「まだ動いている」を取りこぼす。
         """
-        while True:
-            before = len(self.buf)
-            self._pump(quiet)
-            if len(self.buf) == before:
-                return
 
-    def screen(self):
-        return ANSI.sub("", self.buf).replace("\r", "")
+        def state():
+            return (self.screen_text(), self.screen.cursor.y, self.screen.cursor.x)
+
+        while True:
+            before = state()
+            self._pump(quiet)
+            if state() == before:
+                return
 
     def type(self, raw):
         os.write(self.fd, raw.encode())
 
     def line(self, text, wait=PROMPT, timeout=30):
         self.type(text + "\r")
-        return self.wait_for(wait, timeout)
+        return self.wait_prompt(wait, timeout)
 
     def block(self, *lines, timeout=40):
         for one in lines:
             self.type(one + "\r")
-            self.wait_for("|", 20)
+            self.wait_prompt("|", 20)
         self.type("\r")
-        return self.wait_for(PROMPT, timeout)
+        return self.wait_prompt(PROMPT, timeout)
 
     def saved_history(self):
-        """libedit の履歴ファイルを素の文字列のリストに戻す。"""
-        with open(self.history) as f:
-            raw = f.read()
-        return [
-            line.replace("\\040", " ").replace("\\012", "\n")
-            for line in raw.splitlines()
-            if line and line != "_HiStOrY_V2_"
-        ]
+        """履歴ファイルを打った順のリストに戻す。読む側と同じ実装で読む。"""
+        return list(reversed(list(FileHistory(self.history).load_history_strings())))
 
     def close(self, kill=False):
         try:
@@ -286,7 +333,7 @@ def terminal(tmp_path):
     """pty 越しの leani。cols を変えたいときは terminal(cols=100)。"""
     made = []
 
-    def start(cols=80, history_name=None, seed="_HiStOrY_V2_\n"):
+    def start(cols=80, history_name=None, seed=""):
         if history_name is None:
             history, history_env = str(tmp_path / "history"), None
         else:
