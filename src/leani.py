@@ -334,6 +334,14 @@ def parse_env_lines(text: str) -> dict[str, str]:
     return out
 
 
+def signal_name(num: int) -> str:
+    """シグナル番号を名前にする。知らない番号はそのまま返す。"""
+    try:
+        return signal.Signals(num).name
+    except ValueError:
+        return f"signal {num}"
+
+
 # ------------------------------------------------------- エンジンの版 (純粋)
 
 VERSION = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:-rc(\d+))?$")
@@ -1226,21 +1234,45 @@ class Engine:
         except KeyboardInterrupt:
             raise Interrupted() from None
 
+    def _died(self) -> EngineDied:
+        """
+        死んだプロセスの終わり方を報告に載せる。
+
+        版の合わない olean や壊れたエンジンを掴むと、repl は何も言わずに
+        シグナルで消える。終わり方を残さないと呼び出し側は理由を言えず、
+        「import が通らない」という当てずっぽうだけが残って、書き間違って
+        いない import を疑うところから始めることになる。
+
+        EOF を読んだ直後はまだ終了状態を拾えないことがあるので、少し待つ。
+        """
+        code = None
+        if self.proc is not None:
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                code = self.proc.wait(timeout=0.5)
+
+        if code is None:
+            return EngineDied("エンジンが応答しない")
+
+        how = (
+            f"落ちた ({signal_name(-code)})" if code < 0 else f"終了した (exit {code})"
+        )
+        return EngineDied(f"エンジンが{how}\n  {self.dir}/.lake/build/bin/repl")
+
     def _exchange(self, obj: Json) -> Response:
         if self.proc is None or self.proc.poll() is not None:
-            raise EngineDied()
+            raise self._died()
 
         # spawn は必ず PIPE で開くので None にはならないが、Popen の型は
         # それを知らない。落とし穴を残すより、死んだのと同じ扱いにする。
         stdin, stdout = self.proc.stdin, self.proc.stdout
         if stdin is None or stdout is None:
-            raise EngineDied()
+            raise self._died()
 
         try:
             stdin.write(json.dumps(obj) + "\n\n")
             stdin.flush()
         except (BrokenPipeError, ValueError) as e:
-            raise EngineDied() from e
+            raise self._died() from e
 
         fd = stdout.fileno()
         dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
@@ -1250,20 +1282,20 @@ class Engine:
             try:
                 ready, _, _ = select.select([fd], [], [], 0.25)
             except (OSError, ValueError) as e:
-                raise EngineDied() from e
+                raise self._died() from e
 
             if not ready:
                 if self.proc.poll() is not None:
-                    raise EngineDied()
+                    raise self._died()
                 else:
                     continue
 
             try:
                 chunk = os.read(fd, 1 << 16)
             except OSError as e:
-                raise EngineDied() from e
+                raise self._died() from e
             if not chunk:
-                raise EngineDied()
+                raise self._died()
 
             buf += dec.decode(chunk)
             done = first_response(buf)
@@ -2014,8 +2046,8 @@ class Repl:
             self.fold_proof()
             return None
         except (EngineDied, OSError) as e:
-            print(red(f"エンジンを作り直せなかった: {str(e) or 'import が通らない'}"))
-            print(dim("  import と設定を直してから :restart"))
+            print(red(f"エンジンを作り直せなかった: {str(e) or '理由は分からない'}"))
+            print(dim("  原因を直してから :restart"))
             self.fold_proof()
             return None
 
@@ -2819,7 +2851,7 @@ class Repl:
             self._start(target, preload=prev)
         except START_FAILED as e:
             # import が通るかは boot するまで分からない。元の環境に戻す。
-            print(red(f"{arg} で起動できなかった: {str(e) or 'import が通らない'}"))
+            print(red(f"{arg} で起動できなかった: {str(e) or '理由は分からない'}"))
             print(dim(f"  {back.name} に戻る"))
             try:
                 self._start(back, preload=prev)
@@ -3056,7 +3088,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # loop() も中に入れる。再起動でエンジンを用意し直せないことがある。
         return Repl(cfg, args.preload).loop()
     except START_FAILED as e:
-        die(str(e) or "エンジンが起動しなかった (import が通らない)")
+        die(str(e) or "エンジンが起動しなかった")
     except KeyboardInterrupt:
         print()
         return 130

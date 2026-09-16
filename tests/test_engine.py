@@ -407,6 +407,21 @@ def describe_起動の確かめ():
         finally:
             eng.kill()
 
+    @story("G4")
+    def it_エンジンが死んだら終わり方を報告に載せる():
+        # 版の合わないエンジンを掴むと、repl は何も言わずにシグナルで消える。
+        # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
+        # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
+        cfg = leani.EnvConfig.make("bogus")
+        eng = leani.Engine(cfg)
+        try:
+            assert eng.proc is not None
+            eng.proc.kill()
+            with pytest.raises(leani.EngineDied, match="SIGKILL"):
+                eng.send_cmd("def after_kill := 1", fresh=True)
+        finally:
+            eng.kill()
+
     @story("G3", "G4")
     def it_起動に失敗したエンジンのプロセスを残さない(repl, mocker):
         # Engine を作った時点で repl は起動している。boot が投げたあとに
