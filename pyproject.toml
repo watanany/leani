@@ -25,6 +25,7 @@ sources = ["src"]
 
 [dependency-groups]
 dev = [
+    "hypothesis>=6",
     "mypy>=2.3.1",
     "pyte>=0.8.2",
     "pytest>=8",

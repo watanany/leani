@@ -6,6 +6,40 @@ import sys
 
 import pytest
 from conftest import ROOT, leani, story
+from hypothesis import given
+from hypothesis import strategies as st
+
+# ------------------------------------------------- property test の素材
+
+# 括弧が閉じた文字列。中身は Lean の字面に寄せてあるが、閉じ方だけが要る。
+BALANCED = st.recursive(
+    st.sampled_from(["", "x", "exact rfl", "simp only"]),
+    lambda inner: st.one_of(
+        st.tuples(inner, inner).map("".join),
+        st.tuples(st.sampled_from(sorted(leani.pure.PAIRS)), inner).map(
+            lambda pair: pair[0] + pair[1] + leani.pure.PAIRS[pair[0]]
+        ),
+    ),
+    max_leaves=8,
+)
+
+# sorry の前後に置く行。コメントとして "sorry" を書いたものを混ぜてある。
+DECOYS = ["", "def f : True := by", "-- sorry はここにもある", '"sorry"', "  rfl"]
+
+# ヘッダ領域の材料。import・コメント・本体と、import に見えて import でない行。
+HEADERS = [
+    "import Std",
+    "import Lean.Elab",
+    "  import Mathlib",
+    "import",
+    "import Foo -- メモ",
+    "-- import Bar",
+    "/- ここから",
+    "import Baz",
+    "ここまで -/",
+    "",
+    "def a := 1",
+]
 
 
 def describe_継続行の判定():
@@ -96,6 +130,17 @@ def describe_タクティクの提案():
         assert not leani.pure.balanced("simp only [aaa, bbb,")
         assert not leani.pure.balanced("exact foo)")
         assert not leani.pure.balanced("exact ⟨foo]")
+
+    @story("E2")
+    @given(
+        a=BALANCED, b=BALANCED, close=st.sampled_from(list(leani.pure.PAIRS.values()))
+    )
+    def it_閉じたもの同士を繋いでも閉じている(a, b, close):
+        # 例では 5 通りしか置けない。閉じた文字列を文法から組んで、繋いでも
+        # 閉じたまま・閉じ括弧を 1 つ足せば必ず崩れることを見る。
+        assert leani.pure.balanced(a)
+        assert leani.pure.balanced(a + b)
+        assert not leani.pure.balanced(a + close)
 
     @story("E2")
     def it_提案でなければ何も返さない():
@@ -552,6 +597,46 @@ def describe_sorry_の埋め戻し():
             is None
         )
 
+    @story("E3")
+    @given(
+        lines=st.lists(st.text(alphabet="ab \t", max_size=4), min_size=1, max_size=5),
+        n=st.integers(min_value=0, max_value=99),
+        col=st.integers(min_value=0, max_value=99),
+    )
+    def it_行と桁を文字位置に直せる(lines, n, col):
+        # splice_sorry が切る位置はこれで決まる。1 桁ずれると sorry を跨いで切る。
+        src = "\n".join(lines)
+        n %= len(lines)
+        col %= len(lines[n]) + 1
+        i = leani.pure.offset(src, {"line": n + 1, "column": col})
+        assert i is not None
+        assert src[i:].split("\n")[0] == lines[n][col:]
+
+    @story("E3")
+    @given(
+        before=st.lists(st.sampled_from(DECOYS), max_size=4),
+        pad=st.sampled_from(["", "  ", "    ", "  exact ⟨"]),
+        after=st.lists(st.sampled_from(DECOYS), max_size=4),
+        script=st.sampled_from(["rfl", "induction n with\n| zero => rfl"]),
+    )
+    def it_sorry_の前後は書き換えない(before, pad, after, script):
+        # 前後にコメントとして "sorry" を混ぜる。数えて当てていると、そちらを
+        # 切ってしまう。位置で切っている限り、前後は一字も動かない。
+        src = "\n".join([*before, pad + "sorry", *after])
+        line = len(before) + 1
+        sy = {
+            "pos": {"line": line, "column": len(pad)},
+            "endPos": {"line": line, "column": len(pad) + len("sorry")},
+        }
+        a = leani.pure.offset(src, sy["pos"])
+        b = leani.pure.offset(src, sy["endPos"])
+        got = leani.pure.splice_sorry(src, sy, script)
+
+        assert got is not None
+        assert got.endswith(src[b:])
+        # 行の途中に置いた sorry だけは、手前の空白を落として by の下に下げる。
+        assert got.startswith(src[:a].rstrip(" \t"))
+
 
 def describe_ファイルの_import():
     """:save のヘッダに書き戻すため、読み込んだファイルの import を覚える。"""
@@ -583,6 +668,20 @@ def describe_ファイルの_import():
     def it_入れ子のコメントを閉じ切る():
         src = "/- /- import In.Nest -/ import Still.In -/\nimport Real\n"
         assert leani.pure.import_lines(src) == ["Real"]
+
+    @story("B3", "B4")
+    @given(lines=st.lists(st.sampled_from(HEADERS), max_size=12))
+    def it_落とすのは本物の_import_行だけ(lines):
+        src = "\n".join(lines)
+        mods, at = leani.pure.scan_header(src)
+        stripped = leani.pure.strip_imports(src)
+
+        assert len(mods) == len(at)
+        # コメントの中の import を拾っていない。拾えば :save したファイルが壊れる。
+        assert all(lines[n].split()[:1] == ["import"] for n in at)
+        # 落とした跡から新しい import は生えない。ヘッダの終わりは動かないので、
+        # 1 回で落としきる。
+        assert leani.pure.import_lines(stripped) == []
 
 
 def describe_略記の展開():
@@ -619,6 +718,17 @@ def describe_略記の展開():
         # `\to)` まで丸ごと引く。`"\t"` のような文字列を ▸ に化けさせない。
         assert leani.abbrev.expand_abbrev("(\\to)") is None
         assert leani.abbrev.expand_abbrev('"\\t"') is None
+
+    @story("C5")
+    @given(
+        key=st.sampled_from(sorted(leani.abbrev.ABBREV)),
+        head=st.text(alphabet=st.characters(exclude_characters="\\"), max_size=8),
+    )
+    def it_表のどの綴りも引ける(key, head):
+        # 例に書けるのは数件。1829 件すべてが同じ規則で引けることはここで見る。
+        # 打つ手前に何が書いてあっても、直前の `\\` から後ろだけを鍵にする。
+        want = (leani.abbrev.ABBREV[key], len(key) + 1)
+        assert leani.abbrev.expand_abbrev(head + "\\" + key) == want
 
 
 def describe_性質一覧():

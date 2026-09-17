@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 31 件、テスト 172 件。括弧の中はテストの居場所
+ストーリー 31 件、テスト 177 件。括弧の中はテストの居場所
 (層 / describe)。
 
 ## A. 試し打ち
@@ -67,6 +67,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - import が無ければ空 (parsing / ファイルの import)
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 宣言のあとの import は数えない (parsing / ファイルの import)
+- 落とすのは本物の import 行だけ (parsing / ファイルの import)
 
 ### B4 既にあるファイルを読み込んで中の関数を叩きたい。編集したら読み直したい
 
@@ -82,6 +83,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - import の行だけを取り出す (parsing / ファイルの import)
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 入れ子のコメントを閉じ切る (parsing / ファイルの import)
+- 落とすのは本物の import 行だけ (parsing / ファイルの import)
 
 ## C. 複数行の宣言を書く
 
@@ -130,6 +132,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 滅多に打たない綴りも引ける (parsing / 略記の展開)
 - 表に無い名前は変えない (parsing / 略記の展開)
 - 記号が続く形は変えない (parsing / 略記の展開)
+- 表のどの綴りも引ける (parsing / 略記の展開)
 - space で記号になり space も残る (terminal / 略記の入力)
 
 ## D. 名前と型を探す
@@ -191,6 +194,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 折り返した提案を丸ごと取る (parsing / タクティクの提案)
 - Try this と同じ行に書かれた提案も取る (parsing / タクティクの提案)
 - 閉じていない提案は読み切れていないと分かる (parsing / タクティクの提案)
+- 閉じたもの同士を繋いでも閉じている (parsing / タクティクの提案)
 - 提案でなければ何も返さない (parsing / タクティクの提案)
 
 ### E3 証明が通ったら、sorry を埋め戻した本物の宣言として環境に入れたい
@@ -212,6 +216,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 行の途中なら by の下にぶら下げる (parsing / sorry の埋め戻し)
 - 組の中の sorry に空白を足さない (parsing / sorry の埋め戻し)
 - 位置が sorry を指していなければ諦める (parsing / sorry の埋め戻し)
+- 行と桁を文字位置に直せる (parsing / sorry の埋め戻し)
+- sorry の前後は書き換えない (parsing / sorry の埋め戻し)
 
 ### E4 その定理が何の公理に依存しているか確かめたい
 
