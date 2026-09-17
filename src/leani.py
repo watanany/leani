@@ -80,6 +80,39 @@ ERR: Final[State] = "err"
 
 T = TypeVar("T")
 
+
+# 例外は投げる節と受ける節が違うので、どちらにも寄せずここに置く。状態を
+# 持たないので、純粋な側から投げても副作用を呼ぶことにはならない。
+class ConfigError(Exception):
+    """設定が読めない / 指定された環境が無い。"""
+
+
+class EngineError(Exception):
+    """エンジンを用意できない。起動を断る理由になるが、REPL は落とさない。"""
+
+
+class EngineDied(Exception):
+    """repl プロセスが応答しなくなった。呼び出し側は作り直す。"""
+
+
+class Interrupted(Exception):
+    """評価中に Ctrl-C が来た。プロトコルがずれているので作り直す。"""
+
+
+class NoEnvironment(Exception):
+    """
+    環境が無いのに環境の上で走らせようとした。呼ぶ側の誤り。
+
+    boot が通らなかったあとの状態を扱い忘れると、以前は repl が Init だけの
+    環境を勝手に作って答えていた (嘘の型、消える宣言)。黙って進むよりは
+    ここで止める。loop が「内部エラー」として 1 行分に留めるので、セッション
+    ごと落ちることはない。
+    """
+
+
+# 起動が駄目になる理由。どれも報告して済ませる (traceback にしない)。
+START_FAILED = (EngineError, EngineDied, Interrupted, OSError)
+
 # -------------------------------------------------------- 置き場所 (読み取り)
 
 HOME = os.path.expanduser("~")
@@ -113,11 +146,14 @@ BOOT_PROBE = "#check @Lean.Parser.runParserCategory\n"
 
 COMPLETE_CAP = 40000
 
-# --------------------------------------------------------------- 色 (読み取り)
-
+# 色を出すかどうかは起動時に決まる。パイプに流すときは混ぜない。
 TTY = sys.stdout.isatty()
 
+# ------------------------------------------------------------- 小道具 (純粋)
 
+
+# 色を付けるかどうかを読み取る (TTY) のと、実際に組み立てるのは別。判定は
+# 起動時に一度きりなので、ここから下は入力だけで出力が決まる。
 def c(code: str, s: str) -> str:
     return f"\033[{code}m{s}\033[0m" if TTY else s
 
@@ -136,9 +172,6 @@ def green(s: str) -> str:
 
 def dim(s: str) -> str:
     return c("2", s)
-
-
-# ------------------------------------------------------------- 小道具 (純粋)
 
 
 def lean_str(s: str) -> str:
@@ -481,10 +514,6 @@ def engine_dir(engine: str | None, tc: str) -> str:
 
 
 # ---------------------------------------------------------- 設定 (読み取り)
-
-
-class ConfigError(Exception):
-    """設定が読めない / 指定された環境が無い。"""
 
 
 @dataclass(frozen=True)
@@ -870,19 +899,15 @@ def read_text(path: str) -> str | None:
         return None
 
 
-# ------------------------------------------------------- 起動の用意 (副作用)
-
-LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)")
-
-
-class EngineError(Exception):
-    """エンジンを用意できない。起動を断る理由になるが、REPL は落とさない。"""
-
-
 def read_toolchain(path: str | None) -> str | None:
     """そのディレクトリの lean-toolchain。無ければ None。"""
     text = read_text(f"{path}/lean-toolchain") if path else None
     return text.strip() or None if text else None
+
+
+# ------------------------------------------------------- 起動の用意 (副作用)
+
+LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)")
 
 
 def local_toolchain() -> str | None:
@@ -1163,29 +1188,6 @@ def prepare(cfg: EnvConfig) -> None:
 
 
 # ------------------------------------------------------------ エンジン (副作用)
-
-
-class EngineDied(Exception):
-    """repl プロセスが応答しなくなった。呼び出し側は作り直す。"""
-
-
-class Interrupted(Exception):
-    """評価中に Ctrl-C が来た。プロトコルがずれているので作り直す。"""
-
-
-class NoEnvironment(Exception):
-    """
-    環境が無いのに環境の上で走らせようとした。呼ぶ側の誤り。
-
-    boot が通らなかったあとの状態を扱い忘れると、以前は repl が Init だけの
-    環境を勝手に作って答えていた (嘘の型、消える宣言)。黙って進むよりは
-    ここで止める。loop が「内部エラー」として 1 行分に留めるので、セッション
-    ごと落ちることはない。
-    """
-
-
-# 起動が駄目になる理由。どれも報告して済ませる (traceback にしない)。
-START_FAILED = (EngineError, EngineDied, Interrupted, OSError)
 
 
 class Undone(NamedTuple):
