@@ -604,6 +604,12 @@ def describe_略記の展開():
         assert leani.abbrev.expand_abbrev("\\alpha") == ("α", 6)
 
     @story("C5")
+    def it_滅多に打たない綴りも引ける():
+        # 表は本家の全件。よく打つぶんだけに絞っていた頃は引けなかった。
+        assert leani.abbrev.expand_abbrev("\\frown") == ("⌢", 6)
+        assert leani.abbrev.expand_abbrev("\\Gangia") == ("Ϫ", 7)
+
+    @story("C5")
     def it_表に無い名前は変えない():
         assert leani.abbrev.expand_abbrev("\\nosuch") is None
         assert leani.abbrev.expand_abbrev("1 + 1") is None

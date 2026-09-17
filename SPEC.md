@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 31 件、テスト 171 件。括弧の中はテストの居場所
+ストーリー 31 件、テスト 172 件。括弧の中はテストの居場所
 (層 / describe)。
 
 ## A. 試し打ち
@@ -127,6 +127,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - 名前を記号にする (parsing / 略記の展開)
 - 短い名前に食われない (parsing / 略記の展開)
+- 滅多に打たない綴りも引ける (parsing / 略記の展開)
 - 表に無い名前は変えない (parsing / 略記の展開)
 - 記号が続く形は変えない (parsing / 略記の展開)
 - space で記号になり space も残る (terminal / 略記の入力)
