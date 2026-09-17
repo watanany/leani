@@ -824,7 +824,8 @@ def describe_実行時間():
     def it_time_で実行時間が付く(repl):
         assert "on" in repl.feed(":time")
         out = repl.feed("1 + 1")
-        assert "2" in out and "s)" in out, out
+        assert "2" in out, out
+        assert "s)" in out, out
 
         assert "off" in repl.feed(":time")
         assert "s)" not in repl.feed("1 + 1")

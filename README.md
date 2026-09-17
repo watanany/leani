@@ -201,7 +201,7 @@ flake8-tidy-imports)。この約束はテストではなく lint で縛ってい
 には出ない。状態を持つのは repl プロセスを抱える `Engine` と、
 入力バッファと証明モードを持つ `Repl` の 2 つだけ。分岐は `if` の連続ではなく
 `match` / `case` で書き、`return` のあとも `else` を省かないので、`ruff` の
-RET505 だけ外してある。
+RET505 は入れていない。入れなかったルールは `pyproject.toml` に理由ごと並べてある。
 
 ## テスト
 

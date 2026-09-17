@@ -147,7 +147,7 @@ def lake_libs(project: str) -> list[str]:
     except OSError:
         return []
 
-    return re.findall(r"^\s*lean_lib\s+«?([A-Za-z0-9_.\']+)»?", text, re.M)
+    return re.findall(r"^\s*lean_lib\s+«?([A-Za-z0-9_.\']+)»?", text, re.MULTILINE)
 
 
 def problem(cfg: EnvConfig) -> str | None:
@@ -193,11 +193,13 @@ def problem(cfg: EnvConfig) -> str | None:
         # 起動してから落ちるだけなので、警告ではなく断る。
         (
             eng_tc is not None and proj_tc is not None and eng_tc != proj_tc,
-            f"エンジンの版がプロジェクトと違う "
-            f"(プロジェクト={proj_tc} / エンジン={eng_tc})。\n"
-            f"  {proj_tc} で建て直す: cd {cfg.engine} && "
-            f"echo {proj_tc} > lean-toolchain && lake build repl\n"
-            f"  または LEANI_ENGINE を外して leani に用意させる",
+            (
+                f"エンジンの版がプロジェクトと違う "
+                f"(プロジェクト={proj_tc} / エンジン={eng_tc})。\n"
+                f"  {proj_tc} で建て直す: cd {cfg.engine} && "
+                f"echo {proj_tc} > lean-toolchain && lake build repl\n"
+                f"  または LEANI_ENGINE を外して leani に用意させる"
+            ),
         ),
     ]
     return next((why for bad, why in reasons if bad), None)

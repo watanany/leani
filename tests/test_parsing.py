@@ -344,7 +344,7 @@ def describe_設定の値の型():
     def it_表で書くべき所が別の型なら断る():
         with pytest.raises(leani.types.ConfigError, match="env は表"):
             leani.config.resolve(cfg={"default": "m", "env": 3})
-        with pytest.raises(leani.types.ConfigError, match="env.m は表"):
+        with pytest.raises(leani.types.ConfigError, match=r"env\.m は表"):
             leani.config.resolve(cfg={"default": "m", "env": {"m": "nope"}})
 
     @story("G4")

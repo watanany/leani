@@ -674,7 +674,7 @@ class Repl:
         elif continues(line) and self.last is not None:
             # 確定した入力の続きだった。1 つ戻して書き直す。
             self.rewind()
-            self.buf = self.last.src.splitlines() + [line]
+            self.buf = [*self.last.src.splitlines(), line]
             self.last = None
             return "probe"
         else:

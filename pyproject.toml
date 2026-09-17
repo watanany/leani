@@ -54,8 +54,21 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.ruff.lint]
-# RET505 (return のあとの elif) は入れない。分岐は明示的に else で書く方針。
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "TID"]
+# 入れなかったもの。どれも既定では推奨されるが、このリポジトリの方針が先に来る。
+#   RET505           return のあとの elif。分岐は明示的に else で書いている
+#   N802 / PLC2401   日本語のテスト名。これが SPEC.md の見出しになる
+#   PTH              os.path で通している
+#   EM / TRY003      例外の文言は、そのまま読ませるために呼び出し側で組む
+#   D / ANN          docstring と型注釈は要る所に手で付ける
+#   S101             テストの assert
+#   T201             これは print する CLI
+select = [
+    "E", "F", "W", "I", "UP", "B", "SIM", "TID",
+    "C4", "PIE", "PERF", "FLY", "FURB", "RUF", "PLE", "PLW", "PT", "ISC",
+]
+# RUF001-003 は日本語と数学記号を「紛らわしい文字」として全部落とす。
+# ISC001 は formatter と衝突する (行を分けるのは formatter の仕事)。
+ignore = ["RUF001", "RUF002", "RUF003", "ISC001"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 # 相対 import を禁じるのは好みではなく、下の banned-api を効かせるため。
@@ -71,8 +84,6 @@ ban-relative-imports = "all"
 "leani.show".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 
 [tool.ruff.lint.per-file-ignores]
-# 定数を読む前に環境変数を決める必要があるので、import が先頭に来ない。
-"tests/conftest.py" = ["E402"]
 # 副作用の節どうしは呼び合ってよい。名前をまとめる __init__ とテストも外す。
 "src/leani/boot.py" = ["TID251"]
 "src/leani/engine.py" = ["TID251"]

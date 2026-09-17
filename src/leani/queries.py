@@ -55,12 +55,12 @@ DECL_NAME = re.compile(
     r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+|scoped\s+)*"
     r"(?:def|abbrev|theorem|lemma|instance|structure|inductive|class|opaque|axiom)"
     r"\s+([A-Za-z_\u00c0-\uffff][^\s:({\[]*)",
-    re.M,
+    re.MULTILINE,
 )
 
 # #eval できない式。型だけでも出したほうが親切なので #check に落とす。
 NOT_EVALUABLE = re.compile(
     r"noncomputable|failed to compile"
     r"|could not synthesize.*(Repr|ToString|ToExpr|Eval)|cannot evaluate",
-    re.S | re.I,
+    re.DOTALL | re.IGNORECASE,
 )
