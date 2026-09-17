@@ -10,6 +10,7 @@ import re
 import signal
 import textwrap
 from collections.abc import Callable, Sequence
+from typing import cast
 
 from leani.places import ENGINE_CACHE, TTY
 from leani.queries import BLOCK_OPEN, ERR_POS, INCOMPLETE
@@ -21,9 +22,10 @@ from leani.types import (
     TAC,
     TERM,
     EngineError,
-    Json,
     Kind,
     Message,
+    Pos,
+    Probe,
     Response,
     Sorry,
     State,
@@ -158,7 +160,7 @@ def error_text(resp: Response, keep: int = 3) -> str:
     return "\n".join(blob.split("\n")[:keep])
 
 
-def offset(src: str, pos: Json | None) -> int | None:
+def offset(src: str, pos: Pos | None) -> int | None:
     """repl の {"line": 1 から, "column": 0 から} を文字位置に直す。"""
     if not isinstance(pos, dict):
         return None
@@ -231,7 +233,7 @@ def first_response(buf: str) -> Response | None:
         # repl の返事は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
         # 次の区切りを試す (呼ぶ側は添字で鍵を引く)。
         if isinstance(got, dict):
-            return got
+            return cast(Response, got)
 
     return None
 
@@ -329,7 +331,7 @@ def block_continues(buf: Sequence[str], src: str) -> bool:
     return (len(buf) > 1 and continues(buf[-1])) or BLOCK_OPEN.search(src) is not None
 
 
-def classify(probe: Json | None) -> tuple[State, Kind]:
+def classify(probe: Probe | None) -> tuple[State, Kind]:
     """
     パーサの返事を (入力の状態, 送り方) に読む。
 
@@ -344,8 +346,9 @@ def classify(probe: Json | None) -> tuple[State, Kind]:
         case {"term": {"ok": True}}:
             return COMPLETE, TERM
         case _:
-            cmd_err = (probe.get("cmd") or {}).get("err", "")
-            term_err = (probe.get("term") or {}).get("err", "")
+            cmd, term = probe.get("cmd"), probe.get("term")
+            cmd_err = cmd.get("err", "") if cmd else ""
+            term_err = term.get("err", "") if term else ""
             kind = CMD if err_pos(cmd_err) >= err_pos(term_err) else TERM
             if INCOMPLETE.search(cmd_err) or INCOMPLETE.search(term_err):
                 return MORE, kind
@@ -353,7 +356,7 @@ def classify(probe: Json | None) -> tuple[State, Kind]:
                 return ERR, kind
 
 
-def classify_tac(probe: Json | None) -> tuple[State, Kind]:
+def classify_tac(probe: Probe | None) -> tuple[State, Kind]:
     """証明モードでは tacticSeq として読めるかだけを見る。"""
     match probe:
         case {"tac": {"ok": True}}:

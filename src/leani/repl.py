@@ -13,6 +13,7 @@ import textwrap
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass, field
+from typing import cast
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import CompleteEvent, Completer, Completion
@@ -67,8 +68,8 @@ from leani.types import (
     EngineDied,
     EngineError,
     Interrupted,
-    Json,
     Kind,
+    Probe,
     Sorry,
     State,
     Step,
@@ -491,7 +492,7 @@ class Repl:
 
     # -- 完結判定 ---------------------------------------------------------
 
-    def parse(self, src: str) -> Json | None:
+    def parse(self, src: str) -> Probe | None:
         """
         Lean のパーサに command / term / tacticSeq として読めるかを聞く。
         1 往復で 3 つとも取る。実行はしないので、ユーザ定義の notation も効く。
@@ -505,7 +506,7 @@ class Repl:
         except (json.JSONDecodeError, IndexError):
             return None
 
-        return got if isinstance(got, dict) else None
+        return cast(Probe, got) if isinstance(got, dict) else None
 
     def probe(self, src: str) -> tuple[State, Kind]:
         return classify(self.parse(src))
