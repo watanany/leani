@@ -54,6 +54,8 @@ from prompt_toolkit.completion import CompleteEvent, Completer, Completion
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
+from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.shortcuts import CompleteStyle
 
 # ---------------------------------------------------------------- 型 (純粋)
@@ -340,6 +342,89 @@ def signal_name(num: int) -> str:
         return signal.Signals(num).name
     except ValueError:
         return f"signal {num}"
+
+
+# 略記表。VS Code の Lean 拡張が持つ 1857 件から、よく打つものだけを引いた。
+# 丸ごと抱えると 25 KB のデータでこのファイルが埋まるうえ、鍵の 2 割が他の鍵の
+# 接頭辞なので、確定の仕方まで作り込まないと持て余す。値は本家のものをそのまま
+# 使うので、`\d` が δ ではなく ↓ のような意外な対応もそのままにしてある。
+#   https://github.com/leanprover/vscode-lean4/blob/master/lean4-unicode-input/src/abbreviations.json
+# fmt: off
+ABBREV: Final[dict[str, str]] = {
+    # ギリシャ文字
+    "a": "α", "alpha": "α", "b": "β", "beta": "β", "g": "γ", "gamma": "γ",
+    "delta": "δ", "e": "ε", "eps": "ε", "epsilon": "ε", "zeta": "ζ",
+    "eta": "η", "th": "θ", "theta": "θ", "iota": "ι", "kappa": "κ",
+    "lam": "λ", "lambda": "λ", "fun": "λ", "mu": "μ", "nu": "ν", "xi": "ξ",
+    "pi": "π", "rho": "ρ", "si": "σ", "sigma": "σ", "tau": "τ",
+    "upsilon": "υ", "phi": "φ", "varphi": "ϕ", "chi": "χ", "psi": "ψ",
+    "omega": "ω",
+    "G": "Γ", "Gamma": "Γ", "D": "Δ", "Delta": "Δ", "Theta": "Θ", "L": "Λ",
+    "Lambda": "Λ", "Xi": "Ξ", "P": "Π", "Pi": "Π", "S": "Σ", "Sigma": "Σ",
+    "Phi": "Φ", "Psi": "Ψ", "Omega": "Ω",
+    # 矢印
+    "l": "←", "leftarrow": "←", "r": "→", "to": "→", "imp": "→",
+    "rightarrow": "→", "u": "↑", "uparrow": "↑", "d": "↓",
+    "downarrow": "↓", "lr": "↔", "iff": "↔", "mapsto": "↦", "hom": "⟶",
+    "longrightarrow": "⟶",
+    # 論理
+    "all": "∀", "forall": "∀", "ex": "∃", "exists": "∃", "nexists": "∄",
+    "and": "∧", "or": "∨", "not": "¬", "neg": "¬", "bot": "⊥", "top": "⊤",
+    "vdash": "⊢", "entails": "⊢", "models": "⊧", "therefore": "∴",
+    "because": "∵", "qed": "∎",
+    # 集合
+    "in": "∈", "nin": "∉", "sub": "⊆", "subset": "⊆", "subseteq": "⊆",
+    "ssub": "⊂", "supset": "⊇", "supseteq": "⊇", "cup": "∪", "union": "∪",
+    "cap": "∩", "inter": "∩", "bigcup": "⋃", "Union": "⋃", "bigcap": "⋂",
+    "Inter": "⋂", "empty": "∅", "emptyset": "∅", "smallsetminus": "∖",
+    "compl": "ᶜ", "sup": "⊔", "Sup": "⨆", "inf": "⊓", "Inf": "⨅",
+    # 関係
+    "le": "≤", "ge": "≥", "ne": "≠", "sim": "∼", "simeq": "≃",
+    "equiv": "≃", "cong": "≅", "approx": "≈", "ll": "≪", "gg": "≫",
+    "dvd": "∣", "mid": "∣", "parallel": "∥", "perp": "⟂",
+    # 型
+    "N": "ℕ", "nat": "ℕ", "Z": "ℤ", "int": "ℤ", "Q": "ℚ", "R": "ℝ",
+    "real": "ℝ", "C": "ℂ", "aleph": "ℵ", "ell": "ℓ",
+    # 演算
+    "o": "∘", "circ": "∘", "comp": "∘", "dot": "·", "cdot": "·",
+    "t": "▸", "tr": "⬝", "inv": "⁻¹", "times": "×", "div": "÷", "pm": "±",
+    "mp": "∓", "otimes": "⊗", "oplus": "⊕", "odot": "⊙", "star": "⋆",
+    "sqrt": "√", "infty": "∞", "sum": "∑", "prod": "∏", "integral": "∫",
+    "partial": "∂", "nabla": "∇", "prime": "′", "dagger": "†",
+    # 括弧と点
+    "langle": "⟨", "rangle": "⟩", "lceil": "⌈", "rceil": "⌉",
+    "lfloor": "⌊", "rfloor": "⌋", "ldots": "…", "cdots": "⋯",
+    "vdots": "⋮", "ddots": "⋱",
+    # 添字
+    "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄", "5": "₅", "6": "₆",
+    "7": "₇", "8": "₈", "9": "₉", "_1": "₁", "_2": "₂", "_i": "ᵢ",
+    "_n": "ₙ", "^1": "¹", "^2": "²", "^3": "³", "^n": "ⁿ", "^-1": "⁻¹",
+    "^c": "ᶜ",
+}
+# fmt: on
+
+
+def expand_abbrev(head: str) -> tuple[str, int] | None:
+    """
+    カーソルの手前にある `\\name` を記号にする。(記号, 消す文字数) を返す。
+
+    確定は space に任せて、打鍵ごとには変換しない。`\\a` `\\all` `\\alpha` の
+    ように鍵が鍵の接頭辞になっている組が多く、打つそばから確定すると `\\alpha`
+    と打てなくなる。space まで待てばどれを打ったのかは一意に決まる。
+
+    表に無ければ何も返さない。`\\` のあとを空白まで取って丸ごと引くので、
+    `\\to)` のように記号が続いた形は変換しない (space を先に打つ)。
+    """
+    cut = head.rfind("\\")
+    if cut < 0:
+        return None
+
+    name = head[cut + 1 :]
+    sym = ABBREV.get(name)
+    if sym is None:
+        return None
+
+    return sym, len(name) + 1
 
 
 # ------------------------------------------------------- エンジンの版 (純粋)
@@ -1745,6 +1830,34 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
 
 # ------------------------------------------------------- フロント (副作用)
 
+
+def abbrev_keys() -> KeyBindings:
+    """
+    space に略記の確定を割り当てる。
+
+    Tab は補完が使っているので触らない。ここで Tab も兼ねると、同じ打鍵が
+    手前の文字次第で補完にも変換にもなって、どちらが起きるか打つ前に読めない。
+
+    space はそのまま入れる。確定の合図を食べてしまうと `a \\to b` が `a →b` に
+    なって、記号を出すたびに space を打ち足すことになる。表に無ければ何も
+    起きないので、space が space でなくなる場面は作らない。
+    """
+    kb = KeyBindings()
+
+    @kb.add(" ")
+    def _(event: KeyPressEvent) -> None:
+        buf = event.current_buffer
+        got = expand_abbrev(buf.document.text_before_cursor)
+        if got is not None:
+            sym, back = got
+            buf.delete_before_cursor(back)
+            buf.insert_text(sym)
+
+        buf.insert_text(" ")
+
+    return kb
+
+
 USAGE = f"""\
 leani [オプション] [file.lean]
 
@@ -1965,6 +2078,7 @@ class Repl:
         if Repl._session is None:
             Repl._session = PromptSession(
                 history=Repl._history,
+                key_bindings=abbrev_keys(),
                 # Tab を押したときだけ聞く。打つたびに聞くと mathlib では
                 # 1 打鍵ごとにエンジンへ問い合わせることになる。
                 complete_while_typing=False,

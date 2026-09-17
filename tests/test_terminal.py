@@ -55,6 +55,19 @@ def describe_行編集():
         assert "def typo : Nat -> Nat" in term.cursor_line()
 
 
+def describe_略記の入力():
+
+    @story("C5")
+    def it_space_で記号になり_space_も残る(terminal):
+        # space を食べると `a \to b` が `a →b` になり、記号を出すたびに
+        # space を打ち足すことになる。
+        term = terminal()
+        term.type("#check Nat \\to Nat")
+        term.settle()
+        assert "#check Nat → Nat" in term.cursor_line(), term.cursor_line()
+        assert "Nat → Nat : Type" in term.line("")
+
+
 def describe_履歴():
 
     @story("C3", "F3")

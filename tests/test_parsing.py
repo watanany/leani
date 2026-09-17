@@ -572,6 +572,36 @@ def describe_ファイルの_import():
         assert leani.import_lines(src) == ["Real"]
 
 
+def describe_略記の展開():
+    """
+    `\name` を Lean の記号にする。確定は space に任せて、打鍵ごとには見ない。
+    """
+
+    @story("C5")
+    def it_名前を記号にする():
+        assert leani.expand_abbrev("a \\to") == ("→", 3)
+        assert leani.expand_abbrev("x\\dot") == ("·", 4)
+
+    @story("C5")
+    def it_短い名前に食われない():
+        # `\a` も `\all` も `\alpha` も表にある。打鍵ごとに確定すると `\a` で
+        # 決まってしまい、長い方を打てなくなる。
+        assert leani.expand_abbrev("\\a") == ("α", 2)
+        assert leani.expand_abbrev("\\all") == ("∀", 4)
+        assert leani.expand_abbrev("\\alpha") == ("α", 6)
+
+    @story("C5")
+    def it_表に無い名前は変えない():
+        assert leani.expand_abbrev("\\nosuch") is None
+        assert leani.expand_abbrev("1 + 1") is None
+
+    @story("C5")
+    def it_記号が続く形は変えない():
+        # `\to)` まで丸ごと引く。`"\t"` のような文字列を ▸ に化けさせない。
+        assert leani.expand_abbrev("(\\to)") is None
+        assert leani.expand_abbrev('"\\t"') is None
+
+
 def describe_性質一覧():
     """
     SPEC.md はテスト名から生成する (tools/spec.py)。手で書き足す場所を
