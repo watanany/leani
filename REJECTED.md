@@ -486,3 +486,24 @@ space まで待てばどれを打ったのかは一意に決まり、変換は
 代わりに `(\to)` のように記号が続いた形は変換しない (`\` のあとを空白まで
 丸ごと引くため)。これは取りこぼしだが、副作用として `"\t"` が `"▸"` に化ける
 事故も起きない。→ `ABBREV`, `expand_abbrev`, `abbrev_keys`
+
+## 節をまたぐ import の向きを `@story` 付きのテストで縛る
+
+このリポジトリは「約束はテストに書き、`SPEC.md` はテストから生成する」で通して
+きた。だから札の向き (純粋・読み取り・定数 は 副作用 を import しない) も、
+`src/leani/` を AST で読んで向きを数えるテストを 1 件足すのが筋に見えた。
+
+やめて `ruff` の flake8-tidy-imports にした。依存も新しいコマンドも増えず、
+既にある `uv run ruff check .` にそのまま乗り、違反した import 行を指して落ちる。
+`TID251` の banned-api は `import leani.engine` / `from leani.engine import X` /
+`leani.engine` の属性参照のいずれも落とす。相対 import (`from .engine import X`)
+だけはすり抜けるので、`TID252` で相対 import 自体を禁じて塞いだ。自作テストだと
+AST の歩き方を自分で保つことになり、`from X import *` や `importlib` のような
+抜け道を塞ぎ切れたか分からないまま「テストがあるから守られている」になる。
+
+代償は 2 つ。禁止リストを `pyproject.toml` で手で保つこと (副作用のモジュールは
+5 つしかないので手に負える)。もう 1 つは、この約束だけ `SPEC.md` に出ず、
+ストーリー番号も付かないこと。だから README の「読むとき」に、向きを
+`ruff check` が見ていると 1 文書いた。書かないと、どこで守られているのかが
+読んで分からなくなる。
+→ `pyproject.toml` の `[tool.ruff.lint.flake8-tidy-imports]`
