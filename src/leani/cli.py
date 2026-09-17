@@ -1,0 +1,152 @@
+"""入口 (副作用)。
+
+引数を読んで Repl を起こす。"""
+
+from __future__ import annotations
+
+import contextlib
+import io
+import os
+import sys
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+
+from leani.boot import ensure_engine, guess_toolchain, toolchain
+from leani.config import EnvConfig, problem, resolve
+from leani.places import CONFIG, ENGINE_CACHE, HIST, INIT
+from leani.pure import dim, engine_dir
+from leani.repl import HELP, Repl
+from leani.show import die
+from leani.types import START_FAILED, ConfigError
+
+USAGE = f"""\
+leani [オプション] [file.lean]
+
+  -e, --env <name>     設定した環境で起動する
+  -i, --import <Mod>   import を足す (繰り返せる)
+  -p, --project <dir>  Lake プロジェクトを指定する
+      --setup          エンジンを用意して終わる (普段は起動時に自動)
+  -V, --version        版と置き場所
+  -h, --help           これ
+
+環境は {CONFIG} に書く。無ければ cwd の
+lakefile から Lake プロジェクトと lean_lib を推測し、その外なら Lean 本体だけで
+起動する。init ファイルは {INIT}。
+
+エンジン (leanprover-community/repl) は初回だけ git clone と lake build で用意し、
+使う Lean の版ごとに {ENGINE_CACHE} の下へ置く。
+自分で clone したものを使うなら engine か LEANI_ENGINE で指す。
+
+"""
+
+
+@dataclass
+class Args:
+    """CLI 引数を読んだ結果。"""
+
+    name: str | None = None  # -e
+    project: str | None = None  # -p
+    imports: list[str] = field(default_factory=list)  # -i (繰り返せる)
+    preload: str | None = None  # 起動時に読み込むファイル
+    setup: bool = False  # --setup
+    version: bool = False
+    help: bool = False
+
+
+def parse_args(argv: Sequence[str]) -> Args:
+    """引数を読む。値の無いオプションはその場で断る。"""
+    args = Args()
+    rest = list(argv)
+
+    def value(flag: str, what: str) -> str:
+        if not rest:
+            die(f"{flag} には{what}が要る")
+        return rest.pop(0)
+
+    while rest:
+        a = rest.pop(0)
+        match a:
+            case "-e" | "--env":
+                args.name = value(a, "名前")
+            case "-i" | "--import":
+                args.imports.append(value(a, "モジュール名"))
+            case "-p" | "--project":
+                args.project = value(a, "ディレクトリ")
+            case "--setup":
+                args.setup = True
+            case "-h" | "--help":
+                args.help = True
+            case "-V" | "--version":
+                args.version = True
+            case _ if a.startswith("-") and a != "-":
+                die(f"不明なオプション: {a}  (-h で使い方)")
+            case _:
+                args.preload = a
+
+    return args
+
+
+def print_version(cfg: EnvConfig) -> None:
+    tc = guess_toolchain(cfg)
+    engine = engine_dir(cfg.engine, tc) if tc else f"{ENGINE_CACHE}/<版>"
+    ready = "" if os.path.isfile(f"{engine}/.lake/build/bin/repl") else " (未ビルド)"
+
+    print("leani")
+    print(f"  環境:     {cfg}")
+    print(f"  プロジェクト: {cfg.project or '(無し)'}")
+    print(f"  Lean:     {tc or '(不明)'}")
+    print(f"  エンジン: {engine}{ready}")
+    print(f"  設定:     {CONFIG}{'' if os.path.isfile(CONFIG) else ' (無し)'}")
+    print(f"  init:     {INIT}")
+    print(f"  履歴:     {HIST}")
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(list(sys.argv if argv is None else argv)[1:])
+    if args.help:
+        print(USAGE + HELP, end="")
+        return 0
+
+    # 端末でない stdin は strict デコードになり、壊れたバイト 1 つで
+    # UnicodeDecodeError になる。しかも投げた時点で読み込み済みのぶんが
+    # 一緒に落ちるので、後続の行まで消える。置き換えて Lean に渡し、
+    # 構文エラーとして普通に報告させる。
+    if not sys.stdin.isatty() and isinstance(sys.stdin, io.TextIOWrapper):
+        with contextlib.suppress(OSError, ValueError):
+            sys.stdin.reconfigure(errors="replace")
+
+    try:
+        cfg = resolve(args.name, args.project, args.imports)
+    except ConfigError as e:
+        die(str(e))
+
+    if args.version:
+        print_version(cfg)
+        return 0
+
+    why = problem(cfg)
+    if why:
+        die(why)
+
+    try:
+        if args.setup:
+            tc = toolchain(cfg)
+            path = engine_dir(cfg.engine, tc)
+            if os.path.isfile(f"{path}/.lake/build/bin/repl"):
+                print(dim(f"用意済み: {path}"))
+                return 0
+
+            ensure_engine(cfg.engine, tc, asked=True)
+            return 0
+
+        # loop() も中に入れる。再起動でエンジンを用意し直せないことがある。
+        return Repl(cfg, args.preload).loop()
+    except START_FAILED as e:
+        die(str(e) or "エンジンが起動しなかった")
+    except KeyboardInterrupt:
+        print()
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

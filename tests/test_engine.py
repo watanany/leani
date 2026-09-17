@@ -123,7 +123,7 @@ def describe_ファイルの読み書き():
         path = tmp_path / "locked.lean"
         path.write_text("def x := 1\n")
         mocker.patch(
-            "leani.open",
+            "leani.repl.open",
             create=True,
             side_effect=PermissionError(13, "Permission denied"),
         )
@@ -141,7 +141,7 @@ def describe_落ちても続く():
         def crash_once(src, fresh=False):
             if not crashed and src.startswith("def afterCrash"):
                 crashed.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(src, fresh=fresh)
 
         mocker.patch.object(repl.engine, "send_cmd", side_effect=crash_once)
@@ -177,14 +177,14 @@ def describe_環境の切り替え():
     def it_切り替え先が起動しなければ元の環境に戻る(repl, mocker):
         # import が通るかは boot するまで分からない。今のエンジンは kill 済み
         # なので、そのまま投げるとセッションごと消える。
-        real = leani.Engine.boot
+        real = leani.engine.Engine.boot
 
         def only_core(self):
             if self.cfg.name != "core":
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self)
 
-        mocker.patch.object(leani.Engine, "boot", only_core)
+        mocker.patch.object(leani.engine.Engine, "boot", only_core)
         out = repl.feed(":env wide")
         assert "起動できなかった" in out, out
         assert repl.repl.cfg.name == "core", "元の環境に戻っていない"
@@ -197,7 +197,9 @@ def describe_作り直せないとき():
     @story("F1")
     def it_作り直しに失敗しても報告だけで済む(repl, mocker):
         repl.feed("def kept := 4")
-        mocker.patch.object(leani.Engine, "boot", side_effect=leani.EngineDied())
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
+        )
         out = repl.feed(":restart")
         assert "作り直せなかった" in out, out
 
@@ -206,7 +208,9 @@ def describe_作り直せないとき():
         # 捨てると、直してやり直しても replay できなくなる。ただし log には
         # 残せない (env が無いので「環境に入っている宣言」ではない)。
         repl.feed("def kept := 4")
-        mocker.patch.object(leani.Engine, "boot", side_effect=leani.EngineDied())
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
+        )
         repl.feed(":restart")
         assert repl.repl.eng.unplayed == ["def kept := 4"], repl.repl.eng.unplayed
         assert repl.repl.eng.log == []
@@ -251,7 +255,7 @@ def describe_init_の扱い():
     def it_作り直しても_init_の宣言が残る(repl, tmp_path, mocker):
         init = tmp_path / "init.lean"
         init.write_text("def fromInit := 99\n")
-        mocker.patch.object(leani, "INIT", str(init))
+        mocker.patch.object(leani.repl, "INIT", str(init))
         with contextlib.redirect_stdout(io.StringIO()):
             repl.repl.apply_init()
 
@@ -263,7 +267,7 @@ def describe_init_の扱い():
     def it_reset_しても_init_の宣言が残る(repl, tmp_path, mocker):
         init = tmp_path / "init.lean"
         init.write_text("def fromInit := 99\n")
-        mocker.patch.object(leani, "INIT", str(init))
+        mocker.patch.object(leani.repl, "INIT", str(init))
         with contextlib.redirect_stdout(io.StringIO()):
             repl.repl.apply_init()
 
@@ -282,7 +286,7 @@ def describe_書き出しに全部入る():
         loaded.write_text("def fromFile := 2\n")
         out = tmp_path / "all.lean"
 
-        mocker.patch.object(leani, "INIT", str(init))
+        mocker.patch.object(leani.repl, "INIT", str(init))
         with contextlib.redirect_stdout(io.StringIO()):
             repl.repl.apply_init()
         repl.feed(f":l {loaded}")
@@ -383,8 +387,8 @@ def describe_読み込みの中断():
         eng = repl.engine
         keep = (eng.env, list(eng.stack), list(eng.log))
 
-        mocker.patch.object(eng, "send_cmd", side_effect=leani.Interrupted())
-        with pytest.raises(leani.Interrupted):
+        mocker.patch.object(eng, "send_cmd", side_effect=leani.types.Interrupted())
+        with pytest.raises(leani.types.Interrupted):
             eng.load_file(str(tmp_path / "any.lean"), "def loaded := 1\n")
         assert (eng.env, eng.stack, eng.log) == keep
 
@@ -399,10 +403,10 @@ def describe_起動の確かめ():
     def it_解決できない_import_では起動を断る():
         # そのまま起動すると import Lean も無い環境になり、完結判定も補完も
         # 宣言も全部通らなくなる。起動したように見えるぶんだけ厄介。
-        cfg = leani.EnvConfig.make("bogus", imports=["NoSuchModuleXYZ"])
-        eng = leani.Engine(cfg)
+        cfg = leani.config.EnvConfig.make("bogus", imports=["NoSuchModuleXYZ"])
+        eng = leani.engine.Engine(cfg)
         try:
-            with pytest.raises(leani.EngineDied, match="import が通らない"):
+            with pytest.raises(leani.types.EngineDied, match="import が通らない"):
                 eng.boot()
         finally:
             eng.kill()
@@ -412,12 +416,12 @@ def describe_起動の確かめ():
         # 版の合わないエンジンを掴むと、repl は何も言わずにシグナルで消える。
         # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
         # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
-        cfg = leani.EnvConfig.make("bogus")
-        eng = leani.Engine(cfg)
+        cfg = leani.config.EnvConfig.make("bogus")
+        eng = leani.engine.Engine(cfg)
         try:
             assert eng.proc is not None
             eng.proc.kill()
-            with pytest.raises(leani.EngineDied, match="SIGKILL"):
+            with pytest.raises(leani.types.EngineDied, match="SIGKILL"):
                 eng.send_cmd("def after_kill := 1", fresh=True)
         finally:
             eng.kill()
@@ -426,16 +430,16 @@ def describe_起動の確かめ():
     def it_起動に失敗したエンジンのプロセスを残さない(repl, mocker):
         # Engine を作った時点で repl は起動している。boot が投げたあとに
         # self.eng を差し替えると、殺す手立てが無いまま残る。
-        real = leani.Engine.boot
+        real = leani.engine.Engine.boot
         procs = []
 
         def only_core(self):
             procs.append(self.proc)
             if self.cfg.name != "core":
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self)
 
-        mocker.patch.object(leani.Engine, "boot", only_core)
+        mocker.patch.object(leani.engine.Engine, "boot", only_core)
         repl.feed(":env wide")
 
         dead, live = procs[0], procs[-1]
@@ -457,12 +461,12 @@ def describe_履歴の書き出し():
         hist = tmp_path / "gnu-history"
         hist.write_text("1 + 1\n2 + 2\n")
 
-        leani.BlockHistory(str(hist)).record("3 + 3")
+        leani.repl.BlockHistory(str(hist)).record("3 + 3")
         assert hist.read_text().startswith("1 + 1\n2 + 2\n"), "前の履歴が消えた"
 
     @story("C3", "F3")
     def it_複数行を一件として持つ(tmp_path):
-        history = leani.BlockHistory(str(tmp_path / "history"))
+        history = leani.repl.BlockHistory(str(tmp_path / "history"))
         history.record("def f : Nat -> Nat\n  | 0 => 1")
         assert list(history.load_history_strings()) == [
             "def f : Nat -> Nat\n  | 0 => 1"
@@ -472,7 +476,7 @@ def describe_履歴の書き出し():
     def it_行ごとの追加は受け付けない(tmp_path):
         # prompt_toolkit は prompt() を抜けるたびに 1 行入れようとする。受けると
         # 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も要る。
-        history = leani.BlockHistory(str(tmp_path / "history"))
+        history = leani.repl.BlockHistory(str(tmp_path / "history"))
         history.append_string("  | 0 => 1")
         assert list(history.load_history_strings()) == []
 
@@ -507,7 +511,7 @@ def describe_折り返した提案():
         decl = repl.declarations[-1]
         assert "sorry" not in decl, decl
         assert "hypothesisNumberSix" in decl, decl
-        assert leani.balanced(decl), decl
+        assert leani.pure.balanced(decl), decl
 
     @story("E2")
     def it_埋め戻しが走らないときも台本を切らない(repl):
@@ -606,16 +610,16 @@ def describe_タクティクの途中でエンジンが変わる():
         repl.feed("theorem twoGoals : 1 = 1 ∧ 2 = 2 := by sorry")
         repl.feed(":prove")
 
-        real = leani.Engine.send_tactic
+        real = leani.engine.Engine.send_tactic
         dead = []
 
         def die_once(self, src, state):
             if not dead:
                 dead.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, state)
 
-        mocker.patch.object(leani.Engine, "send_tactic", die_once)
+        mocker.patch.object(leani.engine.Engine, "send_tactic", die_once)
         out = repl.feed("constructor")
 
         assert "証明完了" not in out, f"作り直したエンジンの返事を信じた: {out}"
@@ -633,16 +637,16 @@ def describe_タクティクの途中でエンジンが変わる():
         repl.feed("theorem again : 1 = 1 := by sorry")
         repl.feed(":prove")
 
-        real = leani.Engine.send_tactic
+        real = leani.engine.Engine.send_tactic
         hit = []
 
         def stop_once(self, src, state):
             if not hit:
                 hit.append(src)
-                raise leani.Interrupted()
+                raise leani.types.Interrupted()
             return real(self, src, state)
 
-        mocker.patch.object(leani.Engine, "send_tactic", stop_once)
+        mocker.patch.object(leani.engine.Engine, "send_tactic", stop_once)
         out = repl.feed("rfl")
         assert "入り直せる" in out, out
 
@@ -713,16 +717,16 @@ def describe_replay_が途中で止まったとき():
         for one in ("def r1 := 1", "def r2 := 2", "def r3 := 3"):
             repl.feed(one)
 
-        real = leani.Engine.send_cmd
+        real = leani.engine.Engine.send_cmd
         hit = []
 
         def once(self, src, **kw):
             if src.startswith("def r2") and not hit:
                 hit.append(src)
-                raise leani.Interrupted()
+                raise leani.types.Interrupted()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "send_cmd", once)
+        mocker.patch.object(leani.engine.Engine, "send_cmd", once)
         out = repl.feed(":restart")  # Driver が毎行 INVARIANTS を見る
 
         assert "まだ流していない宣言: 2 件" in out, out
@@ -736,16 +740,16 @@ def describe_replay_が途中で止まったとき():
         for one in ("def s1 := 1", "def s2 := 2"):
             repl.feed(one)
 
-        real = leani.Engine.send_cmd
+        real = leani.engine.Engine.send_cmd
         hit = []
 
         def once(self, src, **kw):
             if src.startswith("def s2") and not hit:
                 hit.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "send_cmd", once)
+        mocker.patch.object(leani.engine.Engine, "send_cmd", once)
         repl.feed(":restart")
         mocker.stopall()  # エンジンを直してからやり直す
 
@@ -774,7 +778,7 @@ def describe_init_と読み込みが混ざるとき():
     def it_読み込んだあとも_init_を重ね直す(repl, mocker, tmp_path):
         init = tmp_path / "init.lean"
         init.write_text("def fromInit := 1\n")
-        mocker.patch.object(leani, "INIT", str(init))
+        mocker.patch.object(leani.repl, "INIT", str(init))
         repl.repl.apply_init()
 
         lib = tmp_path / "lib.lean"
@@ -797,14 +801,14 @@ def describe_切り替えに失敗したとき():
     @story("G4", "G5")
     def it_打った宣言も戻ってくる(repl, mocker):
         repl.feed("def typedHere := 42")
-        real = leani.Engine.boot
+        real = leani.engine.Engine.boot
 
         def only_core(self):
             if self.cfg.name != "core":
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self)
 
-        mocker.patch.object(leani.Engine, "boot", only_core)
+        mocker.patch.object(leani.engine.Engine, "boot", only_core)
         out = repl.feed(":env wide")
 
         assert "起動できなかった" in out, out
@@ -893,16 +897,16 @@ def describe_プローブの途中でエンジンが落ちる():
         repl.feed("theorem probeDied : 1 = 1 := by sorry")
         repl.feed(":prove")
 
-        real = leani.Engine.query
+        real = leani.engine.Engine.query
         dead = []
 
         def die_once(self, src, **kw):
             if not dead:
                 dead.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "query", die_once)
+        mocker.patch.object(leani.engine.Engine, "query", die_once)
         out = repl.feed("rfl")
         mocker.stopall()
 
@@ -1090,16 +1094,16 @@ def describe_埋め戻しの途中でエンジンが落ちる():
         repl.feed("theorem died : True := by sorry")
         repl.feed(":prove")
 
-        real = leani.Engine.send_cmd
+        real = leani.engine.Engine.send_cmd
         hit = []
 
         def die_once(self, src, **kw):
             if "by trivial" in src and not hit:
                 hit.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "send_cmd", die_once)
+        mocker.patch.object(leani.engine.Engine, "send_cmd", die_once)
         out = repl.feed("trivial")
         mocker.stopall()
 
@@ -1118,17 +1122,19 @@ def describe_作り直しに失敗したときの証明モード():
         repl.feed("theorem ghost : True := by sorry")
         repl.feed(":prove")
 
-        real = leani.Engine.query
+        real = leani.engine.Engine.query
         dead = []
 
         def die_once(self, src, **kw):
             if not dead:
                 dead.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "query", die_once)
-        mocker.patch.object(leani.Engine, "boot", side_effect=leani.EngineDied())
+        mocker.patch.object(leani.engine.Engine, "query", die_once)
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
+        )
         out = repl.feed("trivial")
 
         # 畳まないと、以降どの行も赤い "Unknown proof state." だけを返す
@@ -1150,7 +1156,9 @@ def describe_起点の環境を失ったとき():
     def _no_env(repl, mocker):
         """boot が通らないエンジンにする。控えに宣言 1 件を残す。"""
         repl.feed("def held := 1")
-        mocker.patch.object(leani.Engine, "boot", side_effect=leani.EngineDied())
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
+        )
         repl.feed(":restart")
         assert repl.repl.eng.env is None
         assert repl.repl.eng.unplayed == ["def held := 1"]
@@ -1199,17 +1207,19 @@ def describe_起点の環境を失ったとき():
         repl.feed("theorem ghostSorry : True := by sorry")
         assert repl.repl.pending
 
-        real = leani.Engine.query
+        real = leani.engine.Engine.query
         dead = []
 
         def die_once(self, src, **kw):
             if not dead:
                 dead.append(src)
-                raise leani.EngineDied()
+                raise leani.types.EngineDied()
             return real(self, src, **kw)
 
-        mocker.patch.object(leani.Engine, "query", die_once)
-        mocker.patch.object(leani.Engine, "boot", side_effect=leani.EngineDied())
+        mocker.patch.object(leani.engine.Engine, "query", die_once)
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
+        )
         repl.feed("def afterGhost := 1")
 
         # 残すと :goals が環境に無い宣言の目標を出し、:prove がその幽霊の
@@ -1226,7 +1236,7 @@ def describe_起点の環境を失ったとき():
         # 環境が無いときにどうするかを決めていない呼び出しは、ここで止まる。
         # env キーを落として送ると repl は Init だけの環境を作って答えるので、
         # 通ったように見える宣言が次のリクエストで消える。
-        with pytest.raises(leani.NoEnvironment):
+        with pytest.raises(leani.types.NoEnvironment):
             eng.send_cmd("def sneaked := 1")
         assert eng.log == []
 

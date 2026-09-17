@@ -1,7 +1,7 @@
 """テストの土台。
 
-中身は src/leani.py にある。pty 越しに起動するときも、インストールした leani
-コマンドと同じその 1 枚を子プロセスとして起動する。
+中身は src/leani/ にある。pty 越しに起動するときも、インストールした leani
+コマンドと同じものを `python -m leani` として子プロセスで起こす。
 
 テストは 3 層に分かれている。上ほど速い。数はエンジンの層が一番多く、端末の層は
 遅いので絞ってある。
@@ -41,8 +41,10 @@ import pytest
 from prompt_toolkit.history import FileHistory
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-REPL = os.path.join(ROOT, "src", "leani.py")
-sys.path.insert(0, os.path.join(ROOT, "src"))
+SRC = os.path.join(ROOT, "src")
+# インストールした leani と同じ入口を使う。-m なら package のまま起こせる。
+REPL = ["-m", "leani"]
+sys.path.insert(0, SRC)
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]")
 # prompt_toolkit は末尾の空白を書かずにカーソルを動かすので、画面上の
 # プロンプトに空白は残らない。
@@ -147,7 +149,7 @@ class Driver:
 
     def __init__(self, env=None):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.repl = leani.Repl(leani.resolve(env))
+            self.repl = leani.repl.Repl(leani.config.resolve(env))
         self.check("起動直後")
 
     @property
@@ -216,12 +218,13 @@ class Terminal:
             os.environ,
             TERM="xterm-256color",
             LEANI_HISTORY=history_env or str(history),
+            PYTHONPATH=SRC,
         )
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
             # lakefile の無い所から起動して、cwd に依存しないことも兼ねて見る。
             os.chdir(_STATE)
-            os.execve(sys.executable, [sys.executable, REPL], env)
+            os.execve(sys.executable, [sys.executable, *REPL], env)
         fcntl.ioctl(
             self.fd, termios.TIOCSWINSZ, struct.pack("HHHH", self.ROWS, cols, 0, 0)
         )
@@ -357,9 +360,13 @@ def piped(src, tmp_path, timeout=180):
     端末が無いときの経路を見るためのもの。stdin が tty でないと入力は
     strict デコードになるので、壊れたバイトの扱いはここでしか出ない。
     """
-    env = dict(os.environ, LEANI_HISTORY=os.path.join(str(tmp_path), "history"))
+    env = dict(
+        os.environ,
+        LEANI_HISTORY=os.path.join(str(tmp_path), "history"),
+        PYTHONPATH=SRC,
+    )
     done = subprocess.run(
-        [sys.executable, REPL],
+        [sys.executable, *REPL],
         input=src,
         env=env,
         cwd=_STATE,
