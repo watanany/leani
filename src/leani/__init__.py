@@ -31,7 +31,7 @@ leani — Lean 4 の対話 REPL。
     config   読み取り  設定
     boot     副作用    起動の用意
     engine   副作用    repl プロセス
-    search   副作用    外に聞く (loogle)
+    search   副作用    loogle に問い合わせる
     show     副作用    表示を出す
     repl     副作用    フロント
     cli      副作用    入口
