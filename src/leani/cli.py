@@ -54,7 +54,7 @@ class Args:
 
 
 def parse_args(argv: Sequence[str]) -> Args:
-    """引数を読む。値の無いオプションはその場で断る。"""
+    """引数を読む。値の無いオプションはその場でエラーにする。"""
     args = Args()
     rest = list(argv)
 

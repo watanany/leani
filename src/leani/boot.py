@@ -60,7 +60,7 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
 
 def toolchain(cfg: EnvConfig) -> str:
     """
-    使うバージョンを決める。分からなければ断る。
+    使うバージョンを決める。分からなければ起動を中止する。
 
     lean は cwd の lean-toolchain を見てバージョンを決めるので、プロジェクトの外から
     呼ぶと既定のバージョンが選ばれて olean が読めなくなる。ここで決めたバージョンを
@@ -127,7 +127,7 @@ def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
     except OSError as e:
         raise EngineError(f"{cmd[0]} を呼べなかった: {e}") from e
     except KeyboardInterrupt as e:
-        # 同じプロセスグループなので Ctrl-C はこちらにも来る。断るだけにする。
+        # 同じプロセスグループなので Ctrl-C はこちらにも来る。起動の失敗として扱う。
         raise EngineError(f"^C 中断した: {' '.join(cmd)}") from e
 
     if r.returncode != 0:

@@ -423,7 +423,7 @@ class Repl:
         self.clear_pending()
 
     def report_replay(self, out: Replay) -> None:
-        """replay で落としたものを言う。黙って消えると気付く場所が無い。"""
+        """replay で落としたものを報告する。黙って消えると気付く場所が無い。"""
         for note in out.notes:
             print(yellow(note))
         for src in out.failed:
@@ -758,7 +758,7 @@ class Repl:
         self.remember(src)
 
         if self.eng.env is None:
-            # boot が通らなかったエンジン。送れば send_cmd が関門で断るが、
+            # boot が通らなかったエンジン。送れば send_cmd が関門で止めるが、
             # 打った本人に要るのは例外の名前ではなく次の一手なので、ここで
             # 案内に変える。
             print(red("エンジンが使えない。:restart で作り直す"))
@@ -918,7 +918,7 @@ class Repl:
         self.close_sorry(script)
 
     def drop_proof(self) -> None:
-        """エンジンが作り直されたので証明モードを畳む。何が起きたかは言う。"""
+        """エンジンが作り直されたので証明モードを畳む。何が起きたかは表示する。"""
         self.proof, self.last = None, None
         print(yellow("エンジンが変わったので証明モードを抜けた"))
         print(dim("  打っていたタクティクは通っていない"))

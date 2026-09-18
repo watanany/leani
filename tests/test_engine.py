@@ -169,7 +169,7 @@ def describe_環境の切り替え():
         assert "11" in repl.feed("switched"), ":l したファイルが引き継がれていない"
 
     @story("G5")
-    def it_設定に無い名前を言われても続く(repl):
+    def it_設定に無い名前を指定されても続く(repl):
         assert "設定に無い" in repl.feed(":env nosuch")
         assert "2" in repl.feed("1 + 1"), "環境を壊して抜けている"
 
@@ -400,7 +400,7 @@ def describe_起動の確かめ():
     """repl は解決できない import を黙って捨てて env を返す。"""
 
     @story("G4")
-    def it_解決できない_import_では起動を断る():
+    def it_解決できない_import_では起動を中止する():
         # そのまま起動すると import Lean も無い環境になり、完結判定も補完も
         # 宣言も全部通らなくなる。起動したように見えるぶんだけ厄介。
         cfg = leani.config.EnvConfig.make("bogus", imports=["NoSuchModuleXYZ"])
@@ -413,7 +413,7 @@ def describe_起動の確かめ():
 
     @story("G4")
     def it_エンジンが死んだら終わり方を報告に載せる():
-        # バージョンの合わないエンジンを掴むと、repl は何も言わずにシグナルで消える。
+        # バージョンの合わないエンジンを掴むと、repl は何も出力せずにシグナルで消える。
         # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
         # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
         cfg = leani.config.EnvConfig.make("bogus")
@@ -662,7 +662,7 @@ def describe_replay_で落としたもの():
     """黙って消えると気付く場所が無い。"""
 
     @story("F1", "B4")
-    def it_読み直せないファイルと消えた宣言を言う(repl, tmp_path):
+    def it_読み直せないファイルと消えた宣言を報告する(repl, tmp_path):
         path = tmp_path / "lib.lean"
         path.write_text("def libA := 10\n")
         repl.feed(f":l {path}")
@@ -694,7 +694,7 @@ def describe_通らなかった宣言の_sorry():
         assert "sorry が無い" in repl.feed(":prove")
 
     @story("E1", "E3")
-    def it_埋め戻しに失敗しても件数を言い直さない(repl):
+    def it_埋め戻しに失敗しても件数を報告し直さない(repl):
         repl.feed("def nums : Nat × Nat := (sorry, sorry)")
         repl.feed(":prove 1")
         out = repl.feed("exact 0")  # 項の位置なのでタクティクは差せない
@@ -861,7 +861,7 @@ def describe_型と_docstring():
         assert "successor" in out, out
 
     @story("D2")
-    def it_無い名前は断る(repl):
+    def it_無い名前はエラーを表示する(repl):
         assert "Nat.nosuchThing" in repl.feed(":i Nat.nosuchThing")
 
 
@@ -1091,7 +1091,7 @@ def describe_コメントに書いた_import():
 def describe_埋め戻しの途中でエンジンが落ちる():
 
     @story("E3", "F1")
-    def it_通ったのに_sorry_のままと言わない(repl, mocker):
+    def it_通ったのに_sorry_のままと報告しない(repl, mocker):
         repl.feed("theorem died : True := by sorry")
         repl.feed(":prove")
 
@@ -1230,7 +1230,7 @@ def describe_起点の環境を失ったとき():
         assert repl.repl.proof is None
 
     @story("F1")
-    def it_送る前に断る(repl, mocker):
+    def it_送る前にエラーにする(repl, mocker):
         _no_env(repl, mocker)
         eng = repl.repl.eng
 
@@ -1248,7 +1248,7 @@ def describe_起点の環境を失ったとき():
 def describe_解決できない_import_のファイル():
 
     @story("B4", "G4")
-    def it_読み込んだと言わない(repl, tmp_path):
+    def it_読み込んだと表示しない(repl, tmp_path):
         path = tmp_path / "badimport.lean"
         # 本文は空にしておく。宣言があると「ヘッダを捨てられた環境では
         # 通らない」形で露見してしまい、probe を通らずに弾かれる。

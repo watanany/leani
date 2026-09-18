@@ -70,7 +70,7 @@ def abspath(path: str | None) -> str | None:
 
 
 def as_str(value: Any, where: str) -> str | None:
-    """設定の文字列 1 つ。型が違えば断る (traceback にしない)。"""
+    """設定の文字列 1 つ。型が違えばエラーにする (traceback にしない)。"""
     if value is None or isinstance(value, str):
         return value
     else:
@@ -84,7 +84,7 @@ def as_imports(value: Any, where: str) -> Sequence[str]:
     import の並び。
 
     文字列 1 つを黙って受けると 1 文字ずつの import になり、どれも解決でき
-    ないのでヘッダが丸ごと捨てられる (import Lean ごと消える)。断るほうがいい。
+    ないのでヘッダが丸ごと捨てられる (import Lean ごと消える)。エラーにするほうがいい。
     """
     if value is None:
         return ()
@@ -97,7 +97,7 @@ def as_imports(value: Any, where: str) -> Sequence[str]:
 
 
 def as_table(value: Any, where: str) -> Json:
-    """設定の表 1 つ。型が違えば断る。"""
+    """設定の表 1 つ。型が違えばエラーにする。"""
     if value is None:
         return {}
     elif isinstance(value, dict):
@@ -190,7 +190,7 @@ def problem(cfg: EnvConfig) -> str | None:
             and not os.path.isfile(f"{cfg.engine}/.lake/build/bin/repl"),
             f"repl が未ビルド: cd {cfg.engine} && lake build repl",
         ),
-        # 起動してから落ちるだけなので、警告ではなく断る。
+        # 起動してから落ちるだけなので、警告ではなくエラーにする。
         (
             eng_tc is not None and proj_tc is not None and eng_tc != proj_tc,
             (

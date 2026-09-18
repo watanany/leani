@@ -114,7 +114,7 @@ class ConfigError(Exception):
 
 
 class EngineError(Exception):
-    """エンジンを用意できない。起動を断る理由になるが、REPL は落とさない。"""
+    """エンジンを用意できない。起動を中止する理由になるが、REPL は落とさない。"""
 
 
 class EngineDied(Exception):

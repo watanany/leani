@@ -360,7 +360,7 @@ def describe_エンジンのバージョン():
         )
 
     @story("G3")
-    def it_パスから外へ出るバージョン名は断る():
+    def it_パスから外へ出るバージョン名は受け付けない():
         # build_engine はこの場所を rmtree してから置き直す。`..` を通すと
         # 関係ないディレクトリを消してしまう。
         for tc in ("leanprover/lean4:..", "..", "."):
@@ -372,7 +372,7 @@ def describe_設定の値の型():
     """TOML は何でも書ける。型が違うぶんは traceback ではなく ConfigError。"""
 
     @story("G4")
-    def it_import_を文字列で書いたら断る():
+    def it_import_を文字列で書いたらエラーにする():
         # 黙って受けると 1 文字ずつの import になり、どれも解決できないので
         # ヘッダが丸ごと捨てられる (import Lean ごと消える)。
         cfg = {"default": "m", "env": {"m": {"imports": "Mathlib"}}}
@@ -380,21 +380,21 @@ def describe_設定の値の型():
             leani.config.resolve(cfg=cfg)
 
     @story("G4")
-    def it_文字列で書くべき所が別の型なら断る():
+    def it_文字列で書くべき所が別の型ならエラーにする():
         for key, value in (("project", 3), ("engine", True), ("prompt", 5)):
             cfg = {"default": "m", "env": {"m": {key: value}}}
             with pytest.raises(leani.types.ConfigError, match=key):
                 leani.config.resolve(cfg=cfg)
 
     @story("G4")
-    def it_表で書くべき所が別の型なら断る():
+    def it_表で書くべき所が別の型ならエラーにする():
         with pytest.raises(leani.types.ConfigError, match="env は表"):
             leani.config.resolve(cfg={"default": "m", "env": 3})
         with pytest.raises(leani.types.ConfigError, match=r"env\.m は表"):
             leani.config.resolve(cfg={"default": "m", "env": {"m": "nope"}})
 
     @story("G4")
-    def it_default_が文字列でなければ断る():
+    def it_default_が文字列でなければエラーにする():
         with pytest.raises(leani.types.ConfigError, match="default"):
             leani.config.resolve(cfg={"default": 3, "env": {"m": {}}})
 
@@ -491,7 +491,7 @@ def describe_エンジンを用意するときの安全側():
         assert os.path.isfile(f"{eng}/lean-toolchain")
 
     @story("G3", "G4")
-    def it_明示されたエンジンにバージョンが無ければ起動を断る(tmp_path, mocker):
+    def it_明示されたエンジンにバージョンが無ければ起動を中止する(tmp_path, mocker):
         # バージョンを合わせる先がこれしかない。黙って elan の既定に落ちると
         # olean が読めない。
         mocker.patch.object(leani.config.shutil, "which", return_value="/usr/bin/x")
@@ -787,7 +787,7 @@ def describe_定理検索():
         assert line.endswith("…")
 
     @story("D4")
-    def it_見つからなければそう言う():
+    def it_見つからなければその旨を表示する():
         assert leani.pure.loogle_text({"count": 0, "hits": []}) == "見つからなかった"
 
     @story("D4")

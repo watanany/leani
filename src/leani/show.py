@@ -59,7 +59,7 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
 
     note = resp.get("message")
     if isinstance(note, str) and note.strip():
-        # repl がリクエストごと断った (env や proofState が無い)。messages には
+        # repl がリクエストごと拒否した (env や proofState が無い)。messages には
         # 何も入らないので、ここで出さないと画面が無反応になる。
         print(red(note.strip()))
         print(dim("  エンジンと環境が食い違っている。:restart で作り直せる"))
