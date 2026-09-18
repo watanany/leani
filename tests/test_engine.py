@@ -1110,7 +1110,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
 
         # guard が作り直して再送し、埋め戻した宣言は通っている。世代だけを
         # 見て「sorry のまま」と言うと、sorry のままのテキストを実行し直して重複エラーの
-        # 宣言が保留に永久に居座る (:restart ごとに「戻せなかった宣言」)。
+        # 宣言が保留に永久に残り続ける (:restart ごとに「戻せなかった宣言」)。
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out
         assert repl.repl.eng.unplayed == [], repl.repl.eng.unplayed

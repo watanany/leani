@@ -125,7 +125,7 @@ def describe_タクティクの提案():
 
     @story("E2")
     def it_閉じていない提案は読み切れていないと分かる():
-        # スクリプトに入れる前の最後の砦。切り落とすと必ず括弧が合わなくなる。
+        # スクリプトに入れる前の最後の確認。切り落とすと必ず括弧が合わなくなる。
         assert leani.pure.balanced("simp only [aaa, bbb]")
         assert leani.pure.balanced("exact ⟨foo (bar x), rfl⟩")
         assert not leani.pure.balanced("simp only [aaa, bbb,")
