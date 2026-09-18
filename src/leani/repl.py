@@ -117,7 +117,8 @@ HELP = """\
   :t <expr>      型 (#check)
   :i <name>      型と docstring
   :p <name>      定義 (#print)
-  :loogle <q>    定理を探す (外に聞く)  例: :loogle |- ?a + ?b = ?b + ?a
+  :loogle <q>    定理を探す (外部サービスに問い合わせる)
+                 例: :loogle |- ?a + ?b = ?b + ?a
                  名前 / 型 / 結論 (|- を付ける) / 名前に含む語 ("commutative")
   :l <file>      読み込む (環境を作り直す)   :r  読み直す
   :reset         起動直後に戻る              :undo [n]  n 個前の環境へ
@@ -534,7 +535,7 @@ class Repl:
         1 行読む。Ctrl-C は KeyboardInterrupt、Ctrl-D は EOFError で上に返る。
 
         端末を握るのは prompt() の中だけなので、評価中の Ctrl-C は今までどおり
-        SIGINT として届く (Engine.send が Interrupted に訳す)。端末でなければ
+        SIGINT として届く (Engine.send が Interrupted に変える)。端末でなければ
         セッションを持たないので、パイプ入力は素の input() を通る。
         """
         if Repl._session is None:
@@ -1150,7 +1151,7 @@ class Repl:
             render(resp, arg)
 
     def cmd_loogle(self, arg: str) -> None:
-        """定理を loogle に聞く。エンジンには触らないので、環境は動かない。"""
+        """loogle に問い合わせる。エンジンには触らないので、環境は動かない。"""
         if not arg:
             print(
                 red(":loogle には名前か型のパターンが要る  (例: |- ?a + ?b = ?b + ?a)")
@@ -1167,15 +1168,15 @@ class Repl:
 
     def ask_loogle(self, query: str) -> Loogle:
         """
-        聞いているあいだ 1 行置く。
+        問い合わせているあいだ 1 行表示する。
 
         重いパターンだと向こうが 20 秒近く走る。何も出ないと固まったように
-        見える。当たっても失敗しても、次を出す前にこの行は消す。
+        見える。成功しても失敗しても、次を表示する前にこの行は消す。
         """
         if not TTY:
             return loogle(query)
 
-        print(dim("loogle に聞いている…"), end="", flush=True)
+        print(dim("loogle に問い合わせています…"), end="", flush=True)
         try:
             return loogle(query)
         finally:

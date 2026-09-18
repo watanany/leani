@@ -111,7 +111,7 @@ import が 1 つでも解決できないと、エンジンはヘッダを丸ご�
 | `:t <expr>`            | 型 (`#check`)                                                                                                           |
 | `:i <name>`            | 型と docstring                                                                                                          |
 | `:p <name>`            | 定義 (`#print`)                                                                                                         |
-| `:loogle <q>`          | 定理を探す。名前 (`Nat.succ_le`)、型 (`(?a -> ?b) -> List ?a -> List ?b`)、結論だけ (`\|- ?a + ?b = ?b + ?a`)、名前に含む語 (`"commutative"`) の 4 通りで書ける。エンジンではなく外の loogle に聞くので、探す先は mathlib。手元の環境に無い名前も挙がるため、どの module のものかを添える |
+| `:loogle <q>`          | 定理を探す。名前 (`Nat.succ_le`)、型 (`(?a -> ?b) -> List ?a -> List ?b`)、結論だけ (`\|- ?a + ?b = ?b + ?a`)、名前に含む語 (`"commutative"`) の 4 通りで書ける。エンジンではなく外部の loogle に問い合わせるので、探す先は mathlib。手元の環境に無い名前も挙がるため、どの module のものかを添える |
 | `:l <file>` / `:r`     | 読み込み / 読み直し                                                                                                     |
 | `:reset` / `:undo [n]` | 環境の操作                                                                                                              |
 | `:env [name]`          | 今の環境 / 設定した環境に切り替えて再起動。打った宣言は控えているぶんも含めて切り替え先で流し直す。起動できなければ元の環境に戻る              |
@@ -197,7 +197,7 @@ olean をどれだけ OS がキャッシュしているかで変わる。
 
 判定と整形はすべて純粋な側にある (完結判定・エラー位置の枠・提案の取り出し・
 補完の単位・設定の検査)。純粋・読み取り・定数のモジュールが副作用のモジュールを
-import していないことは `uv run ruff check .` が落とす (`pyproject.toml` の
+import していないことは `uv run ruff check .` が検出する (`pyproject.toml` の
 flake8-tidy-imports)。この約束はテストではなく lint で縛っているので `SPEC.md`
 には出ない。状態を持つのは repl プロセスを抱える `Engine` と、
 入力バッファと証明モードを持つ `Repl` の 2 つだけ。分岐は `if` の連続ではなく

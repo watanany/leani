@@ -761,7 +761,7 @@ def describe_定理検索():
         assert out[3].startswith("List.mapTR : ")
 
     @story("D4")
-    def it_絞ったときは母数を添える():
+    def it_絞ったときは全体の件数を添える():
         # loogle は 200 件で切って返すので、count は hits より多いことがある。
         got = {"count": 360, "hits": HITS}
         assert (
@@ -781,12 +781,12 @@ def describe_定理検索():
         assert line.endswith("…")
 
     @story("D4")
-    def it_当たらなければそう言う():
-        assert leani.pure.loogle_text({"count": 0, "hits": []}) == "当たらなかった"
+    def it_見つからなければそう言う():
+        assert leani.pure.loogle_text({"count": 0, "hits": []}) == "見つからなかった"
 
     @story("D4")
     def it_エラーは訳さずに候補を添える():
-        # loogle の文言は Lean のパーサのもの。訳すと元の位置情報が消える。
+        # loogle の文言は Lean のパーサのもの。日本語にすると元の位置情報が消える。
         got = {"error": "unknown identifier 'Nope'", "suggestions": ['"Nope"']}
         out = leani.pure.loogle_text(got).split("\n")
         assert out == ["loogle: unknown identifier 'Nope'", 'もしかして: "Nope"']
@@ -803,7 +803,7 @@ def describe_定理検索():
 
     @story("D4")
     def it_届かなければ_SearchError(mocker):
-        # 網の事情で REPL を落とさない。呼ぶ側が受けて 1 行報告する。
+        # ネットワークの事情で REPL を終了させない。呼ぶ側が受けて 1 行報告する。
         mocker.patch("urllib.request.urlopen", side_effect=OSError("名前が引けない"))
         with pytest.raises(leani.types.SearchError, match="名前が引けない"):
             leani.search.loogle("Nat")

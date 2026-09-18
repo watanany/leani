@@ -1263,17 +1263,17 @@ def describe_解決できない_import_のファイル():
         assert "2" in repl.feed("#eval 1 + 1"), "手元の環境まで失った"
 
 
-def describe_定理を外に聞く():
-    """:loogle は外の HTTP に聞くだけで、エンジンには一度も触らない。"""
+def describe_定理を外部サービスで探す():
+    """:loogle は外部サービスに問い合わせるだけで、エンジンには一度も触らない。"""
 
     @story("D4")
-    def it_パターンが無ければ聞きに行かない(repl, mocker):
+    def it_パターンが無ければ問い合わせない(repl, mocker):
         asked = mocker.patch.object(leani.repl, "loogle")
         assert "要る" in repl.feed(":loogle")
-        assert not asked.called, "空の :loogle で外に聞いた"
+        assert not asked.called, "空の :loogle で問い合わせた"
 
     @story("D4")
-    def it_聞いても環境は動かない(repl, mocker):
+    def it_問い合わせても環境は動かない(repl, mocker):
         repl.feed("def beforeLoogle := 7")
         hit = {
             "name": "Nat.add_comm",

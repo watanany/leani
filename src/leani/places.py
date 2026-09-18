@@ -21,7 +21,7 @@ ENGINE_CACHE = f"{STATE}/engine"
 # 明示されたときは leani は何も管理せず、そのディレクトリをそのまま使う。
 ENGINE = os.environ.get("LEANI_ENGINE")
 NO_SETUP = bool(os.environ.get("LEANI_NO_SETUP"))
-# エンジンの用意で外に聞くときの上限。網が黒穴でも黙って止まらないように。
+# エンジンの用意で外部と通信するときの上限。応答が返らないまま黙って止まらないように。
 SETUP_TIMEOUT = 120
 # git に認証を聞き返させない。capture_output だと聞かれても見えないまま止まる。
 SETUP_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
@@ -39,12 +39,12 @@ BOOT_PROBE = "#check @Lean.Parser.runParserCategory\n"
 
 COMPLETE_CAP = 40000
 
-# 定理検索 (loogle)。エンジンとは別の口で、こちらは外の HTTP。自前で建てたもの
+# 定理検索 (loogle)。エンジンとは別のサービスで、こちらは外部への HTTP。自前で建てたもの
 # を指せるようにしてある。公開のものが探す先は mathlib なので、手元の環境に
 # 無い名前も挙がる (module を一緒に出すのはそのため)。
 LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
-# 網が黒穴でもプロンプトが返らなくならないように。重いパターン (部分項をたくさん
-# 挙げたもの) は向こうの heartbeats 上限に当たるまで走るので、実測で 20 秒近く
+# 応答が返らないときもプロンプトが戻るように。重いパターン (部分項をたくさん
+# 挙げたもの) は向こうの heartbeats 上限に達するまで走るので、実測で 20 秒近く
 # かかる。短くすると、答えが出るはずのものまで打ち切ってしまう。
 LOOGLE_TIMEOUT = 30
 

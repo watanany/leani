@@ -186,7 +186,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     sorry 1 個をタクティクの台本に差し替える。位置が読めなければ None。
 
     repl は sorry ごとに pos / endPos を返す。テキストを数えて当てると
-    コメントや識別子の中の "sorry" に当たるので、必ず位置で切る。数えて
+    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切る。数えて
     当てていたころは sorry が 2 個以上あると埋め戻しを丸ごと諦めていた。
     """
     a, b = offset(src, sy.get("pos")), offset(src, sy.get("endPos"))
@@ -452,10 +452,10 @@ def span(
     return ln, col, min(width, max(1, len(src_line) - col))
 
 
-# loogle の返事を読む。エラーも当たりも同じ 200 で来るので、`error` の鍵が
+# loogle の応答を読む。エラーも検索結果も同じ 200 で返るので、`error` の鍵が
 # あるかどうかだけで見分ける。
 def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
-    """loogle の返事を出す形にする。1 件 2 行 (名前と型 / どの module か)。"""
+    """loogle の応答を表示する形にする。1 件 2 行 (名前と型 / どの module か)。"""
     err = got.get("error")
     if err:
         lines = [red(f"loogle: {err}")]
@@ -466,10 +466,10 @@ def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
 
     hits = got.get("hits") or []
     if not hits:
-        return dim("当たらなかった")
+        return dim("見つからなかった")
 
-    # count は当たった総数で、hits は loogle が既に 200 件で切ったもの。
-    # 出すのはさらにその頭だけなので、母数は count のまま書く。
+    # count は見つかった総数で、hits は loogle が既に 200 件で切ったもの。
+    # 表示するのはさらにその先頭だけなので、全体の件数は count のまま書く。
     total = got.get("count", len(hits))
     shown = hits[:keep]
     head = f"{total} 件" + (f" (先頭 {len(shown)} 件)" if len(shown) < total else "")
