@@ -86,7 +86,7 @@ def abbrev_keys() -> KeyBindings:
     """
     space に略記の確定を割り当てる。
 
-    Tab は補完が使っているので触らない。ここで Tab も兼ねると、同じ打鍵が
+    Tab は補完が使っているので使わない。ここで Tab も兼ねると、同じ打鍵が
     手前の文字次第で補完にも変換にもなって、どちらが起きるか打つ前に読めない。
 
     space はそのまま入れる。確定の合図を消費してしまうと `a \\to b` が `a →b` に
@@ -412,7 +412,7 @@ class Repl:
         作り直しに失敗したときの後始末。環境が無いので遡る先も無い。
 
         成功パスだけが証明モードを畳んでいたので、失敗すると死んだ
-        proofState を掴んだままになり、以降どの行も赤い "Unknown proof state."
+        proofState を保持したままになり、以降どの行も赤い "Unknown proof state."
         だけを返す幽霊の証明モードに座り続けていた (抜ける案内も出ない)。
         """
         self.last = None
@@ -746,7 +746,7 @@ class Repl:
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
             # 取っておく間にエンジンが作り直された。保存した env id は死んで
-            # いるので据えられない。テキストから流し直す。
+            # いるので設定できない。テキストから流し直す。
             self.replay_into([undone.src])
 
     # -- 送信 -------------------------------------------------------------
@@ -967,7 +967,7 @@ class Repl:
             return
         elif self.eng.gen != gen:
             # 作り直されて、そのうえ通らなかった。保存した env id は死んで
-            # いるので据えず、sorry のままのテキストを流し直す。持ち越しは
+            # いるので設定せず、sorry のままのテキストを流し直す。持ち越しは
             # 戻さない (死んだ proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
             print(dim("-- エンジンが作り直されたので sorry のままにしておく"))
@@ -1152,7 +1152,7 @@ class Repl:
             render(resp, arg)
 
     def cmd_loogle(self, arg: str) -> None:
-        """loogle に問い合わせる。エンジンには触らないので、環境は動かない。"""
+        """loogle に問い合わせる。エンジンは操作しないので、環境は動かない。"""
         if not arg:
             print(
                 red(":loogle には名前か型のパターンが要る  (例: |- ?a + ?b = ?b + ?a)")
@@ -1353,7 +1353,7 @@ class Repl:
 
     def reset(self) -> None:
         if self.eng.base is None:
-            # 起点の環境が無い (boot が通らなかった)。据え直しても
+            # 起点の環境が無い (boot が通らなかった)。設定し直しても
             # "Unknown environment." しか返さない端末になり、保留だけが消える。
             print(red("起点の環境が無い。:restart で作り直す"))
             return

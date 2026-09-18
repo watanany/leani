@@ -240,7 +240,7 @@ def describe_エラー位置の枠():
     """メッセージの位置を、送ったソースの座標からその行の中に収める。"""
 
     @story("A2")
-    def it_eval_で包んだぶんの下駄を引く():
+    def it_eval_で包んだ分だけ位置を戻す():
         m = {"pos": {"line": 2, "column": 6}, "endPos": {"line": 2, "column": 9}}
         # #eval で 1 行 2 桁ずらして送っているので、元のソースでは 1 行 4 桁。
         assert leani.pure.span(m, ["foo bar"], line_off=1, col_off=2) == (1, 4, 3)
@@ -502,7 +502,7 @@ def describe_エンジンを用意するときの安全側():
 
     @story("G3")
     def it_途中の置き場はプロセスごとに分かれる(tmp_path, mocker):
-        # leani を 2 つ同時に起動したとき、同じ .tmp を掴むと片方が起動できない。
+        # leani を 2 つ同時に起動したとき、同じ .tmp を使うと片方が起動できない。
         seen = []
         mocker.patch.object(leani.boot, "run_setup", side_effect=_fake_setup(seen))
         path = str(tmp_path / "engine" / "v4.33.0")
@@ -710,8 +710,8 @@ def describe_略記の展開():
         assert leani.abbrev.expand_abbrev("\\alpha") == ("α", 6)
 
     @story("C5")
-    def it_滅多に打たない略記も引ける():
-        # 表は本家の全件。よく打つぶんだけに絞っていた頃は引けなかった。
+    def it_滅多に打たない略記も変換できる():
+        # 表は本家の全件。よく打つ分だけに絞っていた頃は変換できなかった。
         assert leani.abbrev.expand_abbrev("\\frown") == ("⌢", 6)
         assert leani.abbrev.expand_abbrev("\\Gangia") == ("Ϫ", 7)
 
@@ -722,7 +722,7 @@ def describe_略記の展開():
 
     @story("C5")
     def it_記号が続く形は変えない():
-        # `\to)` まで丸ごと引く。`"\t"` のような文字列を ▸ に化けさせない。
+        # `\to)` まで丸ごと表を引く。`"\t"` のような文字列を ▸ に化けさせない。
         assert leani.abbrev.expand_abbrev("(\\to)") is None
         assert leani.abbrev.expand_abbrev('"\\t"') is None
 
@@ -731,8 +731,8 @@ def describe_略記の展開():
         key=st.sampled_from(sorted(leani.abbrev.ABBREV)),
         head=st.text(alphabet=st.characters(exclude_characters="\\"), max_size=8),
     )
-    def it_表のどの略記も引ける(key, head):
-        # 例に書けるのは数件。1829 件すべてが同じ規則で引けることはここで見る。
+    def it_表のどの略記も変換できる(key, head):
+        # 例に書けるのは数件。1829 件すべてが同じ規則で変換できることはここで見る。
         # 打つ手前に何が書いてあっても、直前の `\\` から後ろだけを鍵にする。
         want = (leani.abbrev.ABBREV[key], len(key) + 1)
         assert leani.abbrev.expand_abbrev(head + "\\" + key) == want
@@ -762,7 +762,7 @@ def describe_定理検索():
         assert out[0] == "2 件"
         # `type` は先頭に空白が付いて来るので、`name : type` に組み直す。
         assert out[1] == "List.map : (f : α → β) : List α → List β"
-        # どの module にあるかを添える。手元の環境に無い名前も挙がるため。
+        # どの module にあるかを添える。手元の環境に無い名前も出てくるため。
         assert out[2] == "  Init.Prelude"
         assert out[3].startswith("List.mapTR : ")
 

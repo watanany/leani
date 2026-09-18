@@ -75,7 +75,7 @@ class Probe(TypedDict, total=False):
 
 
 class Hit(TypedDict, total=False):
-    """loogle が挙げた宣言 1 件。type は先頭に空白が付いた形で返る。"""
+    """loogle が返した宣言 1 件。type は先頭に空白が付いた形で返る。"""
 
     name: str
     type: str

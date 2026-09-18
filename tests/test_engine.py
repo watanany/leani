@@ -335,7 +335,7 @@ def describe_項の位置の_sorry():
         repl.feed(":prove")
         out = repl.feed("exact 0")
         assert "sorry のまま" in out, out
-        # sorry のままの宣言が残っているので、名前としては引き続き引ける
+        # sorry のままの宣言が残っているので、名前としては引き続き参照できる
         # (#eval は sorry に依存する項を拒むので、値では見ない)。
         assert repl.declarations == ["def termSorry : Nat := sorry"]
         assert "termSorry" in repl.feed(":p termSorry")
@@ -413,7 +413,7 @@ def describe_起動の確かめ():
 
     @story("G4")
     def it_エンジンが死んだら終わり方を報告に載せる():
-        # バージョンの合わないエンジンを掴むと、repl は何も出力せずにシグナルで消える。
+        # バージョンの合わないエンジンを読み込むと、repl は何も出力せずに消える。
         # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
         # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
         cfg = leani.config.EnvConfig.make("bogus")
@@ -768,7 +768,7 @@ def describe_書き出したファイルのヘッダ():
         repl.feed(f":save {path}")
 
         # :l は読むときに import Lean を足すので、そこでは露見しない。
-        # lean に直接渡したときだけ Lean.versionString が引けなくなる。
+        # lean に直接渡したときだけ Lean.versionString が見つからなくなる。
         assert path.read_text().startswith("import Lean\n"), path.read_text()
 
 
@@ -928,19 +928,19 @@ def describe_保留した宣言とエンジンの世代():
     """
 
     @story("F1", "C2")
-    def it_死んだ環境_id_を据え直さない(repl):
+    def it_無効になった環境_id_を設定し直さない(repl):
         repl.feed("def held := 1")
         repl.repl.undone = repl.repl.eng.pop_decl()  # 遡って書き直す途中の形
         repl.feed(":restart")
 
         repl.repl.restore_undone()  # 書き直さずにやめた
-        # 死んだ env id を据えると repl は "Unknown environment." しか返さず、
+        # 無効になった env id を設定すると repl は "Unknown environment." しか返さず、
         # 何を打っても無反応な端末になる。テキストから流し直す。
         assert "2" in repl.feed("#eval held + 1")
 
     @story("F1")
     def it_環境が食い違ったら黙らない(repl):
-        repl.repl.eng.env = 987654  # 死んだ世代の env id を掴んだ状態
+        repl.repl.eng.env = 987654  # 無効になった世代の env id を持つ状態
         out = repl.feed("def afterGhost := 1")
 
         assert "environment" in out.lower(), out
@@ -1169,7 +1169,7 @@ def describe_起点の環境を失ったとき():
         _no_env(repl, mocker)
 
         out = repl.feed(":reset")
-        # base は死んだプロセスの id。据え直すと submit の「env が無い」ガードが
+        # base は死んだプロセスの id。設定し直すと submit の「env が無い」ガードが
         # 外れ、import が 1 つも無い環境に宣言が積まれる (何を書いても通らない)。
         assert "起点の環境が無い" in out, out
         assert repl.repl.eng.unplayed == ["def held := 1"]
@@ -1264,7 +1264,7 @@ def describe_解決できない_import_のファイル():
 
 
 def describe_定理を外部サービスで探す():
-    """:loogle は外部サービスに問い合わせるだけで、エンジンには一度も触らない。"""
+    """:loogle は外部サービスに問い合わせるだけで、エンジンは一度も操作しない。"""
 
     @story("D4")
     def it_パターンが無ければ問い合わせない(repl, mocker):
@@ -1285,7 +1285,7 @@ def describe_定理を外部サービスで探す():
         )
 
         assert "Nat.add_comm" in repl.feed(":loogle ?a + ?b = ?b + ?a")
-        # loogle が挙げるのは mathlib の名前で、手元の環境とは無関係。
+        # loogle が返すのは mathlib の名前で、手元の環境とは無関係。
         assert "7" in repl.feed("beforeLoogle"), ":loogle が環境を動かした"
 
     @story("D4", "F4")

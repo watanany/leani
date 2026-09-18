@@ -236,7 +236,7 @@ def first_response(buf: str) -> Response | None:
             continue
 
         # repl の応答は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
-        # 次の区切りを試す (呼ぶ側は添字で鍵を引く)。
+        # 次の区切りを試す (呼ぶ側は添字で鍵を取り出す)。
         if isinstance(got, dict):
             return cast(Response, got)
 
