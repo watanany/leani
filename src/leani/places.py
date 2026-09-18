@@ -48,5 +48,5 @@ LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
 # かかる。短くすると、答えが出るはずのものまで打ち切ってしまう。
 LOOGLE_TIMEOUT = 30
 
-# 色を出すかどうかは起動時に決まる。パイプに流すときは混ぜない。
+# 色を出すかどうかは起動時に決まる。パイプに出力するときは混ぜない。
 TTY = sys.stdout.isatty()

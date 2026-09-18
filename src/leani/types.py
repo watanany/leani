@@ -9,7 +9,7 @@ from typing import Any, Final, Literal, TypedDict, TypeVar
 # こちらが組む JSON と、TOML の設定。形がその場ごとに違うので dict のまま扱う。
 Json = dict[str, Any]
 
-# repl から返る JSON。実行時はそのままの dict で扱い、欠けた鍵は `.get` で流す
+# repl から返る JSON。実行時はそのままの dict で扱い、欠けた鍵は `.get` で読み飛ばす
 # (repl のバージョンが変わっても落ちないように)。TypedDict にしてあるのは鍵の名前と値の
 # 型を mypy に見てもらうためで、検証はしない。どの鍵も「返ってくるかもしれない」
 # ものなので total=False にする。

@@ -231,7 +231,7 @@ class Terminal:
         self.wait_prompt(PROMPT, 90)
 
     def _feed(self, chunk):
-        """受け取ったバイトを画面に流す。CPR には今のカーソル位置で答える。"""
+        """受け取ったバイトを画面に出力する。CPR には今のカーソル位置で答える。"""
         self._pending += chunk
         cut = ESC_TAIL.search(self._pending)
         head = self._pending[: cut.start()] if cut else self._pending
@@ -239,7 +239,7 @@ class Terminal:
 
         for i, part in enumerate(head.split(CPR)):
             if i:
-                # 直前のぶんを流したあとのカーソル位置で答える。
+                # 直前の分を出力したあとのカーソル位置で答える。
                 row, col = self.screen.cursor.y + 1, self.screen.cursor.x + 1
                 os.write(self.fd, f"\x1b[{row};{col}R".encode())
             self.stream.feed(part)

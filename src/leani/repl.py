@@ -431,7 +431,7 @@ class Repl:
         if out.failed or out.notes:
             print(dim("  これらは環境に無い (テキストは残してある)"))
         if out.skipped:
-            print(yellow(f"まだ流していない宣言: {len(out.skipped)} 件"))
+            print(yellow(f"まだ実行していない宣言: {len(out.skipped)} 件"))
             print(dim("  これらも環境に無い。:restart でやり直せる"))
 
     def reattach(self, out: Replay) -> None:
@@ -451,7 +451,7 @@ class Repl:
         print(dim(f"-- :prove で証明モードに入り直せる (sorry {len(out.sorries)} 個)"))
 
     def replay_into(self, log: Sequence[str]) -> None:
-        """打った宣言を今のエンジンに流し直す。:env の戻り道で使う。"""
+        """打った宣言を今のエンジンに実行し直す。:env の戻り道で使う。"""
         if not log:
             return
 
@@ -746,7 +746,7 @@ class Repl:
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
             # 取っておく間にエンジンが作り直された。保存した env id は死んで
-            # いるので設定できない。テキストから流し直す。
+            # いるので設定できない。テキストから実行し直す。
             self.replay_into([undone.src])
 
     # -- 送信 -------------------------------------------------------------
@@ -962,12 +962,12 @@ class Repl:
         if undone is None or landed:
             # 着地したかは env の中身で決める。世代だけを見ると、落ちた
             # エンジンを guard が作り直して再送し**通った**ときにも
-            # 「sorry のまま」と嘘をつき、sorry のままのテキストを流し直して重複エラーの
-            # 宣言が保留に永久に居座る。
+            # 「sorry のまま」と嘘をつき、sorry のままのテキストを実行し直して
+            # 重複エラーの宣言が保留に永久に居座る。
             return
         elif self.eng.gen != gen:
             # 作り直されて、そのうえ通らなかった。保存した env id は死んで
-            # いるので設定せず、sorry のままのテキストを流し直す。持ち越しは
+            # いるので設定せず、sorry のままのテキストを実行し直す。持ち越しは
             # 戻さない (死んだ proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
             print(dim("-- エンジンが作り直されたので sorry のままにしておく"))
@@ -1224,7 +1224,7 @@ class Repl:
 
         keep, prev, back = self.show_time, self.eng.loaded, self.cfg
         # 打った宣言も持って行く。:l した中身は preload で戻るが、対話で打った
-        # ぶんは新しい Engine には入っていない。戻り道で流し直す。
+        # ぶんは新しい Engine には入っていない。戻り道で実行し直す。
         # 環境に無い宣言も連れて行く。捨てると、直前に「テキストは残してある」
         # と表示したものが :env で黙って消える。新しい環境なら通ることもある
         # (import が増える方向の切り替え)。通らなければまた保留に戻る。
@@ -1242,7 +1242,7 @@ class Repl:
                 die(f"{back.name} にも戻れなくなった: {back_e}")
 
         # 成功しても元に戻っても、対話で打った宣言は新しいエンジンには無い。
-        # except の中だけで流していたので、切り替えが成功したときに限って
+        # except の中だけで実行していたので、切り替えが成功したときに限って
         # 打った宣言が黙って消えていた。
         self.replay_into(log)
         self.show_time = keep

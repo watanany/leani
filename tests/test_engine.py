@@ -707,13 +707,13 @@ def describe_通らなかった宣言の_sorry():
 
 def describe_replay_が途中で止まったとき():
     """
-    流せなかった宣言は保留しておくが、環境に入っている宣言の並び (log) には
+    実行できなかった宣言は保留しておくが、環境に入っている宣言の並び (log) には
     混ぜない。log は env のスタックと 1 対 1 で、混ぜると :undo と埋め戻しが
     別の宣言を落とす。
     """
 
     @story("F1", "F2")
-    def it_流せなかった宣言を環境の並びに混ぜない(repl, mocker):
+    def it_実行できなかった宣言を環境の並びに混ぜない(repl, mocker):
         for one in ("def r1 := 1", "def r2 := 2", "def r3 := 3"):
             repl.feed(one)
 
@@ -729,14 +729,14 @@ def describe_replay_が途中で止まったとき():
         mocker.patch.object(leani.engine.Engine, "send_cmd", once)
         out = repl.feed(":restart")  # Driver が毎行 INVARIANTS を見る
 
-        assert "まだ流していない宣言: 2 件" in out, out
+        assert "まだ実行していない宣言: 2 件" in out, out
         assert repl.declarations == ["def r1 := 1"], repl.declarations
         # env に無いものを :save が書くと、書き出したファイルが通らない。
         assert repl.repl.eng.sources() == ["def r1 := 1"], repl.repl.eng.sources()
         assert repl.repl.eng.unplayed == ["def r2 := 2", "def r3 := 3"]
 
     @story("F1", "F2")
-    def it_次の_restart_で流し直す(repl, mocker):
+    def it_次の_restart_で実行し直す(repl, mocker):
         for one in ("def s1 := 1", "def s2 := 2"):
             repl.feed(one)
 
@@ -787,7 +787,7 @@ def describe_init_と読み込みが混ざるとき():
         repl.feed("def fromRepl := 3")
 
         # :l は環境を作り直す。init を重ね直さないと、env には無いものを
-        # sources() が並べ続ける。並べる順も流した順でないと通らない。
+        # sources() が並べ続ける。並べる順も実行した順でないと通らない。
         assert repl.repl.eng.sources() == [
             "def fromFile := 2",
             "def fromInit := 1",
@@ -813,7 +813,7 @@ def describe_切り替えに失敗したとき():
 
         assert "起動できなかった" in out, out
         # 戻り道は新しい Engine を作る。:l した中身は preload で戻るが、
-        # 対話で打ったぶんは流し直さないと消える。
+        # 対話で打ったぶんは実行し直さないと消える。
         assert "42" in repl.feed("#eval typedHere"), "打った宣言が消えた"
 
 
@@ -935,7 +935,7 @@ def describe_保留した宣言とエンジンの世代():
 
         repl.repl.restore_undone()  # 書き直さずにやめた
         # 無効になった env id を設定すると repl は "Unknown environment." しか返さず、
-        # 何を打っても無反応な端末になる。テキストから流し直す。
+        # 何を打っても無反応な端末になる。テキストから実行し直す。
         assert "2" in repl.feed("#eval held + 1")
 
     @story("F1")
@@ -949,7 +949,7 @@ def describe_保留した宣言とエンジンの世代():
 
 def describe_環境に無い宣言の行き先():
     """
-    replay で通らなかった / 流せなかった宣言は env に無い。テキストは保留
+    replay で通らなかった / 実行できなかった宣言は env に無い。テキストは保留
     しておくが、そのまま書き出すと通らないファイルになる。
     """
 
@@ -1027,7 +1027,7 @@ def describe_切り替えが通ったとき():
         repl.feed("def carried := 42")
         out = repl.feed(":env wide")
 
-        # 戻り道でだけ流し直していたので、切り替えが成功したときに限って
+        # 戻り道でだけ実行し直していたので、切り替えが成功したときに限って
         # 打った宣言が黙って消えていた。
         assert "42" in repl.feed("#eval carried"), out
 
@@ -1109,7 +1109,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
         mocker.stopall()
 
         # guard が作り直して再送し、埋め戻した宣言は通っている。世代だけを
-        # 見て「sorry のまま」と言うと、sorry のままのテキストを流し直して重複エラーの
+        # 見て「sorry のまま」と言うと、sorry のままのテキストを実行し直して重複エラーの
         # 宣言が保留に永久に居座る (:restart ごとに「戻せなかった宣言」)。
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out
@@ -1179,7 +1179,7 @@ def describe_起点の環境を失ったとき():
         assert "1" in repl.feed("#eval held")
 
     @story("F1")
-    def it_流し直さずに保留する(repl, mocker):
+    def it_実行し直さずに保留する(repl, mocker):
         _no_env(repl, mocker)
 
         buf = io.StringIO()
@@ -1187,7 +1187,7 @@ def describe_起点の環境を失ったとき():
             repl.repl.replay_into(["def two := 2"])
         out = buf.getvalue()
 
-        # 流すと repl は env 無しのリクエストから Init だけの環境を勝手に作る。
+        # 実行すると repl は env 無しのリクエストから Init だけの環境を勝手に作る。
         # 「戻した」と報告しながら、設定の import が無い環境に積むことになる。
         assert "戻せなかった" in out, out
         assert repl.repl.eng.unplayed == ["def two := 2", "def held := 1"]

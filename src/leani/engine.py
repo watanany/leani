@@ -284,7 +284,7 @@ class Engine:
         世代が変わっていたら戻さない。保存した env id は死んだプロセスのもので、
         新しいエンジンには無い。それを今の env に設定すると、以後の cmd は
         存在しない環境に飛び (repl は "Unknown environment." を返すだけ)、
-        打っても何も起きない端末になる。宣言は呼ぶ側が流し直す。
+        打っても何も起きない端末になる。宣言は呼ぶ側が実行し直す。
         """
         if saved.gen != self.gen:
             return False
@@ -316,7 +316,7 @@ class Engine:
         log だけでは足りない。init と :l したファイルは base に畳み込んで
         あるので、それも並べないと書き出したものを :l で読み直せない。
 
-        並べる順は実際に流した順。:l は環境を作り直すので、init はその上に
+        並べる順は実際に実行した順。:l は環境を作り直すので、init はその上に
         重なる (load_file が重ね直す)。逆に並べると、init が :l したファイルの
         名前を使っているときだけ書き出したファイルが通らなくなる。
         """
@@ -327,7 +327,7 @@ class Engine:
 
     def boot(self) -> None:
         """
-        設定された import を流して起点の環境を作る。
+        設定された import を実行して起点の環境を作る。
 
         pickle キャッシュは試したが効かないので入れていない。repl の pickle は
         import からの差分しか持たない (1.2KB 程度) ので、unpickle でも
@@ -356,7 +356,7 @@ class Engine:
         self.spawn()
 
         # boot で投げたら log はそのまま残す。やり直せば replay できる。
-        # 前回流せなかったぶんは env に無いので、通ったものの後ろに回す。
+        # 前回実行できなかったぶんは env に無いので、通ったものの後ろに回す。
         log = list(self.log) + list(self.unplayed)
         loaded = self.loaded
         try:
@@ -365,7 +365,7 @@ class Engine:
             # boot が通らなかった。プロセスは作り直したので前の env id は死んで
             # いて、宣言はどこにも入っていない。log に残すと len(stack) と
             # 食い違い、:save が環境に無い宣言を本体に書く。保留に回せば
-            # コメントとして添えられ、直してから :restart で流し直せる。
+            # コメントとして添えられ、直してから :restart で実行し直せる。
             # base も捨てる。:reset が死んだ id を設定し直すと、submit の
             # 「env が無い」ガードが外れて何を打っても通らない端末になる。
             self.env = self.base = None
@@ -454,7 +454,7 @@ class Engine:
 
     def replay(self, log: Sequence[str]) -> Replay:
         """
-        宣言を今の環境に流し直す。通らなかったものは飛ばして続ける。
+        宣言を今の環境に実行し直す。通らなかったものは飛ばして続ける。
 
         :restart と :env の戻り道が同じものを使う。件数だけ返していたころは
         通らなかった宣言が黙って消えていた。
@@ -464,11 +464,11 @@ class Engine:
         found: list[Sorry] = []
 
         if self.env is None:
-            # 流し直す先が無い。送れば send_cmd が関門で断つが、ここは
+            # 実行し直す先が無い。送れば send_cmd が関門で断つが、ここは
             # 「何件通ったか」を返す関数なので、例外を上げずに全件を保留へ
             # 回し、理由を Replay に載せて返す。
             self.unplayed = list(log) + self.unplayed
-            return Replay([], [], list(log), ["環境が無いので流し直せない"], [])
+            return Replay([], [], list(log), ["環境が無いので実行し直せない"], [])
 
         for n, src in enumerate(log):
             try:
