@@ -72,6 +72,7 @@ from leani.types import (
     EngineError,
     Interrupted,
     Kind,
+    Loogle,
     Probe,
     SearchError,
     Sorry,
@@ -116,7 +117,8 @@ HELP = """\
   :t <expr>      型 (#check)
   :i <name>      型と docstring
   :p <name>      定義 (#print)
-  :loogle <q>    定理を探す (loogle / 外に聞く)  例: :loogle Nat.succ_le
+  :loogle <q>    定理を探す (外に聞く)  例: :loogle |- ?a + ?b = ?b + ?a
+                 名前 / 型 / 結論 (|- を付ける) / 名前に含む語 ("commutative")
   :l <file>      読み込む (環境を作り直す)   :r  読み直す
   :reset         起動直後に戻る              :undo [n]  n 個前の環境へ
   :env [name]    今の環境 / 設定した環境に切り替えて再起動
@@ -1150,16 +1152,34 @@ class Repl:
     def cmd_loogle(self, arg: str) -> None:
         """定理を loogle に聞く。エンジンには触らないので、環境は動かない。"""
         if not arg:
-            print(red(":loogle には名前か型のパターンが要る  (例: ?a + ?b = ?b + ?a)"))
+            print(
+                red(":loogle には名前か型のパターンが要る  (例: |- ?a + ?b = ?b + ?a)")
+            )
             return
 
         try:
-            got = loogle(arg)
+            got = self.ask_loogle(arg)
         except SearchError as e:
             print(red(f"loogle に届かない: {e}"))
             return
 
         print(loogle_text(got, width=shutil.get_terminal_size().columns))
+
+    def ask_loogle(self, query: str) -> Loogle:
+        """
+        聞いているあいだ 1 行置く。
+
+        重いパターンだと向こうが 20 秒近く走る。何も出ないと固まったように
+        見える。当たっても失敗しても、次を出す前にこの行は消す。
+        """
+        if not TTY:
+            return loogle(query)
+
+        print(dim("loogle に聞いている…"), end="", flush=True)
+        try:
+            return loogle(query)
+        finally:
+            print("\r\033[K", end="", flush=True)
 
     def cmd_undo(self, arg: str) -> None:
         for _ in range(int(arg) if arg.isdecimal() else 1):

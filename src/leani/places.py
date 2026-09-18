@@ -43,8 +43,10 @@ COMPLETE_CAP = 40000
 # を指せるようにしてある。公開のものは mathlib を索いているので、手元の環境に
 # 無い名前も挙がる (module を一緒に出すのはそのため)。
 LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
-# 網が黒穴でもプロンプトが返らなくならないように。
-LOOGLE_TIMEOUT = 15
+# 網が黒穴でもプロンプトが返らなくならないように。重いパターン (部分項をたくさん
+# 挙げたもの) は向こうの heartbeats 上限に当たるまで走るので、実測で 20 秒近く
+# かかる。短くすると、答えが出るはずのものまで打ち切ってしまう。
+LOOGLE_TIMEOUT = 30
 
 # 色を出すかどうかは起動時に決まる。パイプに流すときは混ぜない。
 TTY = sys.stdout.isatty()
