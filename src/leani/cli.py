@@ -26,7 +26,7 @@ leani [オプション] [file.lean]
   -i, --import <Mod>   import を足す (繰り返せる)
   -p, --project <dir>  Lake プロジェクトを指定する
       --setup          エンジンを用意して終わる (普段は起動時に自動)
-  -V, --version        版と置き場所
+  -V, --version        バージョンとパス
   -h, --help           これ
 
 環境は {CONFIG} に書く。無ければ cwd の
@@ -34,7 +34,7 @@ lakefile から Lake プロジェクトと lean_lib を推測し、その外な�
 起動する。init ファイルは {INIT}。
 
 エンジン (leanprover-community/repl) は初回だけ git clone と lake build で用意し、
-使う Lean の版ごとに {ENGINE_CACHE} の下へ置く。
+使う Lean のバージョンごとに {ENGINE_CACHE} の下へ置く。
 自分で clone したものを使うなら engine か LEANI_ENGINE で指す。
 
 """
@@ -88,7 +88,7 @@ def parse_args(argv: Sequence[str]) -> Args:
 
 def print_version(cfg: EnvConfig) -> None:
     tc = guess_toolchain(cfg)
-    engine = engine_dir(cfg.engine, tc) if tc else f"{ENGINE_CACHE}/<版>"
+    engine = engine_dir(cfg.engine, tc) if tc else f"{ENGINE_CACHE}/<バージョン>"
     ready = "" if os.path.isfile(f"{engine}/.lake/build/bin/repl") else " (未ビルド)"
 
     print("leani")

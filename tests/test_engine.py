@@ -330,12 +330,12 @@ def describe_項の位置の_sorry():
     """`:= sorry` はタクティクを差せない。埋め戻しに失敗する。"""
 
     @story("E3")
-    def it_埋め戻せなければ_sorry_版を残す(repl):
+    def it_埋め戻せなければ_sorry_のまま残す(repl):
         repl.feed("def termSorry : Nat := sorry")
         repl.feed(":prove")
         out = repl.feed("exact 0")
         assert "sorry のまま" in out, out
-        # sorry 版が残っているので、名前としては引き続き引ける
+        # sorry のままの宣言が残っているので、名前としては引き続き引ける
         # (#eval は sorry に依存する項を拒むので、値では見ない)。
         assert repl.declarations == ["def termSorry : Nat := sorry"]
         assert "termSorry" in repl.feed(":p termSorry")
@@ -413,7 +413,7 @@ def describe_起動の確かめ():
 
     @story("G4")
     def it_エンジンが死んだら終わり方を報告に載せる():
-        # 版の合わないエンジンを掴むと、repl は何も言わずにシグナルで消える。
+        # バージョンの合わないエンジンを掴むと、repl は何も言わずにシグナルで消える。
         # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
         # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
         cfg = leani.config.EnvConfig.make("bogus")
@@ -532,7 +532,7 @@ def describe_sorry_が複数あるとき():
     """
     repl は sorry ごとに位置を返す。テキストの "sorry" を数えて当てていた
     ころは 2 個以上あると埋め戻しを丸ごと諦めていて、それでも「証明完了」
-    だけ出ていた (宣言は sorry 版のまま、誰も気付けない)。
+    だけ出ていた (宣言は sorry のまま、誰も気付けない)。
     """
 
     @story("E1", "E3")
@@ -1109,7 +1109,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
         mocker.stopall()
 
         # guard が作り直して再送し、埋め戻した宣言は通っている。世代だけを
-        # 見て「sorry のまま」と言うと、sorry 版を流し直して重複エラーの
+        # 見て「sorry のまま」と言うと、sorry のままのテキストを流し直して重複エラーの
         # 宣言が控えに永久に居座る (:restart ごとに「戻せなかった宣言」)。
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out

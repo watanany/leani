@@ -1,4 +1,4 @@
-"""置き場所 (読み取り)。
+"""パス (読み取り)。
 
 設定・履歴・キャッシュの位置と、環境変数で決まる値。起動時に一度読むだけで、
 ここから先は定数として扱う。"""
@@ -15,7 +15,7 @@ CONFIG = os.environ.get("LEANI_CONFIG", f"{CONFIG_HOME}/leani/config.toml")
 HIST = os.environ.get("LEANI_HISTORY", f"{STATE}/history")
 INIT = os.environ.get("LEANI_INIT", f"{CONFIG_HOME}/leani/init.lean")
 # エンジンは leanprover-community/repl。この REPL 本体ではない。無ければ leani が
-# 取ってきてビルドする (ensure_engine)。使う Lean の版ごとに掘る。
+# 取ってきてビルドする (ensure_engine)。使う Lean のバージョンごとに掘る。
 ENGINE_REPO = "https://github.com/leanprover-community/repl"
 ENGINE_CACHE = f"{STATE}/engine"
 # 明示されたときは leani は何も管理せず、そのディレクトリをそのまま使う。

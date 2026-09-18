@@ -942,7 +942,7 @@ class Repl:
             print(dim("-- 位置が読めなかったので宣言は sorry のまま"))
             return
 
-        # sorry 版と同じ名前になるので、先に取り消してから通し直す。
+        # sorry のままの宣言と同じ名前になるので、先に取り消してから通し直す。
         undone = None
         if self.sorry_env is not None and self.eng.env == self.sorry_env:
             undone = self.eng.pop_decl()
@@ -961,12 +961,12 @@ class Repl:
         if undone is None or landed:
             # 着地したかは env の中身で決める。世代だけを見ると、落ちた
             # エンジンを guard が作り直して再送し**通った**ときにも
-            # 「sorry のまま」と嘘をつき、sorry 版を流し直して重複エラーの
+            # 「sorry のまま」と嘘をつき、sorry のままのテキストを流し直して重複エラーの
             # 宣言が控えに永久に居座る。
             return
         elif self.eng.gen != gen:
             # 作り直されて、そのうえ通らなかった。控えた env id は死んで
-            # いるので据えず、sorry 版のテキストを流し直す。持ち越しは
+            # いるので据えず、sorry のままのテキストを流し直す。持ち越しは
             # 戻さない (死んだ proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
             print(dim("-- エンジンが作り直されたので sorry のままにしておく"))

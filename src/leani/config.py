@@ -157,7 +157,7 @@ def problem(cfg: EnvConfig) -> str | None:
     起動時と :env の切り替え時の両方で使う。切り替えでは今のエンジンを
     落とす前に呼ぶので、駄目なら何も壊さずに断れる。見るだけで何も変えない。
     """
-    # 版が違うエンジンでは olean が読めず repl が起動直後に落ちる。
+    # バージョンが違うエンジンでは olean が読めず repl が起動直後に落ちる。
     proj_tc = read_toolchain(cfg.project)
     eng_tc = read_toolchain(cfg.engine) if cfg.engine else None
 
@@ -178,7 +178,7 @@ def problem(cfg: EnvConfig) -> str | None:
             cfg.engine is not None and not os.path.isdir(cfg.engine),
             f"指定されたエンジンが無い: {cfg.engine}",
         ),
-        # 版を合わせる先がこれしかない。無いと elan の既定に落ちて黙って壊れる。
+        # バージョンを合わせる先がこれしかない。無いと elan の既定に落ちて黙って壊れる。
         (
             cfg.engine is not None
             and os.path.isdir(cfg.engine)
@@ -194,7 +194,7 @@ def problem(cfg: EnvConfig) -> str | None:
         (
             eng_tc is not None and proj_tc is not None and eng_tc != proj_tc,
             (
-                f"エンジンの版がプロジェクトと違う "
+                f"エンジンのバージョンがプロジェクトと違う "
                 f"(プロジェクト={proj_tc} / エンジン={eng_tc})。\n"
                 f"  {proj_tc} で作り直す: cd {cfg.engine} && "
                 f"echo {proj_tc} > lean-toolchain && lake build repl\n"

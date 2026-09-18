@@ -36,14 +36,14 @@ pipx install git+https://github.com/watanany/leani
 無ければ起動時に言う。Python は 3.11 以上が要る。Python 側の依存は
 prompt_toolkit だけで、インストーラが一緒に入れる。
 
-エンジンは leani が用意する。使う Lean の版ごとに
-`~/.local/state/leani/engine/<版>` へ clone してビルドし、初回の起動だけ
+エンジンは leani が用意する。使う Lean のバージョンごとに
+`~/.local/state/leani/engine/<バージョン>` へ clone してビルドし、初回の起動だけ
 10 秒ほど余分にかかる。先に済ませておくなら `leani --setup`、自動で用意させたく
 なければ `LEANI_NO_SETUP=1` (手順を出して終わる)。
 
 自分で clone したものを使うなら設定の `engine` か `LEANI_ENGINE` で指す。この
-ときはビルドも版の管理も leani はしない。Lake プロジェクトの外なら、そのエンジンを
-ビルドした版 (`lean-toolchain`) に合わせて起動する。プロジェクトと版が食い違う
+ときはビルドもバージョンの管理も leani はしない。Lake プロジェクトの外なら、そのエンジンを
+ビルドしたバージョン (`lean-toolchain`) に合わせて起動する。プロジェクトとバージョンが食い違う
 ときは olean が読めず起動直後に落ちるだけなので、作り直す手順を出して断る。
 
 ## 環境の設定
@@ -121,7 +121,7 @@ import が 1 つでも解決できないと、エンジンはヘッダを丸ご�
 | `:restart`             | エンジンを作り直して宣言を replay                                                                                       |
 | `:{ ... :}`            | 複数行を明示的に囲む                                                                                                    |
 | `:!<cmd>`              | shell (Ctrl-C で止めても REPL は続く)                                                                                                                   |
-| `:q` / `:help`         | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` に置き場所                                                          |
+| `:q` / `:help`         | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` にパス                                                          |
 
 証明モードの例:
 
@@ -149,7 +149,7 @@ sorry 1 [proofState 0]
 起動は Lean 本体だけなら 1 秒、中規模の環境で 1.4 秒、mathlib 入りで 6〜11 秒。
 olean をどれだけ OS がキャッシュしているかで変わる。
 
-## 置き場所
+## ファイルの場所
 
 |                         |                                                     |
 |-------------------------|-----------------------------------------------------|
@@ -157,7 +157,7 @@ olean をどれだけ OS がキャッシュしているかで変わる。
 | init                    | `~/.config/leani/init.lean` (`LEANI_INIT`)          |
 | 履歴                    | `~/.local/state/leani/history` (`LEANI_HISTORY`)    |
 | `lake env` のキャッシュ | `~/.local/state/leani/lake-env/`                    |
-| エンジン                | `~/.local/state/leani/engine/<版>` (`LEANI_ENGINE`) |
+| エンジン                | `~/.local/state/leani/engine/<バージョン>` (`LEANI_ENGINE`) |
 
 `XDG_CONFIG_HOME` / `XDG_STATE_HOME` があればそちらを見る。`leani -V` で実際に
 使っている場所が出る。
@@ -184,7 +184,7 @@ olean をどれだけ OS がキャッシュしているかで変わる。
 | モジュール   | 札       | 中身                                     |
 |--------------|----------|------------------------------------------|
 | `types.py`   | 純粋     | 型と例外                                 |
-| `places.py`  | 読み取り | 設定・履歴・キャッシュの置き場所         |
+| `places.py`  | 読み取り | 設定・履歴・キャッシュのパス         |
 | `queries.py` | 定数     | エンジンに投げるクエリ                   |
 | `abbrev.py`  | 純粋     | 略記表と展開                             |
 | `pure.py`    | 純粋     | 判定と整形                               |

@@ -293,7 +293,7 @@ def describe_起動前の下ごしらえ():
 
     @story("G3", "G4")
     def it_toolchain_が動いたらキャッシュを取り直す(tmp_path):
-        # LEAN_PATH は core の olean も指す。前の版のキャッシュを使い回すと
+        # LEAN_PATH は core の olean も指す。前のバージョンのキャッシュを使い回すと
         # repl は起動するのに import が丸ごと落ちて、原因が見えなくなる。
         project = tmp_path / "proj"
         project.mkdir()
@@ -310,11 +310,11 @@ def describe_起動前の下ごしらえ():
         assert leani.boot.lake_env_stale(str(cache), str(project))
 
 
-def describe_エンジンの版():
-    """使う Lean の版から repl のタグと置き場所を決める。"""
+def describe_エンジンのバージョン():
+    """使う Lean のバージョンから repl のタグとパスを決める。"""
 
     @story("G3")
-    def it_toolchain_から版だけ取る():
+    def it_toolchain_からバージョンだけ取る():
         assert (
             leani.pure.toolchain_version("leanprover/lean4:v4.34.0-rc2")
             == "v4.34.0-rc2"
@@ -322,12 +322,12 @@ def describe_エンジンの版():
         assert leani.pure.toolchain_version("v4.33.0") == "v4.33.0"
 
     @story("G3")
-    def it_rc_は同じ版の正式版より前():
+    def it_rc_は同じバージョンの正式リリースより前():
         assert leani.pure.version_key("v4.33.0-rc1") < leani.pure.version_key("v4.33.0")
         assert leani.pure.version_key("v4.33.0") < leani.pure.version_key("v4.34.0-rc1")
 
     @story("G3")
-    def it_読めない版は_None():
+    def it_読めないバージョンは_None():
         for tag in ("v4.33", "nightly-2026-01-01", "4.33.0"):
             assert leani.pure.version_key(tag) is None, f"読めてしまう: {tag!r}"
 
@@ -337,30 +337,30 @@ def describe_エンジンの版():
         assert leani.pure.pick_tag("v4.33.0", tags) == "v4.33.0"
 
     @story("G3")
-    def it_タグの無い_patch_版は直前のタグを使う():
+    def it_タグの無い_patch_リリースは直前のタグを使う():
         # repl は v4.33.1 にタグを付けない。API は patch で変わらない。
         tags = ["v4.32.0", "v4.33.0", "v4.34.0-rc2"]
         assert leani.pure.pick_tag("v4.33.1", tags) == "v4.33.0"
 
     @story("G3")
-    def it_どのタグより古い版なら_None():
+    def it_どのタグより古いバージョンなら_None():
         assert leani.pure.pick_tag("v4.0.0", ["v4.32.0", "v4.33.0"]) is None
         assert leani.pure.pick_tag("nightly", ["v4.33.0"]) is None
 
     @story("G3")
-    def it_置き場所は版ごとに分かれる():
+    def it_パスはバージョンごとに分かれる():
         got = leani.pure.engine_dir(None, "leanprover/lean4:v4.33.0")
         assert got == f"{leani.places.ENGINE_CACHE}/v4.33.0"
 
     @story("G3")
-    def it_明示された置き場所はそのまま使う():
+    def it_明示されたパスはそのまま使う():
         assert (
             leani.pure.engine_dir("/opt/repl", "leanprover/lean4:v4.33.0")
             == "/opt/repl"
         )
 
     @story("G3")
-    def it_置き場所から外へ出る版名は断る():
+    def it_パスから外へ出るバージョン名は断る():
         # build_engine はこの場所を rmtree してから置き直す。`..` を通すと
         # 関係ないディレクトリを消してしまう。
         for tc in ("leanprover/lean4:..", "..", "."):
@@ -412,11 +412,15 @@ def _toolchain_dir(tmp_path, name, tc):
     return str(d)
 
 
-def describe_使う版の決め方():
-    """elan run に渡す版。エンジンをビルドした版と合わないと olean が読めない。"""
+def describe_使うバージョンの決め方():
+    """
+    elan run に渡すバージョン。
+
+    エンジンをビルドしたバージョンと合わないと olean が読めない。
+    """
 
     @story("G3")
-    def it_プロジェクトの版が最優先(tmp_path):
+    def it_プロジェクトのバージョンが最優先(tmp_path):
         cfg = leani.config.EnvConfig.make(
             "t",
             project=_toolchain_dir(tmp_path, "proj", "leanprover/lean4:v4.34.0-rc2"),
@@ -425,9 +429,10 @@ def describe_使う版の決め方():
         assert leani.boot.guess_toolchain(cfg) == "leanprover/lean4:v4.34.0-rc2"
 
     @story("G3")
-    def it_明示したエンジンの版に倒す(tmp_path):
-        # 手動のエンジンは leani がビルドし直さないので、その版に合わせるしかない。
-        # elan の既定版に落ちると 4.34 の olean を 4.33 で読むことになる。
+    def it_明示したエンジンのバージョンに倒す(tmp_path):
+        # 手動のエンジンは leani がビルドし直さないので、そのバージョンに
+        # 合わせるしかない。
+        # elan の既定バージョンに落ちると 4.34 の olean を 4.33 で読むことになる。
         cfg = leani.config.EnvConfig.make(
             "t", engine=_toolchain_dir(tmp_path, "eng", "leanprover/lean4:v4.33.0")
         )
@@ -446,7 +451,7 @@ def describe_手で用意する手順():
     """自動で駄目だったときに出す。そのままなぞって同じものになる形。"""
 
     @story("G3")
-    def it_タグと版の書き換えまで含む():
+    def it_タグとバージョンの書き換えまで含む():
         out = leani.boot.manual_setup("/x/e", "leanprover/lean4:v4.33.1", "v4.33.0")
         assert "--branch v4.33.0" in out, out
         assert "leanprover/lean4:v4.33.1 > /x/e/lean-toolchain" in out, out
@@ -486,8 +491,9 @@ def describe_エンジンを用意するときの安全側():
         assert os.path.isfile(f"{eng}/lean-toolchain")
 
     @story("G3", "G4")
-    def it_明示されたエンジンに版が無ければ起動を断る(tmp_path, mocker):
-        # 版を合わせる先がこれしかない。黙って elan の既定に落ちると olean が読めない。
+    def it_明示されたエンジンにバージョンが無ければ起動を断る(tmp_path, mocker):
+        # バージョンを合わせる先がこれしかない。黙って elan の既定に落ちると
+        # olean が読めない。
         mocker.patch.object(leani.config.shutil, "which", return_value="/usr/bin/x")
         (tmp_path / "eng/.lake/build/bin").mkdir(parents=True)
         (tmp_path / "eng/.lake/build/bin/repl").touch()

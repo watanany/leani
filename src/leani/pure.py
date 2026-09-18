@@ -1,6 +1,6 @@
 """判定と整形 (純粋)。
 
-色付け・応答の読み取り・エンジンの版・完結判定・表示の組み立て。
+色付け・応答の読み取り・エンジンのバージョン・完結判定・表示の組み立て。
 入力だけで出力が決まるので、テストは入力と出力だけで書ける。"""
 
 from __future__ import annotations
@@ -271,7 +271,11 @@ def toolchain_version(tc: str) -> str:
 
 
 def version_key(tag: str) -> tuple[int, int, int, int] | None:
-    """版の並び。rc は同じ版の正式版より前。読めない形なら None。"""
+    """
+    バージョンの並び。rc は同じバージョンの正式リリースより前。
+
+    読めない形なら None。
+    """
     m = VERSION.match(tag)
     if m is None:
         return None
@@ -282,11 +286,11 @@ def version_key(tag: str) -> tuple[int, int, int, int] | None:
 
 def pick_tag(version: str, tags: Sequence[str]) -> str | None:
     """
-    その版に使う repl のタグ。同名があればそれ、無ければ以下で一番新しいもの。
+    そのバージョンに使う repl のタグ。同名があればそれ、無ければ以下で一番新しいもの。
 
-    repl のタグは Lean の版と同名だが、patch 版には付かないことがある
+    repl のタグは Lean のバージョンと同名だが、patch リリースには付かないことがある
     (v4.33.0 はあるが v4.33.1 は無い)。patch で API は変わらないので、1 つ前の
-    タグのソースを目的の版でビルドすれば通る。
+    タグのソースを目的のバージョンでビルドすれば通る。
     """
     want = version_key(version)
     if want is None:
@@ -299,17 +303,17 @@ def pick_tag(version: str, tags: Sequence[str]) -> str | None:
 
 
 def engine_dir(engine: str | None, tc: str) -> str:
-    """置き場所。設定で明示されていればそれ、無ければ版ごとの置き場所。"""
+    """エンジンのパス。設定で明示されていればそれ、無ければバージョンごとのパス。"""
     if engine is not None:
         return engine
 
-    # 版名がそのままディレクトリ名になるので、区切り文字は落とす。さらに
+    # バージョン名がそのままディレクトリ名になるので、区切り文字は落とす。さらに
     # build_engine はこの場所を作り直す (rmtree する) ので、`..` のように
     # 上へ抜ける名前は通さない。
     version = toolchain_version(tc)
     name = re.sub(r"[^A-Za-z0-9._-]", "-", version)
     if not name.strip(".-"):
-        raise EngineError(f"版の名前として使えない: {version}")
+        raise EngineError(f"バージョンの名前として使えない: {version}")
     return f"{ENGINE_CACHE}/{name}"
 
 

@@ -10,7 +10,7 @@ from typing import Any, Final, Literal, TypedDict, TypeVar
 Json = dict[str, Any]
 
 # repl から返る JSON。実行時はそのままの dict で扱い、欠けた鍵は `.get` で流す
-# (repl の版が変わっても落ちないように)。TypedDict にしてあるのは鍵の綴りと値の
+# (repl のバージョンが変わっても落ちないように)。TypedDict にしてあるのは鍵の綴りと値の
 # 型を mypy に見てもらうためで、検証はしない。どの鍵も「返ってくるかもしれない」
 # ものなので total=False にする。
 #

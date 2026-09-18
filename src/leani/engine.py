@@ -98,9 +98,9 @@ class Engine:
 
     def _warn_toolchain(self) -> None:
         """
-        明示されたエンジンの版を確かめる。
+        明示されたエンジンのバージョンを確かめる。
 
-        leani が用意したものは使う版でビルドしてあるので食い違わない。人が
+        leani が用意したものは使うバージョンでビルドしてあるので食い違わない。人が
         用意したものだけ、違っていたら言う (勝手に作り直さない)。
         """
         if self.cfg.engine is None:
@@ -111,7 +111,7 @@ class Engine:
             print(
                 yellow(
                     f"警告: toolchain が違う "
-                    f"(使う版={self.tc} / エンジン={engine_tc})。\n"
+                    f"(使うバージョン={self.tc} / エンジン={engine_tc})。\n"
                     f"  cd {self.dir} && lake build repl"
                 ),
                 file=sys.stderr,
@@ -170,7 +170,7 @@ class Engine:
         """
         死んだプロセスの終わり方を報告に載せる。
 
-        版の合わない olean や壊れたエンジンを掴むと、repl は何も言わずに
+        バージョンの合わない olean や壊れたエンジンを掴むと、repl は何も言わずに
         シグナルで消える。終わり方を残さないと呼び出し側は理由を言えず、
         「import が通らない」という当てずっぽうだけが残って、書き間違って
         いない import を疑うところから始めることになる。

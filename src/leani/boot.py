@@ -1,6 +1,6 @@
 """起動の用意 (副作用)。
 
-Lean の版を決め、エンジン (leanprover-community/repl) を取ってきてビルドし、
+Lean のバージョンを決め、エンジン (leanprover-community/repl) を取ってきてビルドし、
 lake の環境変数を用意する。"""
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)")
 
 
 def local_toolchain() -> str | None:
-    """elan が今選んでいる版。プロジェクトも指定も無いときの落とし所。"""
+    """elan が今選んでいるバージョン。プロジェクトも指定も無いときの落とし所。"""
     try:
         r = subprocess.run(
             ["lean", "--version"],
@@ -47,11 +47,11 @@ def local_toolchain() -> str | None:
 
 def guess_toolchain(cfg: EnvConfig) -> str | None:
     """
-    使う Lean の版。プロジェクト → 明示されたエンジン → elan の既定。
+    使う Lean のバージョン。プロジェクト → 明示されたエンジン → elan の既定。
 
     2 番目は手動で指したエンジン用。leani はそれをビルドし直さないので、
-    合わせるべき版は「そのエンジンをビルドした版」しかない。leani が用意した
-    エンジンなら engine が None なので、ここは飛ばして既定版に落ちる。
+    合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
+    用意したエンジンなら engine が None なので、ここは飛ばして既定バージョンに落ちる。
     """
     return (
         read_toolchain(cfg.project) or read_toolchain(cfg.engine) or local_toolchain()
@@ -60,15 +60,15 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
 
 def toolchain(cfg: EnvConfig) -> str:
     """
-    使う版を決める。分からなければ断る。
+    使うバージョンを決める。分からなければ断る。
 
-    lean は cwd の lean-toolchain を見て版を決めるので、プロジェクトの外から
-    呼ぶと既定の版が選ばれて olean が読めなくなる。ここで決めた版を
-    elan run で固定し、エンジンもその版でビルドする。
+    lean は cwd の lean-toolchain を見てバージョンを決めるので、プロジェクトの外から
+    呼ぶと既定のバージョンが選ばれて olean が読めなくなる。ここで決めたバージョンを
+    elan run で固定し、エンジンもそのバージョンでビルドする。
     """
     tc = guess_toolchain(cfg)
     if tc is None:
-        raise EngineError("Lean の版が分からない (lean --version が答えない)")
+        raise EngineError("Lean のバージョンが分からない (lean --version が答えない)")
 
     return tc
 
@@ -77,7 +77,7 @@ def manual_setup(path: str, tc: str, tag: str | None) -> str:
     """
     自動で用意できなかったときに出す手順。
 
-    タグを省くと HEAD が来て版が合わないので、必ず指す。使う版で
+    タグを省くと HEAD が来てバージョンが合わないので、必ず指す。使うバージョンで
     ビルドし直すところまで含めて、ensure_engine と同じことを手でやる形。
     """
     branch = tag or f"<{toolchain_version(tc)} 以下で一番新しいタグ>"
@@ -136,9 +136,9 @@ def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
 
 def build_engine(path: str, tc: str, tag: str) -> None:
     """
-    タグのソースを使う版でビルドして置く。
+    タグのソースを使うバージョンでビルドして置く。
 
-    olean を読めるかはビルドに使った Lean の版で決まるので、clone した
+    olean を読めるかはビルドに使った Lean のバージョンで決まるので、clone した
     lean-toolchain を書き換えてからビルドする。通ってから os.replace で置くので、
     途中で止めても半端なものが残らない。
     """
@@ -196,7 +196,7 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
         version = toolchain_version(tc)
         tag = pick_tag(version, fetch_tags())
         if tag is None and version_key(version) is None:
-            # nightly や stable。版として読めないので比べようがない。repl は
+            # nightly や stable。バージョンとして読めないので比べようがない。repl は
             # master が最新の Lean に追いているので、そこで試す。
             tag = "master"
             print(dim(f"{version} に対応するタグは無い。master で試す"), flush=True)
@@ -220,7 +220,7 @@ def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
 
     lake env は起動に 1 秒近くかかるので、新しいキャッシュがあれば使い回す。
     LEAN_PATH は core の olean を指すので、toolchain ごとに別の鍵で持つ。
-    同じ鍵で持ち回していたころは、rc を差し替えると前の版の olean を指した
+    同じ鍵で持ち回していたころは、rc を差し替えると前のバージョンの olean を指した
     ままになり、repl は起動するのに import が丸ごと落ちていた。
     """
     if not project:
@@ -234,8 +234,8 @@ def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
     return parse_env_lines(read_text(cache) or "")
 
 
-# キャッシュより新しければ取り直す。manifest は依存の版、lean-toolchain は
-# core の版。どちらが動いても LEAN_PATH は変わる。
+# キャッシュより新しければ取り直す。manifest は依存のバージョン、lean-toolchain は
+# core のバージョン。どちらが動いても LEAN_PATH は変わる。
 LAKE_ENV_INPUTS = ("lake-manifest.json", "lean-toolchain")
 
 
