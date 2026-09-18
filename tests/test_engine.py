@@ -402,7 +402,7 @@ def describe_起動の確かめ():
     @story("G4")
     def it_解決できない_import_では起動を中止する():
         # そのまま起動すると import Lean も無い環境になり、完結判定も補完も
-        # 宣言も全部通らなくなる。起動したように見えるぶんだけ厄介。
+        # 宣言も全部通らなくなる。起動したように見える分だけ厄介。
         cfg = leani.config.EnvConfig.make("bogus", imports=["NoSuchModuleXYZ"])
         eng = leani.engine.Engine(cfg)
         try:
@@ -412,7 +412,7 @@ def describe_起動の確かめ():
             eng.kill()
 
     @story("G4")
-    def it_エンジンが死んだら終わり方を報告に載せる():
+    def it_エンジンが異常終了したら終わり方を報告に載せる():
         # バージョンの合わないエンジンを読み込むと、repl は何も出力せずに消える。
         # 終わり方を落とすと呼び出し側は理由を言えず、「import が通らない」と
         # いう当てずっぽうだけが残って、書き間違っていない import を疑わせる。
@@ -457,7 +457,7 @@ def describe_履歴の書き出し():
     @story("F3")
     def it_読めない形式の履歴を上書きしない(tmp_path):
         # readline や libedit の履歴を引き継いだ環境がこれになる。読み込みでは
-        # 無視されるが、書き込みは追記なので前のぶんは残る。
+        # 無視されるが、書き込みは追記なので前の分は残る。
         hist = tmp_path / "gnu-history"
         hist.write_text("1 + 1\n2 + 2\n")
 
@@ -475,7 +475,7 @@ def describe_履歴の書き出し():
     @story("C3", "F3")
     def it_行ごとの追加は受け付けない(tmp_path):
         # prompt_toolkit は prompt() を抜けるたびに 1 行入れようとする。受けると
-        # 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も要る。
+        # 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も必要になる。
         history = leani.repl.BlockHistory(str(tmp_path / "history"))
         history.append_string("  | 0 => 1")
         assert list(history.load_history_strings()) == []
@@ -813,7 +813,7 @@ def describe_切り替えに失敗したとき():
 
         assert "起動できなかった" in out, out
         # 戻り道は新しい Engine を作る。:l した中身は preload で戻るが、
-        # 対話で打ったぶんは実行し直さないと消える。
+        # 対話で打った分は実行し直さないと消える。
         assert "42" in repl.feed("#eval typedHere"), "打った宣言が消えた"
 
 
@@ -1119,7 +1119,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
 def describe_作り直しに失敗したときの証明モード():
 
     @story("F1", "E1")
-    def it_死んだ_proofState_に座り続けない(repl, mocker):
+    def it_無効になった_proofState_を使い続けない(repl, mocker):
         repl.feed("theorem ghost : True := by sorry")
         repl.feed(":prove")
 
@@ -1169,7 +1169,7 @@ def describe_起点の環境を失ったとき():
         _no_env(repl, mocker)
 
         out = repl.feed(":reset")
-        # base は死んだプロセスの id。設定し直すと submit の「env が無い」ガードが
+        # base は終了したプロセスの id。設定し直すと submit の「env が無い」ガードが
         # 外れ、import が 1 つも無い環境に宣言が積まれる (何を書いても通らない)。
         assert "起点の環境が無い" in out, out
         assert repl.repl.eng.unplayed == ["def held := 1"]
@@ -1269,7 +1269,7 @@ def describe_定理を外部サービスで探す():
     @story("D4")
     def it_パターンが無ければ問い合わせない(repl, mocker):
         asked = mocker.patch.object(leani.repl, "loogle")
-        assert "要る" in repl.feed(":loogle")
+        assert "必要" in repl.feed(":loogle")
         assert not asked.called, "空の :loogle で問い合わせた"
 
     @story("D4")

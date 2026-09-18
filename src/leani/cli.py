@@ -60,7 +60,7 @@ def parse_args(argv: Sequence[str]) -> Args:
 
     def value(flag: str, what: str) -> str:
         if not rest:
-            die(f"{flag} には{what}が要る")
+            die(f"{flag} には{what}が必要")
         return rest.pop(0)
 
     while rest:
@@ -108,7 +108,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     # 端末でない stdin は strict デコードになり、壊れたバイト 1 つで
-    # UnicodeDecodeError になる。しかも投げた時点で読み込み済みのぶんが
+    # UnicodeDecodeError になる。しかも投げた時点で読み込み済みの分が
     # 一緒に落ちるので、後続の行まで消える。置き換えて Lean に渡し、
     # 構文エラーとして普通に報告させる。
     if not sys.stdin.isatty() and isinstance(sys.stdin, io.TextIOWrapper):

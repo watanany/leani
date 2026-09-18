@@ -27,7 +27,7 @@ SETUP_TIMEOUT = 120
 SETUP_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 PROMPT = "λ> "
 # 完結判定と補完のクエリが Lean.Parser / CoreM / Json を使うので、ユーザの
-# import が何であれこれだけは要る。import は先頭に並べる決まりなので、
+# import が何であれこれだけは必要。import は先頭に並べる決まりなので、
 # 常に 1 行目に足しておけば他の import と共存できる。
 PROBE_IMPORT = "import Lean\n"
 

@@ -84,7 +84,7 @@ class Hit(TypedDict, total=False):
 
 
 class Loogle(TypedDict, total=False):
-    """loogle の応答。見つかったときは hits、駄目だったときは error が入る。"""
+    """loogle の応答。見つかったときは hits、失敗したときは error が入る。"""
 
     count: int
     header: str  # 「Found N declarations ...」の 2 行
@@ -114,7 +114,7 @@ class ConfigError(Exception):
 
 
 class EngineError(Exception):
-    """エンジンを用意できない。起動を中止する理由になるが、REPL は落とさない。"""
+    """エンジンを用意できない。起動を中止する理由になるが、REPL は終了させない。"""
 
 
 class EngineDied(Exception):
@@ -137,8 +137,8 @@ class NoEnvironment(Exception):
 
 
 class SearchError(Exception):
-    """外部サービスに届かなかった。ネットワークの事情なので、報告だけで済ませる。"""
+    """外部サービスに届かなかった。ネットワークの事情なので、報告するだけにする。"""
 
 
-# 起動が駄目になる理由。どれも報告して済ませる (traceback にしない)。
+# 起動が失敗する理由。どれも報告するだけにする (traceback にしない)。
 START_FAILED = (EngineError, EngineDied, Interrupted, OSError)

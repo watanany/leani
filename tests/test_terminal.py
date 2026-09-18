@@ -11,7 +11,7 @@ def describe_行編集():
     @story("C3")
     def it_プロンプトの色を桁として数えない(terminal):
         # 数えていると折り返す位置がずれ、履歴から戻した行を Backspace で
-        # 消せなくなる (実際に踏んだバグ)。80 桁でプロンプト 3 桁ぶんが空く。
+        # 消せなくなる (実際に踏んだバグ)。80 桁でプロンプト 3 桁分が空く。
         term = terminal(cols=80)
         row = term.screen.cursor.y
         term.type("a" * 74)
@@ -90,10 +90,10 @@ def describe_履歴():
         assert "already been declared" in term.line("", timeout=40)
 
     @story("F3")
-    def it_ディレクトリ成分の無い履歴でも前回のぶんを消さない(terminal):
+    def it_ディレクトリ成分の無い履歴でも前回の分を消さない(terminal):
         # LEANI_HISTORY=history のように相対名だと dirname が "" になり、
         # makedirs("") が投げて読み込みごと飛ばされていた。読めていない
-        # 履歴に 1 行目で書き込むので、前回までのぶんが丸ごと消える。
+        # 履歴に 1 行目で書き込むので、前回までの分が丸ごと消える。
         term = terminal(
             history_name="bare-history",
             seed="\n# 2026-01-01 00:00:00.000000\n+def old := 1\n",
@@ -142,7 +142,7 @@ def describe_端末でない入力():
     @story("F4")
     def it_UTF__8_で読めないバイトがあっても後続の行を失わない(tmp_path):
         # strict デコードのままだと UnicodeDecodeError で落ちるうえ、読み込み
-        # 済みのぶんが一緒に消えて後続の行まで無くなる。置き換えて渡し、
+        # 済みの分が一緒に消えて後続の行まで無くなる。置き換えて渡し、
         # Lean の構文エラーとして報告させる。
         out = piped(b"def keepPipe : Nat := 41\n\xff\xfe\nkeepPipe + 1\n", tmp_path)
         assert "42" in out, out

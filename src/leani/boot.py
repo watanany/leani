@@ -173,7 +173,7 @@ def build_engine(path: str, tc: str, tag: str) -> None:
 
 def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
     """
-    使うエンジンのディレクトリ。leani が持つぶんは無ければ用意する。
+    使うエンジンのディレクトリ。leani が持つ分は無ければ用意する。
 
     engine が明示されているときは leani の管理外なので、揃っているかを見る
     だけで何も作らないし消さない。build_engine は置き場を作り直すので、
@@ -205,7 +205,7 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
 
         build_engine(path, tc, tag)
     except EngineError as e:
-        # 自動で駄目でも手でなら通ることがある。使うタグまで出しておく。
+        # 自動で用意できなくても手動なら通ることがある。使うタグまで出しておく。
         raise EngineError(f"{e}\n{manual_setup(path, tc, tag)}") from e
 
     return path
@@ -296,8 +296,8 @@ def prepare(cfg: EnvConfig) -> None:
     """
     その環境で起動できるようにする。エンジンが無ければここで用意する。
 
-    Engine を作る前に呼べる。:env の切り替えでは今のエンジンを落とす前に
-    通すので、ここで断れたぶんは何も壊さずに済む。lake env も先に解決して
+    Engine を作る前に呼べる。:env の切り替えでは今のエンジンを終了させる前に
+    通すので、ここでエラーにできた分は何も壊さずに済む。lake env も先に解決して
     キャッシュしておく (Engine の中で失敗させない)。
     """
     tc = toolchain(cfg)

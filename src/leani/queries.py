@@ -46,7 +46,7 @@ INCOMPLETE = re.compile(r"unexpected end of input|unterminated (comment|string)"
 META_LINE = re.compile(r"^:[A-Za-z!?{}]")
 # `structure P where` や `induction n with` は Lean 文法ではそれ自体で完結する。
 # パーサは「終わり」と言うが、続きのブロックを書きたいのが普通なので確定を遅らせる。
-# 完結判定を覆すわけではないので、外しても Enter が 1 回余分に要るだけで済む。
+# 完結判定を覆すわけではないので、外しても Enter が 1 回余分に必要になるだけ。
 BLOCK_OPEN = re.compile(r"(?:^|[\s)\]}])(where|with|do|by)[ \t]*$")
 ERR_POS = re.compile(r"<input>:(\d+):(\d+):")
 # 自分で通した宣言の名前。補完に足すためだけなので、取りこぼしても害はない。

@@ -12,7 +12,7 @@ from typing import Final
 #   https://github.com/leanprover/vscode-lean4/blob/master/lean4-unicode-input/src/abbreviations.json
 #
 # 落としたのは 2 種類。`{}` → `{$CURSOR}` のように変換後のカーソル位置を持つ
-# 26 件は、置いたあとにカーソルを戻す仕組みが要る。`\` と `+ ` の 2 件は space で
+# 26 件は、置いたあとにカーソルを戻す仕組みが必要。`\` と `+ ` の 2 件は space で
 # 確定する方式では打てない (`\` は直前の `\` から後ろを鍵として表を引くので鍵が空に
 # なり、`+ ` は鍵の中の空白が先に確定を起こす)。
 #

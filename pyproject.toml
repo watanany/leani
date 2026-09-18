@@ -60,7 +60,7 @@ addopts = "-q"
 #   N802 / PLC2401   日本語のテスト名。これが SPEC.md の見出しになる
 #   PTH              os.path で通している
 #   EM / TRY003      例外の文言は、そのまま読ませるために呼び出し側で組む
-#   D / ANN          docstring と型注釈は要る所に手で付ける
+#   D / ANN          docstring と型注釈は必要な所に手で付ける
 #   S101             テストの assert
 #   T201             これは print する CLI
 select = [

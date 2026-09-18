@@ -168,7 +168,7 @@ class BlockHistory(FileHistory):
     確定した入力を 1 件として持つ履歴。
 
     prompt_toolkit は prompt() を抜けるたびにその 1 行を入れようとするが、
-    `def fib` の 4 行が 4 件になると呼び戻すのに Ctrl-P が 4 回要る。何をもって
+    `def fib` の 4 行が 4 件になると呼び戻すのに Ctrl-P が 4 回必要になる。何をもって
     1 件とするかは leani 側が知っている (submit / discard) ので、勝手な追加は
     捨てて record だけを受ける。
 
@@ -411,14 +411,14 @@ class Repl:
         """
         作り直しに失敗したときの後始末。環境が無いので遡る先も無い。
 
-        成功パスだけが証明モードを畳んでいたので、失敗すると死んだ
+        成功パスだけが証明モードを畳んでいたので、失敗すると無効になった
         proofState を保持したままになり、以降どの行も赤い "Unknown proof state."
         だけを返す幽霊の証明モードに座り続けていた (抜ける案内も出ない)。
         """
         self.last = None
         if self.proof is not None:
             self.drop_proof()
-        # 持ち越した proofState も死んだプロセスのもの。残すと :goals が
+        # 持ち越した proofState も終了したプロセスのもの。残すと :goals が
         # 環境に無い宣言の目標を出し、:prove がその幽霊で証明モードに入る。
         self.clear_pending()
 
@@ -574,12 +574,12 @@ class Repl:
                     return 0
             except KeyboardInterrupt:
                 # Engine.send の中は Interrupted に翻訳されるが、その外
-                # (子プロセス・整形・補完) で来たぶんはここに落ちる。
+                # (子プロセス・整形・補完) で来た分はここに落ちる。
                 self.discard()
                 self.last = None
                 print("^C")
             except Exception as e:
-                # 想定外でも 1 行分のエラーで済ませる。セッションを畳むと
+                # 想定外でも 1 行分のエラーに留める。セッションを畳むと
                 # そこまでの宣言を全部失うので、それが一番高い代償になる。
                 print(red(f"内部エラー: {type(e).__name__}: {e}"))
                 self.discard()
@@ -745,21 +745,21 @@ class Repl:
 
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
-            # 取っておく間にエンジンが作り直された。保存した env id は死んで
-            # いるので設定できない。テキストから実行し直す。
+            # 取っておく間にエンジンが作り直された。保存した env id は無効に
+            # なっているので設定できない。テキストから実行し直す。
             self.replay_into([undone.src])
 
     # -- 送信 -------------------------------------------------------------
 
     def submit(self, src: str, kind: Kind | None = None) -> None:
         """完結した入力を送って結果を出す。"""
-        # 送れるかを見る前に履歴へ入れる。エンジンが死んでいるときこそ、
+        # 送れるかを見る前に履歴へ入れる。エンジンが落ちているときこそ、
         # 打ったものを呼び戻せないと困る。
         self.remember(src)
 
         if self.eng.env is None:
             # boot が通らなかったエンジン。送れば send_cmd が関門で止めるが、
-            # 打った本人に要るのは例外の名前ではなく次の一手なので、ここで
+            # 打った本人に必要なのは例外の名前ではなく次の一手なので、ここで
             # 案内に変える。
             print(red("エンジンが使えない。:restart で作り直す"))
             return
@@ -966,9 +966,9 @@ class Repl:
             # 重複エラーの宣言が保留に永久に居座る。
             return
         elif self.eng.gen != gen:
-            # 作り直されて、そのうえ通らなかった。保存した env id は死んで
-            # いるので設定せず、sorry のままのテキストを実行し直す。持ち越しは
-            # 戻さない (死んだ proofState で replay_into が付け直した値を
+            # 作り直されて、そのうえ通らなかった。保存した env id は無効に
+            # なっているので設定せず、sorry のままのテキストを実行し直す。持ち越しは
+            # 戻さない (無効になった proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
             print(dim("-- エンジンが作り直されたので sorry のままにしておく"))
             if undone.src is not None:
@@ -1122,7 +1122,7 @@ class Repl:
 
     def cmd_type(self, arg: str) -> None:
         if not arg:
-            print(red(":t には式が要る"))
+            print(red(":t には式が必要"))
             return
 
         out = self.guard(
@@ -1132,7 +1132,7 @@ class Repl:
 
     def cmd_info(self, arg: str) -> None:
         if not arg:
-            print(red(":i には名前が要る"))
+            print(red(":i には名前が必要"))
             return
 
         out = self.guard(lambda: self.eng.query(f"#check @{arg}"))
@@ -1144,7 +1144,7 @@ class Repl:
 
     def cmd_print(self, arg: str) -> None:
         if not arg:
-            print(red(":p には名前が要る"))
+            print(red(":p には名前が必要"))
             return
 
         resp = self.guard(lambda: self.eng.send_cmd(f"#print {arg}"))
@@ -1155,7 +1155,7 @@ class Repl:
         """loogle に問い合わせる。エンジンは操作しないので、環境は動かない。"""
         if not arg:
             print(
-                red(":loogle には名前か型のパターンが要る  (例: |- ?a + ?b = ?b + ?a)")
+                red(":loogle には名前か型のパターンが必要  (例: |- ?a + ?b = ?b + ?a)")
             )
             return
 
@@ -1214,17 +1214,17 @@ class Repl:
         try:
             why = problem(target)
             if why is None:
-                prepare(target)  # 落とす前に用意まで済ませる
+                prepare(target)  # 終了させる前に用意まで済ませる
         except EngineError as e:
             why = str(e)
 
         if why:
-            print(red(why))  # 今のエンジンは落とさない
+            print(red(why))  # 今のエンジンは終了させない
             return
 
         keep, prev, back = self.show_time, self.eng.loaded, self.cfg
         # 打った宣言も持って行く。:l した中身は preload で戻るが、対話で打った
-        # ぶんは新しい Engine には入っていない。戻り道で実行し直す。
+        # 分は新しい Engine には入っていない。戻り道で実行し直す。
         # 環境に無い宣言も連れて行く。捨てると、直前に「テキストは残してある」
         # と表示したものが :env で黙って消える。新しい環境なら通ることもある
         # (import が増える方向の切り替え)。通らなければまた保留に戻る。
@@ -1273,7 +1273,7 @@ class Repl:
         ソースで持っておけば編集もできるし lean でそのまま走る。
         """
         if not arg:
-            print(red(":save にはファイル名が要る"))
+            print(red(":save にはファイル名が必要"))
             return
 
         srcs = self.eng.sources()
@@ -1314,7 +1314,7 @@ class Repl:
 
     def load(self, path: str, announce: bool = True) -> None:
         if not path:
-            print(red("ファイル名が要る"))
+            print(red("ファイル名が必要"))
             return
 
         path = os.path.expanduser(path)

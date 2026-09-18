@@ -1,4 +1,4 @@
-"""入力の読み方を決めている純関数。端末もエンジンも要らないのでミリ秒で終わる。"""
+"""入力の読み方を決めている純関数。端末もエンジンも不要なのでミリ秒で終わる。"""
 
 import io
 import os
@@ -12,7 +12,7 @@ from hypothesis import strategies as st
 
 # ------------------------------------------------- property test の素材
 
-# 括弧が閉じた文字列。中身は Lean の字面に寄せてあるが、閉じ方だけが要る。
+# 括弧が閉じた文字列。中身は Lean の字面に寄せてあるが、閉じ方だけが必要。
 BALANCED = st.recursive(
     st.sampled_from(["", "x", "exact rfl", "simp only"]),
     lambda inner: st.one_of(
@@ -369,7 +369,7 @@ def describe_エンジンのバージョン():
 
 
 def describe_設定の値の型():
-    """TOML は何でも書ける。型が違うぶんは traceback ではなく ConfigError。"""
+    """TOML は何でも書ける。型が違う分は traceback ではなく ConfigError。"""
 
     @story("G4")
     def it_import_を文字列で書いたらエラーにする():
@@ -448,7 +448,7 @@ def describe_使うバージョンの決め方():
 
 
 def describe_手で用意する手順():
-    """自動で駄目だったときに出す。そのままなぞって同じものになる形。"""
+    """自動で用意できなかったときに出す。そのままなぞって同じものになる形。"""
 
     @story("G3")
     def it_タグとバージョンの書き換えまで含む():
@@ -824,7 +824,7 @@ def describe_性質一覧():
     @story("X1")
     def it_SPEC_md_がテストと揃っている():
         # 別プロセスで走らせる。tools/spec.py は cwd を基準にしているので、
-        # ここから import すると chdir が要る。
+        # ここから import すると chdir が必要。
         done = subprocess.run(
             [sys.executable, "tools/spec.py", "--check"],
             cwd=ROOT,

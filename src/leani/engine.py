@@ -36,11 +36,11 @@ from leani.types import EngineDied, Interrupted, Json, NoEnvironment, Response, 
 
 
 class Undone(NamedTuple):
-    """取り消した宣言 1 件。戻すのに要るものだけ。"""
+    """取り消した宣言 1 件。戻すのに必要なものだけ。"""
 
     env: int | None
     src: str | None
-    gen: int  # 保存したときのプロセスの世代。作り直されたら env id は死んでいる
+    gen: int  # 保存したときのプロセスの世代。作り直されたら env id は無効になる
 
 
 class Loaded(NamedTuple):
@@ -168,7 +168,7 @@ class Engine:
 
     def _died(self) -> EngineDied:
         """
-        死んだプロセスの終わり方を報告に載せる。
+        終了したプロセスの終わり方を報告に載せる。
 
         バージョンの合わない olean や壊れたエンジンを読み込むと、repl は何も出力せずに
         シグナルで消える。終わり方を残さないと呼び出し側は理由を言えず、
@@ -195,7 +195,7 @@ class Engine:
             raise self._died()
 
         # spawn は必ず PIPE で開くので None にはならないが、Popen の型は
-        # それを知らない。落とし穴を残すより、死んだのと同じ扱いにする。
+        # それを知らない。分かりにくい状態を残すより、異常終了と同じ扱いにする。
         stdin, stdout = self.proc.stdin, self.proc.stdout
         if stdin is None or stdout is None:
             raise self._died()
@@ -281,7 +281,7 @@ class Engine:
         """
         pop_decl で取り消したものを戻す。戻せなければ False。
 
-        世代が変わっていたら戻さない。保存した env id は死んだプロセスのもので、
+        世代が変わっていたら戻さない。保存した env id は終了したプロセスのもので、
         新しいエンジンには無い。それを今の env に設定すると、以後の cmd は
         存在しない環境に飛び (repl は "Unknown environment." を返すだけ)、
         打っても何も起きない端末になる。宣言は呼ぶ側が実行し直す。
@@ -356,17 +356,17 @@ class Engine:
         self.spawn()
 
         # boot で投げたら log はそのまま残す。やり直せば replay できる。
-        # 前回実行できなかったぶんは env に無いので、通ったものの後ろに回す。
+        # 前回実行できなかった分は env に無いので、通ったものの後ろに回す。
         log = list(self.log) + list(self.unplayed)
         loaded = self.loaded
         try:
             self.boot()
         except (EngineDied, Interrupted, OSError, KeyboardInterrupt):
-            # boot が通らなかった。プロセスは作り直したので前の env id は死んで
-            # いて、宣言はどこにも入っていない。log に残すと len(stack) と
+            # boot が通らなかった。プロセスは作り直したので前の env id は無効に
+            # なっていて、宣言はどこにも入っていない。log に残すと len(stack) と
             # 食い違い、:save が環境に無い宣言を本体に書く。保留に回せば
             # コメントとして添えられ、直してから :restart で実行し直せる。
-            # base も捨てる。:reset が死んだ id を設定し直すと、submit の
+            # base も捨てる。:reset が無効になった id を設定し直すと、submit の
             # 「env が無い」ガードが外れて何を打っても通らない端末になる。
             self.env = self.base = None
             self.stack, self.log, self.unplayed = [], [], log
@@ -464,7 +464,7 @@ class Engine:
         found: list[Sorry] = []
 
         if self.env is None:
-            # 実行し直す先が無い。送れば send_cmd が関門で断つが、ここは
+            # 実行し直す先が無い。送れば send_cmd が関門で止めるが、ここは
             # 「何件通ったか」を返す関数なので、例外を上げずに全件を保留へ
             # 回し、理由を Replay に載せて返す。
             self.unplayed = list(log) + self.unplayed
