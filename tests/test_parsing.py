@@ -1,5 +1,6 @@
 """入力の読み方を決めている純関数。端末もエンジンも要らないのでミリ秒で終わる。"""
 
+import io
 import os
 import subprocess
 import sys
@@ -729,6 +730,83 @@ def describe_略記の展開():
         # 打つ手前に何が書いてあっても、直前の `\\` から後ろだけを鍵にする。
         want = (leani.abbrev.ABBREV[key], len(key) + 1)
         assert leani.abbrev.expand_abbrev(head + "\\" + key) == want
+
+
+def describe_定理検索():
+    """
+    loogle に聞いた結果を出す形にする。外に聞く所だけが副作用で、整形は純粋。
+    """
+
+    HITS = [
+        {
+            "name": "List.map",
+            "type": " (f : α → β) : List α → List β",
+            "module": "Init.Prelude",
+        },
+        {
+            "name": "List.mapTR",
+            "type": " (f : α → β) : List α → List β",
+            "module": "Init.Data.List.Basic",
+        },
+    ]
+
+    @story("D4")
+    def it_名前と型と居場所を出す():
+        out = leani.pure.loogle_text({"count": 2, "hits": HITS}).split("\n")
+        assert out[0] == "2 件"
+        # `type` は先頭に空白が付いて来るので、`name : type` に組み直す。
+        assert out[1] == "List.map : (f : α → β) : List α → List β"
+        # どの module にあるかを添える。手元の環境に無い名前も挙がるため。
+        assert out[2] == "  Init.Prelude"
+        assert out[3].startswith("List.mapTR : ")
+
+    @story("D4")
+    def it_絞ったときは母数を添える():
+        # loogle は 200 件で切って返すので、count は hits より多いことがある。
+        got = {"count": 360, "hits": HITS}
+        assert (
+            leani.pure.loogle_text(got, keep=1).split("\n")[0] == "360 件 (先頭 1 件)"
+        )
+        assert leani.pure.loogle_text({"count": 2, "hits": HITS}).count("\n") == 4
+
+    @story("D4")
+    def it_長い行は幅で切る():
+        # 折り返すと 1 件 2 行の並びが崩れて、どの型がどの名前のものか分からない。
+        got = {
+            "count": 1,
+            "hits": [{"name": "X", "type": " " + "a" * 200, "module": "M"}],
+        }
+        line = leani.pure.loogle_text(got, width=40).split("\n")[1]
+        assert len(line) == 40
+        assert line.endswith("…")
+
+    @story("D4")
+    def it_当たらなければそう言う():
+        assert leani.pure.loogle_text({"count": 0, "hits": []}) == "当たらなかった"
+
+    @story("D4")
+    def it_エラーは訳さずに候補を添える():
+        # loogle の文言は Lean のパーサのもの。訳すと元の位置情報が消える。
+        got = {"error": "unknown identifier 'Nope'", "suggestions": ['"Nope"']}
+        out = leani.pure.loogle_text(got).split("\n")
+        assert out == ["loogle: unknown identifier 'Nope'", 'もしかして: "Nope"']
+
+    @story("D4")
+    def it_記号を含むクエリも壊さずに送る(mocker):
+        # `?a + ?b` の `+` をそのまま URL に置くと、向こうでは空白として読まれる。
+        opened = mocker.patch(
+            "urllib.request.urlopen",
+            return_value=io.BytesIO(b'{"count": 0, "hits": []}'),
+        )
+        leani.search.loogle("?a + ?b")
+        assert opened.call_args[0][0].endswith("?q=%3Fa%20%2B%20%3Fb")
+
+    @story("D4")
+    def it_届かなければ_SearchError(mocker):
+        # 網の事情で REPL を落とさない。呼ぶ側が受けて 1 行報告する。
+        mocker.patch("urllib.request.urlopen", side_effect=OSError("名前が引けない"))
+        with pytest.raises(leani.types.SearchError, match="名前が引けない"):
+            leani.search.loogle("Nat")
 
 
 def describe_性質一覧():

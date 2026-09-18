@@ -23,6 +23,7 @@ from leani.types import (
     TERM,
     EngineError,
     Kind,
+    Loogle,
     Message,
     Pos,
     Probe,
@@ -148,10 +149,14 @@ def strip_imports(text: str) -> str:
     return "\n".join(line for n, line in enumerate(text.splitlines()) if n not in at)
 
 
+def clip(line: str, width: int) -> str:
+    """長い 1 行を端末に収める。折り返すと、並べたときに行の対応が崩れる。"""
+    return line if len(line) <= width else line[: width - 1] + "…"
+
+
 def head_line(src: str, width: int = 60) -> str:
     """宣言 1 件を 1 行で指す。報告に使うので長ければ切る。"""
-    line = src.strip().split("\n")[0]
-    return line if len(line) <= width else line[: width - 1] + "…"
+    return clip(src.strip().split("\n")[0], width)
 
 
 def error_text(resp: Response, keep: int = 3) -> str:
@@ -445,3 +450,34 @@ def span(
         width = max(1, end.get("column", 0) - col_off - col)
 
     return ln, col, min(width, max(1, len(src_line) - col))
+
+
+# loogle の返事を読む。エラーも当たりも同じ 200 で来るので、`error` の鍵が
+# あるかどうかだけで見分ける。
+def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
+    """loogle の返事を出す形にする。1 件 2 行 (名前と型 / どの module か)。"""
+    err = got.get("error")
+    if err:
+        lines = [red(f"loogle: {err}")]
+        suggest = got.get("suggestions") or []
+        if suggest:
+            lines.append(dim("もしかして: " + "  ".join(suggest)))
+        return "\n".join(lines)
+
+    hits = got.get("hits") or []
+    if not hits:
+        return dim("当たらなかった")
+
+    # count は当たった総数で、hits は loogle が既に 200 件で切ったもの。
+    # 出すのはさらにその頭だけなので、母数は count のまま書く。
+    total = got.get("count", len(hits))
+    shown = hits[:keep]
+    head = f"{total} 件" + (f" (先頭 {len(shown)} 件)" if len(shown) < total else "")
+
+    lines = [dim(head)]
+    for hit in shown:
+        sig = f"{hit.get('name', '?')} :{hit.get('type', '')}".rstrip()
+        lines.append(clip(" ".join(sig.split()), width))
+        lines.append(dim("  " + hit.get("module", "?")))
+
+    return "\n".join(lines)

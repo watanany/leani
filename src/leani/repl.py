@@ -7,6 +7,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -42,6 +43,7 @@ from leani.pure import (
     has_error,
     head_line,
     lean_str,
+    loogle_text,
     messages,
     red,
     sorries,
@@ -58,6 +60,7 @@ from leani.queries import (
     NOT_EVALUABLE,
     PARSE_PROBE,
 )
+from leani.search import loogle
 from leani.show import die, panic_check, render
 from leani.types import (
     CMD,
@@ -70,6 +73,7 @@ from leani.types import (
     Interrupted,
     Kind,
     Probe,
+    SearchError,
     Sorry,
     State,
     Step,
@@ -112,6 +116,7 @@ HELP = """\
   :t <expr>      型 (#check)
   :i <name>      型と docstring
   :p <name>      定義 (#print)
+  :loogle <q>    定理を探す (loogle / 外に聞く)  例: :loogle Nat.succ_le
   :l <file>      読み込む (環境を作り直す)   :r  読み直す
   :reset         起動直後に戻る              :undo [n]  n 個前の環境へ
   :env [name]    今の環境 / 設定した環境に切り替えて再起動
@@ -1052,6 +1057,8 @@ class Repl:
                 self.cmd_info(arg)
             case "p" | "print":
                 self.cmd_print(arg)
+            case "loogle":
+                self.cmd_loogle(arg)
             case "l" | "load":
                 self.load(arg)
             case "r" | "reload":
@@ -1139,6 +1146,20 @@ class Repl:
         resp = self.guard(lambda: self.eng.send_cmd(f"#print {arg}"))
         if resp is not None:
             render(resp, arg)
+
+    def cmd_loogle(self, arg: str) -> None:
+        """定理を loogle に聞く。エンジンには触らないので、環境は動かない。"""
+        if not arg:
+            print(red(":loogle には名前か型のパターンが要る  (例: ?a + ?b = ?b + ?a)"))
+            return
+
+        try:
+            got = loogle(arg)
+        except SearchError as e:
+            print(red(f"loogle に届かない: {e}"))
+            return
+
+        print(loogle_text(got, width=shutil.get_terminal_size().columns))
 
     def cmd_undo(self, arg: str) -> None:
         for _ in range(int(arg) if arg.isdecimal() else 1):

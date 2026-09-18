@@ -111,6 +111,7 @@ import が 1 つでも解決できないと、エンジンはヘッダを丸ご�
 | `:t <expr>`            | 型 (`#check`)                                                                                                           |
 | `:i <name>`            | 型と docstring                                                                                                          |
 | `:p <name>`            | 定義 (`#print`)                                                                                                         |
+| `:loogle <q>`          | 定理を名前か型のパターンで探す (`:loogle ?a + ?b = ?b + ?a`)。エンジンではなく外の loogle に聞くので、索かれるのは mathlib。手元の環境に無い名前も挙がるため、どの module のものかを添える |
 | `:l <file>` / `:r`     | 読み込み / 読み直し                                                                                                     |
 | `:reset` / `:undo [n]` | 環境の操作                                                                                                              |
 | `:env [name]`          | 今の環境 / 設定した環境に切り替えて再起動。打った宣言は控えているぶんも含めて切り替え先で流し直す。起動できなければ元の環境に戻る              |
@@ -207,7 +208,7 @@ RET505 は入れていない。入れなかったルールは `pyproject.toml` �
 
 ```
 uv sync
-uv run pytest                         # 177 件、4 分
+uv run pytest                         # 187 件、4 分
 uv run pytest -n auto                 # 並列で 40 秒
 uv run pytest tests/test_parsing.py   # 純関数だけなら 0.2 秒
 uv run pytest -k 履歴                 # 名前で絞る

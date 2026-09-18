@@ -546,3 +546,19 @@ AST の歩き方を自分で保つことになり、`from X import *` や `impor
 しか言わず、`tests/conftest.py` の `INVARIANTS` (1 行ごとに確認している不変
 条件) のほうが原因に近い所で落ちる。層ごとに、例・不変条件・性質を使い分ける。
 → `tests/test_parsing.py` の先頭
+
+## 定理検索を Lean の中の `#loogle` (LeanSearchClient) で済ませる
+
+エンジンに `import LeanSearchClient` を足せば、`#loogle` `#leansearch` が Lean の
+コマンドとして使える。leani 側は何も書かなくてよい。
+
+だが検索がエンジンの往復に乗る。網が黒穴のときプロンプトが返らず、Ctrl-C は
+評価の中断としてエンジンを作り直す (通した宣言を replay する) ので、検索を諦める
+だけのつもりが環境の作り直しになる。返るのも Lean の message なので、幅で切ったり
+module を添えたりは手が出ない。
+
+そのうえ LeanSearchClient は mathlib と同じ土俵の package で、`G1` の「mathlib 無しで
+速く起動したい」環境には入っていない。検索したいときに限って使えない。
+
+外の HTTP を自分で叩けば、エンジンと無関係に済む。失敗は `SearchError` 1 つに
+まとめて 1 行報告し、環境は一切動かさない。→ `leani/search.py`, `Repl.cmd_loogle`

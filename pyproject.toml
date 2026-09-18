@@ -81,6 +81,7 @@ ban-relative-imports = "all"
 "leani.boot".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 "leani.engine".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 "leani.repl".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
+"leani.search".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 "leani.cli".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 "leani.show".msg = "純粋・読み取り・定数の節は、副作用の節を import しない"
 
@@ -88,6 +89,7 @@ ban-relative-imports = "all"
 # 副作用の節どうしは呼び合ってよい。名前をまとめる __init__ とテストも外す。
 "src/leani/boot.py" = ["TID251"]
 "src/leani/engine.py" = ["TID251"]
+"src/leani/search.py" = ["TID251"]
 "src/leani/show.py" = ["TID251"]
 "src/leani/repl.py" = ["TID251"]
 "src/leani/cli.py" = ["TID251"]

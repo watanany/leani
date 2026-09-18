@@ -70,6 +70,29 @@ class Probe(TypedDict, total=False):
     tac: Parse
 
 
+# loogle の返り。こちらは repl ではなく外の HTTP で、エラーも 200 で来る
+# (`error` の鍵があるかどうかで見分ける)。同じく検証はしない。
+
+
+class Hit(TypedDict, total=False):
+    """loogle が挙げた宣言 1 件。type は先頭に空白が付いて来る。"""
+
+    name: str
+    type: str
+    module: str
+    doc: str | None
+
+
+class Loogle(TypedDict, total=False):
+    """loogle の返事。当たったときは hits、駄目なときは error が入る。"""
+
+    count: int
+    header: str  # 「Found N declarations ...」の 2 行
+    hits: list[Hit]
+    error: str
+    suggestions: list[str]  # 綴り違いのときの候補
+
+
 Kind = Literal["cmd", "term", "tac"]  # 送り方
 State = Literal["complete", "more", "err"]  # 入力の状態
 Step = Literal["probe", "done", "quit"]  # 1 行食べたあと何をするか
@@ -111,6 +134,10 @@ class NoEnvironment(Exception):
     ここで止める。loop が「内部エラー」として 1 行分に留めるので、セッション
     ごと落ちることはない。
     """
+
+
+class SearchError(Exception):
+    """外の検索に届かなかった。網の事情なので、REPL は落とさず報告して済ませる。"""
 
 
 # 起動が駄目になる理由。どれも報告して済ませる (traceback にしない)。

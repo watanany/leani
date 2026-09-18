@@ -1261,3 +1261,39 @@ def describe_解決できない_import_のファイル():
         assert "読み込めなかった" in out, out
         assert "ヘッダ" in out, out
         assert "2" in repl.feed("#eval 1 + 1"), "手元の環境まで失った"
+
+
+def describe_定理を外に聞く():
+    """:loogle は外の HTTP に聞くだけで、エンジンには一度も触らない。"""
+
+    @story("D4")
+    def it_パターンが無ければ聞きに行かない(repl, mocker):
+        asked = mocker.patch.object(leani.repl, "loogle")
+        assert "要る" in repl.feed(":loogle")
+        assert not asked.called, "空の :loogle で外に聞いた"
+
+    @story("D4")
+    def it_聞いても環境は動かない(repl, mocker):
+        repl.feed("def beforeLoogle := 7")
+        hit = {
+            "name": "Nat.add_comm",
+            "type": " : ∀ (n m : Nat), n + m = m + n",
+            "module": "Init",
+        }
+        mocker.patch.object(
+            leani.repl, "loogle", return_value={"count": 1, "hits": [hit]}
+        )
+
+        assert "Nat.add_comm" in repl.feed(":loogle ?a + ?b = ?b + ?a")
+        # loogle が挙げるのは mathlib の名前で、手元の環境とは無関係。
+        assert "7" in repl.feed("beforeLoogle"), ":loogle が環境を動かした"
+
+    @story("D4", "F4")
+    def it_届かなくてもセッションは続く(repl, mocker):
+        err = leani.types.SearchError("timed out")
+        mocker.patch.object(leani.repl, "loogle", side_effect=err)
+
+        out = repl.feed(":loogle Nat")
+        assert "届かない" in out, out
+        assert "timed out" in out, out
+        assert "2" in repl.feed("1 + 1"), "loogle の失敗でセッションが壊れた"
