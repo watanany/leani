@@ -10,12 +10,12 @@ from typing import Any, Final, Literal, TypedDict, TypeVar
 Json = dict[str, Any]
 
 # repl から返る JSON。実行時はそのままの dict で扱い、欠けた鍵は `.get` で流す
-# (repl のバージョンが変わっても落ちないように)。TypedDict にしてあるのは鍵の綴りと値の
+# (repl のバージョンが変わっても落ちないように)。TypedDict にしてあるのは鍵の名前と値の
 # 型を mypy に見てもらうためで、検証はしない。どの鍵も「返ってくるかもしれない」
 # ものなので total=False にする。
 #
-# 見てもらえる範囲は 2 つ。添字 (`resp["env"]`) の綴りと、取り出した値の型。
-# `.get("綴り間違い")` は Mapping.get として通ってしまうが、返りが object になる
+# 見てもらえる範囲は 2 つ。添字 (`resp["env"]`) の名前と、取り出した値の型。
+# `.get("間違った名前")` は Mapping.get として通ってしまうが、返りが object になる
 # ので使った所で落ちる。
 
 
@@ -45,7 +45,7 @@ class Sorry(TypedDict, total=False):
 
 
 class Response(TypedDict, total=False):
-    """repl の返事ひとつ。"""
+    """repl の応答ひとつ。"""
 
     env: int
     proofState: int
@@ -56,14 +56,14 @@ class Response(TypedDict, total=False):
 
 
 class Parse(TypedDict, total=False):
-    """1 つの構文カテゴリとして読めたか (PARSE_PROBE の返事の中身)。"""
+    """1 つの構文カテゴリとして読めたか (PARSE_PROBE の応答の中身)。"""
 
     ok: bool
     err: str
 
 
 class Probe(TypedDict, total=False):
-    """PARSE_PROBE の返事。command / term / tacticSeq を 1 往復で聞いた結果。"""
+    """PARSE_PROBE の応答。command / term / tacticSeq を 1 往復で聞いた結果。"""
 
     cmd: Parse
     term: Parse
@@ -90,7 +90,7 @@ class Loogle(TypedDict, total=False):
     header: str  # 「Found N declarations ...」の 2 行
     hits: list[Hit]
     error: str
-    suggestions: list[str]  # 綴り違いのときの候補
+    suggestions: list[str]  # 名前が違うときの候補
 
 
 Kind = Literal["cmd", "term", "tac"]  # 送り方

@@ -865,7 +865,7 @@ class Repl:
         resp = self.guard(lambda: self.eng.send_tactic(src, before))
         if self.proof is not proof or self.eng.gen != gen:
             # guard がエンジンを作り直した。手元の proofState は前のプロセスの
-            # ものなので、返事が来ていても中身が違う。新しいエンジンは番号を
+            # ものなので、応答が来ていても中身が違う。新しいエンジンは番号を
             # 0 から振り直すので、他の証明の状態に当たって「証明完了」まで
             # 出てしまう (宣言は sorry のまま残る)。
             self.drop_proof()

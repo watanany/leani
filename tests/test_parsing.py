@@ -81,7 +81,7 @@ def describe_続きを待つ行():
             assert not leani.queries.BLOCK_OPEN.search(line), f"余計に待つ: {line!r}"
 
 
-def describe_パーサからの返事():
+def describe_パーサからの応答():
     """「まだ途中」だけを継続と読む。"""
 
     @story("C1")
@@ -186,7 +186,7 @@ def describe_補完をまとめて取る単位():
 
 
 def describe_完結したかの読み分け():
-    """パーサの返事 (JSON) だけを見て、送り方と状態を決める。"""
+    """パーサの応答 (JSON) だけを見て、送り方と状態を決める。"""
 
     @story("A1", "C1")
     def it_command_として読めたらそのまま送る():
@@ -710,7 +710,7 @@ def describe_略記の展開():
         assert leani.abbrev.expand_abbrev("\\alpha") == ("α", 6)
 
     @story("C5")
-    def it_滅多に打たない綴りも引ける():
+    def it_滅多に打たない略記も引ける():
         # 表は本家の全件。よく打つぶんだけに絞っていた頃は引けなかった。
         assert leani.abbrev.expand_abbrev("\\frown") == ("⌢", 6)
         assert leani.abbrev.expand_abbrev("\\Gangia") == ("Ϫ", 7)
@@ -731,7 +731,7 @@ def describe_略記の展開():
         key=st.sampled_from(sorted(leani.abbrev.ABBREV)),
         head=st.text(alphabet=st.characters(exclude_characters="\\"), max_size=8),
     )
-    def it_表のどの綴りも引ける(key, head):
+    def it_表のどの略記も引ける(key, head):
         # 例に書けるのは数件。1829 件すべてが同じ規則で引けることはここで見る。
         # 打つ手前に何が書いてあっても、直前の `\\` から後ろだけを鍵にする。
         want = (leani.abbrev.ABBREV[key], len(key) + 1)

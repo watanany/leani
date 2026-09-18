@@ -1,6 +1,6 @@
 """略記表と展開 (純粋)。
 
-`\\to` を `→` にする表。VS Code の Lean 拡張と同じ綴りと同じ値を使う。"""
+`\\to` を `→` にする表。VS Code の Lean 拡張と同じ表記と同じ値を使う。"""
 
 from __future__ import annotations
 

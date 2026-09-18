@@ -601,7 +601,7 @@ def describe_sorry_が複数あるとき():
 def describe_タクティクの途中でエンジンが変わる():
     """
     proofState は前のプロセスのもの。新しいエンジンは番号を 0 から振り直す
-    ので、そのまま送ると別の証明の状態に当たって返事が来る。
+    ので、そのまま送ると別の証明の状態に当たって応答が来る。
     """
 
     @story("F1", "E1")
@@ -622,7 +622,7 @@ def describe_タクティクの途中でエンジンが変わる():
         mocker.patch.object(leani.engine.Engine, "send_tactic", die_once)
         out = repl.feed("constructor")
 
-        assert "証明完了" not in out, f"作り直したエンジンの返事を信じた: {out}"
+        assert "証明完了" not in out, f"作り直したエンジンの応答を信じた: {out}"
         assert "証明モードを抜けた" in out, out
         assert repl.repl.proof is None
 

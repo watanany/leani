@@ -235,7 +235,7 @@ def first_response(buf: str) -> Response | None:
         except json.JSONDecodeError:
             continue
 
-        # repl の返事は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
+        # repl の応答は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
         # 次の区切りを試す (呼ぶ側は添字で鍵を引く)。
         if isinstance(got, dict):
             return cast(Response, got)
@@ -342,7 +342,7 @@ def block_continues(buf: Sequence[str], src: str) -> bool:
 
 def classify(probe: Probe | None) -> tuple[State, Kind]:
     """
-    パーサの返事を (入力の状態, 送り方) に読む。
+    パーサの応答を (入力の状態, 送り方) に読む。
 
     判定できなければ err にして、そのまま投げて Lean に本当のエラーを出させる
     (自前の推測でエラーを作らない)。
