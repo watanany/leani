@@ -135,7 +135,8 @@ HELP = """\
 """
 
 PROOF_HELP = (
-    "証明モード: 1 行 = 1 タクティク。:goals 目標  :script 台本  :undo 戻す  :done 出る"
+    "証明モード: 1 行 = 1 タクティク。"
+    ":goals 目標  :script スクリプト  :undo 戻す  :done 出る"
 )
 
 
@@ -895,12 +896,12 @@ class Repl:
         found = try_this(messages(resp))
         if found and not balanced(found):
             # 提案を読み切れていない (メッセージの形が変わった等)。壊れた
-            # 台本を完成した証明として出すより、打った通りを残す。
-            print(dim("-- 提案を読み切れなかったので打った通りを台本に入れた"))
+            # スクリプトを完成した証明として出すより、打った通りを残す。
+            print(dim("-- 提案を読み切れなかったので打った通りをスクリプトに入れた"))
             found = None
         if found and found != src:
             shown = found.replace("\n", " ")
-            print(dim(f"-- 台本には {shown} を入れた"))
+            print(dim(f"-- スクリプトには {shown} を入れた"))
         proof.script.append(found or src)
         self.last = Last(src, advanced=True, proof=True)
 
@@ -911,7 +912,7 @@ class Repl:
 
         script = "\n".join(proof.script)
         print(green("証明完了。"))
-        print(dim("-- 台本:"))
+        print(dim("-- スクリプト:"))
         print(textwrap.indent(script, "  "))
         self.proof, self.last = None, None
         self.close_sorry(script)
@@ -930,14 +931,14 @@ class Repl:
             print(dim("  :restart で作り直してから打ち直す"))
 
     def close_sorry(self, script: str) -> None:
-        """`by sorry` を台本で埋め戻して、宣言を本物として通し直す。"""
+        """`by sorry` をスクリプトで埋め戻して、宣言を本物として通し直す。"""
         src, at = self.proof_src, self.proof_at
         if not src or at is None:
             return
 
         new_src = splice_sorry(src, at, script)
         if new_src is None:
-            # 位置が読めなかった。証明そのものは通っているので台本は上に
+            # 位置が読めなかった。証明そのものは通っているのでスクリプトは上に
             # 出ている。黙って戻ると「証明完了」だけが残る。
             print(dim("-- 位置が読めなかったので宣言は sorry のまま"))
             return

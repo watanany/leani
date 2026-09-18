@@ -183,7 +183,7 @@ def offset(src: str, pos: Pos | None) -> int | None:
 
 def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     """
-    sorry 1 個をタクティクの台本に差し替える。位置が読めなければ None。
+    sorry 1 個をタクティクのスクリプトに差し替える。位置が読めなければ None。
 
     repl は sorry ごとに pos / endPos を返す。テキストを数えて当てると
     コメントや識別子の中の "sorry" にも一致するので、必ず位置で切る。数えて
@@ -200,7 +200,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
         # インデントが 1 桁になって by ブロックから外れる。
         return src[:a] + script + src[b:]
     elif not pad.strip():
-        # sorry だけの行。その桁を台本の桁にする。
+        # sorry だけの行。その桁をスクリプトの桁にする。
         return src[:a] + hang(script, pad) + src[b:]
     else:
         # 行の途中 (:= by sorry)。by の下にぶら下げる。
@@ -209,7 +209,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
 
 
 def hang(script: str, pad: str) -> str:
-    """台本の 2 行目以降を pad の桁に揃える。1 行目は呼ぶ側が置く。"""
+    """スクリプトの 2 行目以降を pad の桁に揃える。1 行目は呼ぶ側が置く。"""
     head, *rest = script.split("\n")
     return "\n".join([head] + [pad + one if one.strip() else one for one in rest])
 
@@ -376,7 +376,7 @@ def classify_tac(probe: Probe | None) -> tuple[State, Kind]:
             return ERR, TAC
 
 
-# `exact?` や `simp?` は結果を "Try this:" として info で返す。台本にはこの
+# `exact?` や `simp?` は結果を "Try this:" として info で返す。スクリプトにはこの
 # 中身を入れる。`exact?` のままでは :save したファイルで毎回検索が走り、
 # 結果も環境次第で変わる。提案の先頭には `[apply]` のような目印が付く。
 SUGGESTION_TAG = re.compile(r"^\[[^\]]*\]\s*")
@@ -419,7 +419,7 @@ def try_this(messages_: Sequence[Message] | None) -> str | None:
 
     提案は pretty printer が 100 桁前後で折り返すので、`simp?` の結果は
     ふつうに複数行になる。1 行目だけ取ると `simp only [a, b,` のような
-    閉じていない台本になり、しかもそれが「完成した証明」として出るので
+    閉じていないスクリプトになり、しかもそれが「完成した証明」として出るので
     気付けない。改行ごと返す (Lean のタクティクは複数行でよい)。
     """
     for m in messages_ or []:

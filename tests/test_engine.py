@@ -60,18 +60,18 @@ def describe_複数行の宣言():
 def describe_証明モード():
 
     @story("E2")
-    def it_exact_の提案を台本に入れる(repl):
+    def it_exact_の提案をスクリプトに入れる(repl):
         # `exact?` のままだと :save したファイルで毎回検索が走り、
         # 結果も環境次第で変わる。
         repl.feed("theorem t1 (n : Nat) : n + 0 = n := by sorry")
         repl.feed(":prove")
         out = repl.feed("exact?")  # 1 手で閉じるのでそのまま抜ける
-        assert "台本には" in out, out
+        assert "スクリプトには" in out, out
         assert "証明完了" in out, out
         assert "exact?" not in out[out.index("証明完了") :], "埋め戻しに残った"
 
     @story("E1")
-    def it_複数手の証明で目標と台本を見られる(repl):
+    def it_複数手の証明で目標とスクリプトを見られる(repl):
         repl.feed("theorem t2 : 1 = 1 ∧ 2 = 2 := by sorry")
         repl.feed(":prove")
         repl.feed("constructor")
@@ -483,7 +483,7 @@ def describe_履歴の書き出し():
 
 def describe_折り返した提案():
     """
-    simp? の結果は 100 桁前後で折り返る。取りこぼすと、閉じていない台本を
+    simp? の結果は 100 桁前後で折り返る。取りこぼすと、閉じていないスクリプトを
     「証明完了」として出したまま何も知らせない (sorry が 2 個以上あると
     埋め戻しが走らないので、露見する場所が無い)。
     """
@@ -500,7 +500,7 @@ def describe_折り返した提案():
 
     @story("E2", "E3")
     def it_折り返した提案でも埋め戻せる(repl):
-        # 切り落とした台本では埋め戻しが通らず、通ったはずの証明が捨てられる。
+        # 切り落としたスクリプトでは埋め戻しが通らず、通ったはずの証明が捨てられる。
         repl.feed(
             f"theorem folded (a b c d e f : Nat) {HYPS} : "
             "a + b + c + d + e + f = 21 := by sorry"
@@ -514,9 +514,9 @@ def describe_折り返した提案():
         assert leani.pure.balanced(decl), decl
 
     @story("E2")
-    def it_埋め戻しが走らないときも台本を切らない(repl):
+    def it_埋め戻しが走らないときもスクリプトを切らない(repl):
         # sorry が 2 個以上あると close_sorry が即 return するので、壊れた
-        # 台本を「証明完了」として出したまま誰も気付けない。
+        # スクリプトを「証明完了」として出したまま誰も気付けない。
         repl.feed(
             f"theorem twoHoles (a b c d e f : Nat) {HYPS} : "
             "(a + b + c + d + e + f = 21) ∧ True := ⟨sorry, sorry⟩"
@@ -525,7 +525,7 @@ def describe_折り返した提案():
         out = repl.feed(SIMP)
 
         assert "証明完了" in out, out
-        assert "hypothesisNumberSix" in out, f"台本を切り落とした: {out}"
+        assert "hypothesisNumberSix" in out, f"スクリプトを切り落とした: {out}"
 
 
 def describe_sorry_が複数あるとき():

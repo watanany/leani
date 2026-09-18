@@ -125,7 +125,7 @@ def describe_タクティクの提案():
 
     @story("E2")
     def it_閉じていない提案は読み切れていないと分かる():
-        # 台本に入れる前の最後の砦。切り落とすと必ず括弧が合わなくなる。
+        # スクリプトに入れる前の最後の砦。切り落とすと必ず括弧が合わなくなる。
         assert leani.pure.balanced("simp only [aaa, bbb]")
         assert leani.pure.balanced("exact ⟨foo (bar x), rfl⟩")
         assert not leani.pure.balanced("simp only [aaa, bbb,")
@@ -548,7 +548,7 @@ def mark(src, word="sorry", nth=0):
 
 def describe_sorry_の埋め戻し():
     """
-    repl の pos / endPos で切って台本に差し替える。桁は codepoint 単位で
+    repl の pos / endPos で切ってスクリプトに差し替える。桁は codepoint 単位で
     Python の添字と揃っている (日本語コメントを挟んで実測した)。
     """
 
@@ -568,7 +568,7 @@ def describe_sorry_の埋め戻し():
         ), got
 
     @story("E3")
-    def it_複数行の台本は_sorry_の桁に揃える():
+    def it_複数行のスクリプトは_sorry_の桁に揃える():
         src = "example : True := by\n  have h : True := by\n    sorry\n  exact h"
         got = leani.pure.splice_sorry(src, mark(src), "constructor\n-- おわり")
         assert got == (

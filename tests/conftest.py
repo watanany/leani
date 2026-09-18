@@ -122,7 +122,7 @@ INVARIANTS = [
         lambda r: r.sorry_env is None or r.sorry_env == r.eng.env,
     ),
     (
-        "証明の台本と巻き戻し用スタックの長さが一致する",
+        "証明のスクリプトと巻き戻し用スタックの長さが一致する",
         lambda r: r.proof is None or len(r.proof.script) == len(r.proof.stack),
     ),
     (
