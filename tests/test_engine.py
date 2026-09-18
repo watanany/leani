@@ -627,7 +627,7 @@ def describe_タクティクの途中でエンジンが変わる():
         assert repl.repl.proof is None
 
         # 畳んだのに last.proof が立っていると、続きのインデント行で
-        # 本物の宣言が pop される (取り消しの控えも消えるので戻せない)。
+        # 本物の宣言が pop される (取り消した中身も消えるので戻せない)。
         mocker.stopall()
         repl.feed("  exact rfl")
         assert "theorem twoGoals : 1 = 1 ∧ 2 = 2 := by sorry" in repl.declarations
@@ -707,7 +707,7 @@ def describe_通らなかった宣言の_sorry():
 
 def describe_replay_が途中で止まったとき():
     """
-    流せなかった宣言は控えておくが、環境に入っている宣言の並び (log) には
+    流せなかった宣言は保留しておくが、環境に入っている宣言の並び (log) には
     混ぜない。log は env のスタックと 1 対 1 で、混ぜると :undo と埋め戻しが
     別の宣言を落とす。
     """
@@ -922,9 +922,9 @@ def describe_プローブの途中でエンジンが落ちる():
         assert repl.feed(":prove").count("⊢") >= 1, "案内どおりに入り直せない"
 
 
-def describe_控えた宣言とエンジンの世代():
+def describe_保留した宣言とエンジンの世代():
     """
-    取り消した宣言の控えは env id を持つ。作り直したエンジンにその id は無い。
+    取り消した宣言の中身は env id を持つ。作り直したエンジンにその id は無い。
     """
 
     @story("F1", "C2")
@@ -949,12 +949,12 @@ def describe_控えた宣言とエンジンの世代():
 
 def describe_環境に無い宣言の行き先():
     """
-    replay で通らなかった / 流せなかった宣言は env に無い。テキストは控えて
-    おくが、そのまま書き出すと通らないファイルになる。
+    replay で通らなかった / 流せなかった宣言は env に無い。テキストは保留
+    しておくが、そのまま書き出すと通らないファイルになる。
     """
 
     @story("F1", "F2")
-    def it_戻せなかった宣言のテキストを控える(repl, tmp_path):
+    def it_戻せなかった宣言のテキストを保留する(repl, tmp_path):
         path = tmp_path / "lib2.lean"
         path.write_text("def libB := 10\n")
         repl.feed(f":l {path}")
@@ -985,7 +985,7 @@ def describe_環境に無い宣言の行き先():
         assert "def other := 1" in text, text
 
     @story("F2")
-    def it_reset_したら控えも捨てる(repl, tmp_path):
+    def it_reset_したら保留も捨てる(repl, tmp_path):
         path = tmp_path / "lib4.lean"
         path.write_text("def libD := 10\n")
         repl.feed(f":l {path}")
@@ -1032,15 +1032,15 @@ def describe_切り替えが通ったとき():
         assert "42" in repl.feed("#eval carried"), out
 
 
-def describe_控えと環境の乗り換え():
+def describe_保留と環境の乗り換え():
     """
-    replay で通らなかった宣言は控え (`Engine.unplayed`) に残る。環境を作り
-    直す操作で黙って消すと、直前に「テキストは控えてある」と言った直後に
+    replay で通らなかった宣言は保留 (`Engine.unplayed`) に残る。環境を作り
+    直す操作で黙って消すと、直前に「テキストは残してある」と表示した直後に
     消えることになる。
     """
 
     def _strand(repl, tmp_path, name):
-        """控えを 1 件作る。読み込んだファイルから依存先を消す。"""
+        """保留を 1 件作る。読み込んだファイルから依存先を消す。"""
         lib = tmp_path / f"{name}.lean"
         lib.write_text(f"def {name}Dep := 1\n")
         repl.feed(f":l {lib}")
@@ -1051,14 +1051,14 @@ def describe_控えと環境の乗り換え():
         return lib
 
     @story("G5", "F2")
-    def it_env_の切り替えでも控えを連れて行く(repl, tmp_path):
+    def it_env_の切り替えでも保留を連れて行く(repl, tmp_path):
         _strand(repl, tmp_path, "envKeep")
 
         repl.feed(":env wide")
         assert repl.repl.eng.unplayed == ["def envKeepUse := envKeepDep + 1"]
 
     @story("B4", "F2")
-    def it_l_が控えを捨てるならそう言う(repl, tmp_path):
+    def it_l_が保留を捨てるなら件数を表示する(repl, tmp_path):
         _strand(repl, tmp_path, "loadDrop")
 
         other = tmp_path / "other2.lean"
@@ -1110,7 +1110,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
 
         # guard が作り直して再送し、埋め戻した宣言は通っている。世代だけを
         # 見て「sorry のまま」と言うと、sorry のままのテキストを流し直して重複エラーの
-        # 宣言が控えに永久に居座る (:restart ごとに「戻せなかった宣言」)。
+        # 宣言が保留に永久に居座る (:restart ごとに「戻せなかった宣言」)。
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out
         assert repl.repl.eng.unplayed == [], repl.repl.eng.unplayed
@@ -1155,7 +1155,7 @@ def describe_起点の環境を失ったとき():
     """
 
     def _no_env(repl, mocker):
-        """boot が通らないエンジンにする。控えに宣言 1 件を残す。"""
+        """boot が通らないエンジンにする。保留に宣言 1 件を残す。"""
         repl.feed("def held := 1")
         mocker.patch.object(
             leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
@@ -1165,7 +1165,7 @@ def describe_起点の環境を失ったとき():
         assert repl.repl.eng.unplayed == ["def held := 1"]
 
     @story("F1", "F2")
-    def it_reset_は断って控えを残す(repl, mocker):
+    def it_reset_は受け付けずに保留を残す(repl, mocker):
         _no_env(repl, mocker)
 
         out = repl.feed(":reset")
@@ -1179,7 +1179,7 @@ def describe_起点の環境を失ったとき():
         assert "1" in repl.feed("#eval held")
 
     @story("F1")
-    def it_流し直さずに控える(repl, mocker):
+    def it_流し直さずに保留する(repl, mocker):
         _no_env(repl, mocker)
 
         buf = io.StringIO()

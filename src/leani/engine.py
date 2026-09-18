@@ -40,7 +40,7 @@ class Undone(NamedTuple):
 
     env: int | None
     src: str | None
-    gen: int  # 控えたときのプロセスの世代。作り直されたら env id は死んでいる
+    gen: int  # 保存したときのプロセスの世代。作り直されたら env id は死んでいる
 
 
 class Loaded(NamedTuple):
@@ -271,7 +271,7 @@ class Engine:
         self.env = resp["env"]
 
     def pop_decl(self) -> Undone:
-        """直前の宣言を環境ごと取り消す。戻せるように控えを返す。"""
+        """直前の宣言を環境ごと取り消す。戻せるように取り消した中身を返す。"""
         saved = Undone(self.env, self.log.pop() if self.log else None, self.gen)
         if self.stack:
             self.env = self.stack.pop()
@@ -281,7 +281,7 @@ class Engine:
         """
         pop_decl で取り消したものを戻す。戻せなければ False。
 
-        世代が変わっていたら戻さない。控えた env id は死んだプロセスのもので、
+        世代が変わっていたら戻さない。保存した env id は死んだプロセスのもので、
         新しいエンジンには無い。それを今の env に据えると、以後の cmd は
         存在しない環境に飛び (repl は "Unknown environment." を返すだけ)、
         打っても何も起きない端末になる。宣言は呼ぶ側が流し直す。
@@ -364,7 +364,7 @@ class Engine:
         except (EngineDied, Interrupted, OSError, KeyboardInterrupt):
             # boot が通らなかった。プロセスは作り直したので前の env id は死んで
             # いて、宣言はどこにも入っていない。log に残すと len(stack) と
-            # 食い違い、:save が環境に無い宣言を本体に書く。控えに回せば
+            # 食い違い、:save が環境に無い宣言を本体に書く。保留に回せば
             # コメントとして添えられ、直してから :restart で流し直せる。
             # base も捨てる。:reset が死んだ id を据え直すと、submit の
             # 「env が無い」ガードが外れて何を打っても通らない端末になる。
@@ -465,7 +465,7 @@ class Engine:
 
         if self.env is None:
             # 流し直す先が無い。送れば send_cmd が関門で断つが、ここは
-            # 「何件通ったか」を返す関数なので、例外を上げずに全件を控えへ
+            # 「何件通ったか」を返す関数なので、例外を上げずに全件を保留へ
             # 回し、理由を Replay に載せて返す。
             self.unplayed = list(log) + self.unplayed
             return Replay([], [], list(log), ["環境が無いので流し直せない"], [])
@@ -474,7 +474,7 @@ class Engine:
             try:
                 resp = self.send_cmd(src)
             except (EngineDied, Interrupted):
-                # 試せていないものは unplayed に控える。エンジンを直せば
+                # 試せていないものは unplayed に保留する。エンジンを直せば
                 # :restart でやり直せる。ここで捨てると打ったものが戻らない。
                 #
                 # log に混ぜてはいけない。log は env に入っている宣言の並びで、
@@ -485,7 +485,7 @@ class Engine:
                 return Replay(done, failed, rest, [], found)
 
             if has_error(resp):
-                # テキストは控えに回す。落ちたのはユーザの操作ではないので、
+                # テキストは保留に回す。落ちたのはユーザの操作ではないので、
                 # 「戻せなかった」と言うだけで打ったものを消してはいけない。
                 # 読み込むファイルを直せば次の :restart で通る。
                 failed.append(src)

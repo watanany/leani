@@ -286,7 +286,7 @@ def write_lake_env(cache: str, project: str) -> None:
 
         os.replace(tmp, cache)
     except OSError as e:
-        raise EngineError(f"lake env を控えられなかった ({cache}): {e}") from e
+        raise EngineError(f"lake env を保存できなかった ({cache}): {e}") from e
     finally:
         with contextlib.suppress(OSError):
             os.unlink(tmp)

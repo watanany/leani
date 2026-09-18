@@ -428,7 +428,7 @@ class Repl:
         for src in out.failed:
             print(yellow(f"戻せなかった宣言: {head_line(src)}"))
         if out.failed or out.notes:
-            print(dim("  これらは環境に無い (テキストは控えてある)"))
+            print(dim("  これらは環境に無い (テキストは残してある)"))
         if out.skipped:
             print(yellow(f"まだ流していない宣言: {len(out.skipped)} 件"))
             print(dim("  これらも環境に無い。:restart でやり直せる"))
@@ -456,9 +456,9 @@ class Repl:
 
         if self.eng.env is None:
             # ここは案内を出す層。関門の例外をそのまま「内部エラー」として
-            # 見せると、控えが残っていることも次の一手も伝わらない。
+            # 見せると、テキストが残っていることも次の一手も伝わらない。
             print(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
-            print(dim("  テキストは控えてある。:restart で作り直せる"))
+            print(dim("  テキストは残してある。:restart で作り直せる"))
             self.eng.unplayed = list(log) + self.eng.unplayed
             return
 
@@ -734,7 +734,7 @@ class Repl:
                 self.proof.script.pop()
             return
         else:
-            # 書き直しをやめたときに戻せるよう控える (C-c / C-d / ブロック脱出)。
+            # 書き直しをやめたときに戻せるよう取っておく (C-c / C-d / ブロック脱出)。
             self.undone = self.eng.pop_decl()
 
     def restore_undone(self) -> None:
@@ -744,7 +744,7 @@ class Repl:
 
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
-            # 控えている間にエンジンが作り直された。控えた env id は死んで
+            # 取っておく間にエンジンが作り直された。保存した env id は死んで
             # いるので据えられない。テキストから流し直す。
             self.replay_into([undone.src])
 
@@ -947,7 +947,7 @@ class Repl:
         if self.sorry_env is not None and self.eng.env == self.sorry_env:
             undone = self.eng.pop_decl()
 
-        # 通し直しに失敗したら戻せるよう控える。sorry が 2 個以上あるときに
+        # 通し直しに失敗したら戻せるよう取っておく。sorry が 2 個以上あるときに
         # 持ち越しを捨てると、残りを :prove で続けられなくなる。
         keep = (self.pending, self.proof_at, self.proof_src, self.sorry_env)
         self.proof_at, self.proof_src, self.sorry_env = None, None, None
@@ -962,10 +962,10 @@ class Repl:
             # 着地したかは env の中身で決める。世代だけを見ると、落ちた
             # エンジンを guard が作り直して再送し**通った**ときにも
             # 「sorry のまま」と嘘をつき、sorry のままのテキストを流し直して重複エラーの
-            # 宣言が控えに永久に居座る。
+            # 宣言が保留に永久に居座る。
             return
         elif self.eng.gen != gen:
-            # 作り直されて、そのうえ通らなかった。控えた env id は死んで
+            # 作り直されて、そのうえ通らなかった。保存した env id は死んで
             # いるので据えず、sorry のままのテキストを流し直す。持ち越しは
             # 戻さない (死んだ proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
@@ -1222,11 +1222,11 @@ class Repl:
             return
 
         keep, prev, back = self.show_time, self.eng.loaded, self.cfg
-        # 打った宣言も控える。:l した中身は preload で戻るが、対話で打った
+        # 打った宣言も持って行く。:l した中身は preload で戻るが、対話で打った
         # ぶんは新しい Engine には入っていない。戻り道で流し直す。
-        # 環境に無い宣言も連れて行く。捨てると、直前に「テキストは控えてある」
-        # と言ったものが :env で黙って消える。新しい環境なら通ることもある
-        # (import が増える方向の切り替え)。通らなければまた控えに戻る。
+        # 環境に無い宣言も連れて行く。捨てると、直前に「テキストは残してある」
+        # と表示したものが :env で黙って消える。新しい環境なら通ることもある
+        # (import が増える方向の切り替え)。通らなければまた保留に戻る。
         log = list(self.eng.log) + list(self.eng.unplayed)
         self.eng.kill()
         try:
@@ -1328,7 +1328,7 @@ class Repl:
             print(red(f"読めない: {path} ({e.strerror})"))
             return
 
-        left = len(self.eng.unplayed)  # 読み込みが通れば控えも作り直される
+        left = len(self.eng.unplayed)  # 読み込みが通れば保留も作り直される
         out = self.guard(lambda: self.eng.load_file(path, src))
         if out is None:
             return
@@ -1353,12 +1353,12 @@ class Repl:
     def reset(self) -> None:
         if self.eng.base is None:
             # 起点の環境が無い (boot が通らなかった)。据え直しても
-            # "Unknown environment." しか返さない端末になり、控えだけが消える。
+            # "Unknown environment." しか返さない端末になり、保留だけが消える。
             print(red("起点の環境が無い。:restart で作り直す"))
             return
 
         self.eng.env, self.eng.stack, self.eng.log = self.eng.base, [], []
-        # 控えも捨てる。残すと、:reset で消したはずの宣言が次の :restart で
+        # 保留も捨てる。残すと、:reset で消したはずの宣言が次の :restart で
         # 戻ってくる。
         left, self.eng.unplayed = len(self.eng.unplayed), []
         self.proof, self.last = None, None
