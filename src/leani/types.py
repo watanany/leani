@@ -9,7 +9,7 @@ from typing import Any, Final, Literal, TypedDict, TypeVar
 # こちらが組む JSON と、TOML の設定。形がその場ごとに違うので dict のまま扱う。
 Json = dict[str, Any]
 
-# repl から返る JSON。実行時は素の dict のままで、欠けた鍵は `.get` で流す
+# repl から返る JSON。実行時はそのままの dict で扱い、欠けた鍵は `.get` で流す
 # (repl の版が変わっても落ちないように)。TypedDict にしてあるのは鍵の綴りと値の
 # 型を mypy に見てもらうためで、検証はしない。どの鍵も「返ってくるかもしれない」
 # ものなので total=False にする。
@@ -52,7 +52,7 @@ class Response(TypedDict, total=False):
     messages: list[Message]
     sorries: list[Sorry]
     goals: list[str]
-    message: str  # エンジンからの素のエラー。messages ではなくこちらで来る
+    message: str  # エンジンが直接返すエラー。messages ではなくこちらに入る
 
 
 class Parse(TypedDict, total=False):
@@ -95,7 +95,7 @@ class Loogle(TypedDict, total=False):
 
 Kind = Literal["cmd", "term", "tac"]  # 送り方
 State = Literal["complete", "more", "err"]  # 入力の状態
-Step = Literal["probe", "done", "quit"]  # 1 行食べたあと何をするか
+Step = Literal["probe", "done", "quit"]  # 1 行処理したあと何をするか
 
 CMD: Final[Kind] = "cmd"
 TERM: Final[Kind] = "term"

@@ -7,14 +7,14 @@
 遅いので絞ってある。
 
   test_parsing.py      純関数と読み取りだけ。端末もエンジンも要らない。ミリ秒。
-  test_engine.py       Repl を直接叩く。1 テスト 1.5 秒。
+  test_engine.py       Repl を直接呼ぶ。1 テスト 1.5 秒。
   test_completion.py   同上。問い合わせ回数は mocker で数える。
   test_terminal.py     pty 越しに本物の行編集を相手にする。
 
 どのテストも Lean 本体だけを import する環境で走る。特定の Lake プロジェクト
 に依存しないので、このリポジトリの外へ持って行ってもそのまま動く。
 
-エンジン層では 1 行食わせるごとに INVARIANTS を全部確認する。この REPL は
+エンジン層では 1 行渡すごとに INVARIANTS を全部確認する。この REPL は
 env のスタックと証明モードを持つ状態機械で、踏んだバグはどれも単発の操作では
 なく操作の並びで出た。個別の assert とは別に「どの状態でも成り立つはずのこと」
 を毎回見ておくと、想定していない並びでも捕まる。
@@ -145,7 +145,7 @@ INVARIANTS = [
 
 
 class Driver:
-    """Repl を直接叩く。1 行食わせるごとに不変条件を確認する。"""
+    """Repl を直接呼ぶ。1 行渡すごとに不変条件を確認する。"""
 
     def __init__(self, env=None):
         with contextlib.redirect_stdout(io.StringIO()):
@@ -162,7 +162,7 @@ class Driver:
             assert holds(self.repl), f"{after} で不変条件が破れた: {why}"
 
     def feed(self, *lines):
-        """行を順に食わせて、出力をまとめて返す。"""
+        """行を順に渡して、出力をまとめて返す。"""
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             for one in lines:
@@ -355,7 +355,7 @@ def terminal(tmp_path):
 
 def piped(src, tmp_path, timeout=180):
     """
-    パイプ越しに leani へ食わせて、出たものを全部返す。
+    パイプ越しに leani へ渡して、出たものを全部返す。
 
     端末が無いときの経路を見るためのもの。stdin が tty でないと入力は
     strict デコードになるので、壊れたバイトの扱いはここでしか出ない。

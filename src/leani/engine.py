@@ -362,7 +362,7 @@ class Engine:
         try:
             self.boot()
         except (EngineDied, Interrupted, OSError, KeyboardInterrupt):
-            # boot が通らなかった。プロセスは建て直したので前の env id は死んで
+            # boot が通らなかった。プロセスは作り直したので前の env id は死んで
             # いて、宣言はどこにも入っていない。log に残すと len(stack) と
             # 食い違い、:save が環境に無い宣言を本体に書く。控えに回せば
             # コメントとして添えられ、直してから :restart で流し直せる。

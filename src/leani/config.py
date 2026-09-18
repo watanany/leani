@@ -196,7 +196,7 @@ def problem(cfg: EnvConfig) -> str | None:
             (
                 f"エンジンの版がプロジェクトと違う "
                 f"(プロジェクト={proj_tc} / エンジン={eng_tc})。\n"
-                f"  {proj_tc} で建て直す: cd {cfg.engine} && "
+                f"  {proj_tc} で作り直す: cd {cfg.engine} && "
                 f"echo {proj_tc} > lean-toolchain && lake build repl\n"
                 f"  または LEANI_ENGINE を外して leani に用意させる"
             ),

@@ -39,8 +39,8 @@ BOOT_PROBE = "#check @Lean.Parser.runParserCategory\n"
 
 COMPLETE_CAP = 40000
 
-# 定理検索 (loogle)。エンジンとは別のサービスで、こちらは外部への HTTP。自前で建てたもの
-# を指せるようにしてある。公開のものが探す先は mathlib なので、手元の環境に
+# 定理検索 (loogle)。エンジンとは別のサービスで、こちらは外部への HTTP。自分で
+# 用意したものを指せるようにしてある。公開のものが探す先は mathlib なので、手元に
 # 無い名前も挙がる (module を一緒に出すのはそのため)。
 LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
 # 応答が返らないときもプロンプトが戻るように。重いパターン (部分項をたくさん

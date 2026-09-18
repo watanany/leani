@@ -89,7 +89,7 @@ def abbrev_keys() -> KeyBindings:
     Tab は補完が使っているので触らない。ここで Tab も兼ねると、同じ打鍵が
     手前の文字次第で補完にも変換にもなって、どちらが起きるか打つ前に読めない。
 
-    space はそのまま入れる。確定の合図を食べてしまうと `a \\to b` が `a →b` に
+    space はそのまま入れる。確定の合図を消費してしまうと `a \\to b` が `a →b` に
     なって、記号を出すたびに space を打ち足すことになる。表に無ければ何も
     起きないので、space が space でなくなる場面は作らない。
     """
@@ -172,7 +172,7 @@ class BlockHistory(FileHistory):
     捨てて record だけを受ける。
 
     ファイルへは追記しかしない。読めない形式のファイル (readline や libedit の
-    履歴) があっても、行が無視されるだけで書き潰さない。
+    履歴) があっても、行が無視されるだけで上書きしない。
     """
 
     def append_string(self, string: str) -> None:
@@ -248,7 +248,7 @@ class Repl:
             self.eng.boot()
         except BaseException:
             # Engine を作った時点で repl は起動している。ここで投げると
-            # 呼び側が self.eng を差し替えるので、殺す手立てが無くなる
+            # 呼び側が self.eng を差し替えるので、終了させる手立てが無くなる
             # (:env の切り替えに失敗するたび 1 プロセス残っていた)。
             self.eng.kill()
             raise
@@ -458,7 +458,7 @@ class Repl:
             # ここは案内を出す層。関門の例外をそのまま「内部エラー」として
             # 見せると、控えが残っていることも次の一手も伝わらない。
             print(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
-            print(dim("  テキストは控えてある。:restart で建て直せる"))
+            print(dim("  テキストは控えてある。:restart で作り直せる"))
             self.eng.unplayed = list(log) + self.eng.unplayed
             return
 
@@ -536,7 +536,7 @@ class Repl:
 
         端末を握るのは prompt() の中だけなので、評価中の Ctrl-C は今までどおり
         SIGINT として届く (Engine.send が Interrupted に変える)。端末でなければ
-        セッションを持たないので、パイプ入力は素の input() を通る。
+        セッションを持たないので、パイプ入力は標準の input() を通る。
         """
         if Repl._session is None:
             return input(prompt)
@@ -586,7 +586,7 @@ class Repl:
     def feed_line(self, line: str) -> Step | None:
         """端末から来た 1 件。履歴から戻ったものは改行入りで来る。"""
         # まとめた履歴を呼び戻すと改行入りの 1 行として返ってくるので、
-        # 打ったときと同じ順に食わせ直す。
+        # 打ったときと同じ順に渡し直す。
         lines = line.split("\n")
         for one in lines:
             if self.feed(one) == "quit":
@@ -744,7 +744,7 @@ class Repl:
 
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
-            # 控えている間にエンジンが建て直された。控えた env id は死んで
+            # 控えている間にエンジンが作り直された。控えた env id は死んで
             # いるので据えられない。テキストから流し直す。
             self.replay_into([undone.src])
 
@@ -760,7 +760,7 @@ class Repl:
             # boot が通らなかったエンジン。送れば send_cmd が関門で断るが、
             # 打った本人に要るのは例外の名前ではなく次の一手なので、ここで
             # 案内に変える。
-            print(red("エンジンが使えない。:restart で建て直す"))
+            print(red("エンジンが使えない。:restart で作り直す"))
             return
 
         self.undone = None  # 書き直しが確定した。もう戻さない
@@ -874,7 +874,7 @@ class Repl:
 
         self.last = Last(src, advanced=False, proof=True)
 
-        if resp.get("message"):  # エンジンからの素のエラー
+        if resp.get("message"):  # エンジンが直接返すエラー
             print(red(resp["message"].rstrip()))
             return
         elif has_error(resp):
@@ -927,7 +927,7 @@ class Repl:
         else:
             # 作り直せなかったときの proofState は前のプロセスのもの。
             self.clear_pending()
-            print(dim("  :restart で建て直してから打ち直す"))
+            print(dim("  :restart で作り直してから打ち直す"))
 
     def close_sorry(self, script: str) -> None:
         """`by sorry` を台本で埋め戻して、宣言を本物として通し直す。"""
@@ -960,16 +960,16 @@ class Repl:
         landed = bool(self.eng.log) and self.eng.log[-1] == new_src
         if undone is None or landed:
             # 着地したかは env の中身で決める。世代だけを見ると、落ちた
-            # エンジンを guard が建て直して再送し**通った**ときにも
+            # エンジンを guard が作り直して再送し**通った**ときにも
             # 「sorry のまま」と嘘をつき、sorry 版を流し直して重複エラーの
             # 宣言が控えに永久に居座る。
             return
         elif self.eng.gen != gen:
-            # 建て直されて、そのうえ通らなかった。控えた env id は死んで
+            # 作り直されて、そのうえ通らなかった。控えた env id は死んで
             # いるので据えず、sorry 版のテキストを流し直す。持ち越しは
             # 戻さない (死んだ proofState で replay_into が付け直した値を
             # 上書きすると、次の :prove が今の環境に無い状態を指す)。
-            print(dim("-- エンジンが建て直されたので sorry のままにしておく"))
+            print(dim("-- エンジンが作り直されたので sorry のままにしておく"))
             if undone.src is not None:
                 self.replay_into([undone.src])
         else:
@@ -1283,7 +1283,7 @@ class Repl:
 
         path = os.path.abspath(os.path.expanduser(arg))
         if os.path.exists(path) and path not in self.saved:
-            # 打ち間違いでプロジェクトのソースを潰さない。2 度目からは上書きする。
+            # 打ち間違いでプロジェクトのソースを消さない。2 度目からは上書きする。
             print(red(f"すでにある: {path}"))
             print(dim("  消すか別の名前にする"))
             return
@@ -1354,7 +1354,7 @@ class Repl:
         if self.eng.base is None:
             # 起点の環境が無い (boot が通らなかった)。据え直しても
             # "Unknown environment." しか返さない端末になり、控えだけが消える。
-            print(red("起点の環境が無い。:restart で建て直す"))
+            print(red("起点の環境が無い。:restart で作り直す"))
             return
 
         self.eng.env, self.eng.stack, self.eng.log = self.eng.base, [], []

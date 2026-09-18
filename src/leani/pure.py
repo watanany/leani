@@ -197,7 +197,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     if "\n" not in script:
         # 1 行なら sorry のあった桁にそのまま置く。前後の空白は動かさない。
         # 動かすと ⟨sorry, …⟩ が ⟨ rfl, …⟩ になり、行頭に寄っている sorry は
-        # インデントが 1 桁に潰れて by ブロックから外れる。
+        # インデントが 1 桁になって by ブロックから外れる。
         return src[:a] + script + src[b:]
     elif not pad.strip():
         # sorry だけの行。その桁を台本の桁にする。

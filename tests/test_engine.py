@@ -1,6 +1,6 @@
-"""Repl を直接叩く層。端末は挟まないが、本物のエンジンと話す。
+"""Repl を直接呼ぶ層。端末は挟まないが、本物のエンジンと話す。
 
-`repl` fixture は 1 行食わせるごとに不変条件 (conftest.INVARIANTS) を
+`repl` fixture は 1 行渡すごとに不変条件 (conftest.INVARIANTS) を
 確認するので、各テストの assert は「その操作で何が起きてほしいか」だけを
 書けばいい。
 """
@@ -17,7 +17,7 @@ import leani
 def describe_式の評価():
 
     @story("A1")
-    def it_裸の式は評価されて値が出る(repl):
+    def it_単独の式は評価されて値が出る(repl):
         assert "2" in repl.feed("1 + 1")
 
     @story("A1", "B1")
@@ -429,7 +429,7 @@ def describe_起動の確かめ():
     @story("G3", "G4")
     def it_起動に失敗したエンジンのプロセスを残さない(repl, mocker):
         # Engine を作った時点で repl は起動している。boot が投げたあとに
-        # self.eng を差し替えると、殺す手立てが無いまま残る。
+        # self.eng を差し替えると、終了させる手立てが無いまま残る。
         real = leani.engine.Engine.boot
         procs = []
 
@@ -445,7 +445,7 @@ def describe_起動の確かめ():
         dead, live = procs[0], procs[-1]
         assert dead is not live
         assert dead.wait(timeout=10) is not None, "起動に失敗したエンジンが残った"
-        assert live.poll() is None, "戻った先のエンジンまで殺した"
+        assert live.poll() is None, "戻った先のエンジンまで終了させた"
 
 
 def describe_履歴の書き出し():
@@ -455,7 +455,7 @@ def describe_履歴の書き出し():
     """
 
     @story("F3")
-    def it_読めない形式の履歴を書き潰さない(tmp_path):
+    def it_読めない形式の履歴を上書きしない(tmp_path):
         # readline や libedit の履歴を引き継いだ環境がこれになる。読み込みでは
         # 無視されるが、書き込みは追記なので前のぶんは残る。
         hist = tmp_path / "gnu-history"
@@ -768,7 +768,7 @@ def describe_書き出したファイルのヘッダ():
         repl.feed(f":save {path}")
 
         # :l は読むときに import Lean を足すので、そこでは露見しない。
-        # lean に直接食わせたときだけ Lean.versionString が引けなくなる。
+        # lean に直接渡したときだけ Lean.versionString が引けなくなる。
         assert path.read_text().startswith("import Lean\n"), path.read_text()
 
 
@@ -812,7 +812,7 @@ def describe_切り替えに失敗したとき():
         out = repl.feed(":env wide")
 
         assert "起動できなかった" in out, out
-        # 戻り道は新しい Engine を建てる。:l した中身は preload で戻るが、
+        # 戻り道は新しい Engine を作る。:l した中身は preload で戻るが、
         # 対話で打ったぶんは流し直さないと消える。
         assert "42" in repl.feed("#eval typedHere"), "打った宣言が消えた"
 
@@ -1108,7 +1108,7 @@ def describe_埋め戻しの途中でエンジンが落ちる():
         out = repl.feed("trivial")
         mocker.stopall()
 
-        # guard が建て直して再送し、埋め戻した宣言は通っている。世代だけを
+        # guard が作り直して再送し、埋め戻した宣言は通っている。世代だけを
         # 見て「sorry のまま」と言うと、sorry 版を流し直して重複エラーの
         # 宣言が控えに永久に居座る (:restart ごとに「戻せなかった宣言」)。
         assert repl.declarations == ["theorem died : True := by trivial"]

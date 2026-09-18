@@ -59,7 +59,7 @@ def describe_略記の入力():
 
     @story("C5")
     def it_space_で記号になり_space_も残る(terminal):
-        # space を食べると `a \to b` が `a →b` になり、記号を出すたびに
+        # space を確定に使い切ると `a \to b` が `a →b` になり、記号を出すたびに
         # space を打ち足すことになる。
         term = terminal()
         term.type("#check Nat \\to Nat")
@@ -137,7 +137,7 @@ def describe_外部コマンド():
 
 
 def describe_端末でない入力():
-    """パイプで食わせたとき。入力が strict デコードになるのはここだけ。"""
+    """パイプで渡したとき。入力が strict デコードになるのはここだけ。"""
 
     @story("F4")
     def it_UTF__8_で読めないバイトがあっても後続の行を失わない(tmp_path):
