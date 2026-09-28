@@ -70,6 +70,15 @@ class Probe(TypedDict, total=False):
     tac: Parse
 
 
+class Scope(TypedDict, total=False):
+    """SCOPE_QUERY の応答。短い名前がどの名前空間から来るか。"""
+
+    # (名前空間, hiding で隠した名前)。namespace の中ならその名前空間と親も入る。
+    open: list[tuple[str, list[str]]]
+    # `open X (a)` や renaming で足した (短い名前, 本当の名前)。
+    alias: list[tuple[str, str]]
+
+
 # loogle の応答。こちらは repl ではなく外部サービスへの HTTP で、エラーも 200 で返る
 # (`error` の鍵があるかどうかで見分ける)。同じく検証はしない。
 

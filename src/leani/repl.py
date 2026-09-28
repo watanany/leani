@@ -43,9 +43,11 @@ from leani.pure import (
     has_error,
     head_line,
     lean_str,
+    lean_strs,
     loogle_text,
     messages,
     red,
+    shorten,
     sorries,
     splice_sorry,
     strip_imports,
@@ -59,6 +61,7 @@ from leani.queries import (
     META_LINE,
     NOT_EVALUABLE,
     PARSE_PROBE,
+    SCOPE_QUERY,
 )
 from leani.search import loogle
 from leani.show import die, panic_check, render
@@ -74,6 +77,7 @@ from leani.types import (
     Kind,
     Loogle,
     Probe,
+    Scope,
     SearchError,
     Sorry,
     State,
@@ -241,6 +245,7 @@ class Repl:
         # 補完と履歴
         self._comp_cache: dict[tuple[int | None, str], list[str]] = {}
         self._own: tuple[int, list[str]] = (-1, [])
+        self._scope: tuple[tuple[int, int | None] | None, Scope] = (None, {})
 
         self.eng = Engine(cfg)
         try:
@@ -343,30 +348,77 @@ class Repl:
         return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
 
     def _names(self, prefix: str) -> list[str]:
-        """定数名の prefix 検索。名前空間ごとの塊を 1 度だけ取って以後は絞る。"""
+        """
+        いま短い名前で書ける定数のうち、prefix で始まるもの。
+
+        `open Lean` のあとの `Json.pa` は `Lean.Json.pa` として探し、`Lean.` を
+        外して出す。namespace の中なら、その名前空間と親からも同じように探す。
+        """
         if len(prefix) < 2:
             return []
 
-        # 塊は base 環境 (import / :l 直後) に紐付ける。宣言を 1 つ通すたびに
-        # 捨てていると mathlib では毎回 1.1 秒かかり直すので、自分で通した分だけ
-        # Python 側で足す。
-        key = (self.eng.base, self._chunk(prefix))
-        chunk = self._comp_cache.get(key)
-        if chunk is None:
-            out = self.guard(
-                lambda: self.eng.query(
-                    COMPLETE_QUERY % (lean_str(key[1]), COMPLETE_CAP)
-                )
-            )
-            if out is None:
-                return []
+        scope = self._scope_now()
+        opens = [("", list[str]())] + [(ns, hid) for ns, hid in scope.get("open", [])]
+        full = {ns: f"{ns}.{prefix}" if ns else prefix for ns, _ in opens}
+        chunks = self._chunks({self._chunk(f) for f in full.values()})
 
-            chunk = out.split()
-            self._comp_cache[key] = chunk
-
-        hits = {x for x in chunk if x.startswith(prefix)}
+        hits: set[str] = set()
+        for ns, hidden in opens:
+            got = chunks.get(self._chunk(full[ns]))
+            if got is not None:
+                hits.update(shorten(got, prefix, ns, hidden))
+        hits.update(a for a, _ in scope.get("alias", []) if a.startswith(prefix))
         hits.update(x for x in self._own_names() if x.startswith(prefix))
         return sorted(hits)
+
+    def _chunks(self, keys: set[str]) -> dict[str, list[str]]:
+        """
+        名前空間ごとの塊。まだ持っていない分は定数を 1 周してまとめて取る。
+
+        塊は base 環境 (import / :l 直後) に紐付ける。宣言を 1 つ通すたびに
+        捨てていると mathlib では毎回 1.1 秒かかり直すので、自分で通した分だけ
+        Python 側で足す。open する名前空間が増えても 1 周で済ませる。
+        """
+        base = self.eng.base
+        missing = sorted(k for k in keys if (base, k) not in self._comp_cache)
+        if missing:
+            out = self.guard(
+                lambda: self.eng.query(
+                    COMPLETE_QUERY % (lean_strs(missing), COMPLETE_CAP)
+                )
+            )
+            try:
+                got = json.loads(out.strip().splitlines()[-1]) if out else None
+            except (json.JSONDecodeError, IndexError):
+                got = None
+            if isinstance(got, list) and len(got) == len(missing):
+                for k, names in zip(missing, got, strict=True):
+                    self._comp_cache[(base, k)] = names
+
+        return {
+            k: self._comp_cache[(base, k)]
+            for k in keys
+            if (base, k) in self._comp_cache
+        }
+
+    def _scope_now(self) -> Scope:
+        """
+        いまの namespace と open。環境が変わったときだけ聞き直す。
+
+        open は宣言と同じく環境ごとに repl が覚えているので、打った文字列から
+        拾うより正確に取れる (`open X in` は残らず、`hiding` や `renaming` も分かる)。
+        問い合わせは定数を回らないので、mathlib でも数十ミリ秒で済む。
+        """
+        key = (self.eng.gen, self.eng.env)
+        if self._scope[0] != key:
+            out = self.guard(lambda: self.eng.query(SCOPE_QUERY))
+            try:
+                got = json.loads(out.strip().splitlines()[-1]) if out else {}
+            except (json.JSONDecodeError, IndexError):
+                got = {}
+            self._scope = (key, cast(Scope, got) if isinstance(got, dict) else {})
+
+        return self._scope[1]
 
     def _own_names(self) -> list[str]:
         """REPL で通した宣言の名前。ログが伸びたときだけ数え直す。"""

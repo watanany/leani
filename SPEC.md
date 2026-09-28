@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 31 件、テスト 187 件。括弧の中はテストの居場所
+ストーリー 32 件、テスト 195 件。括弧の中はテストの居場所
 (層 / describe)。
 
 ## A. 試し打ち
@@ -142,6 +142,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 同じ名前空間なら一度しか問い合わせない (completion / 名前空間ごとのキャッシュ)
 - 別の名前空間なら取り直す (completion / 名前空間ごとのキャッシュ)
 - 宣言を通してもキャッシュを捨てない (completion / 名前空間ごとのキャッシュ)
+- open した名前空間の分も一度に取る (completion / 名前空間ごとのキャッシュ)
 - 自分で通した宣言も候補に出る (completion / 候補)
 - 一文字では候補を出さない (completion / 候補)
 - 修飾子や属性が付いていても名前を取れる (parsing / 宣言の名前拾い)
@@ -171,6 +172,17 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - エラーは訳さずに候補を添える (parsing / 定理検索)
 - 記号を含むクエリも壊さずに送る (parsing / 定理検索)
 - 届かなければ SearchError (parsing / 定理検索)
+
+### D5 open した名前空間の名前も、ソースに書くのと同じ短い名前で Tab 補完したい
+
+- open した名前空間の分も一度に取る (completion / 名前空間ごとのキャッシュ)
+- open すると短い名前で出る (completion / open した名前空間)
+- open しなければ短い名前では出ない (completion / open した名前空間)
+- open X in は後に残らない (completion / open した名前空間)
+- hiding した名前は出ない (completion / open した名前空間)
+- 名前を選んで open した分だけ出る (completion / open した名前空間)
+- protected な名前は最後の語だけでは出ない (completion / open した名前空間)
+- namespace の中ではその名前空間の名前も短く出る (completion / open した名前空間)
 
 ## E. 証明する
 

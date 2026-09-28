@@ -63,6 +63,37 @@ def lean_str(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)
 
 
+def lean_strs(xs: Sequence[str]) -> str:
+    """文字列の列を Lean の `#[...]` にする。"""
+    return "#[" + ", ".join(lean_str(x) for x in xs) + "]"
+
+
+def shorten(
+    chunk: Sequence[str], prefix: str, ns: str, hidden: Sequence[str]
+) -> list[str]:
+    """
+    `ns` を open したとき (`ns` が空なら root) に、prefix で始まる短い名前。
+
+    chunk は COMPLETE_QUERY の塊の 1 つで、protected な名前は先頭に ! が付いている。
+    Lean と同じく protected な名前は最後の 1 語だけでは書けないので出さない
+    (`open Nat` しても `add_comm` は `Nat.add_comm` にならない)。
+    """
+    head = f"{ns}." if ns else ""
+    out: list[str] = []
+    for x in chunk:
+        protected = x.startswith("!")
+        name = x[1:] if protected else x
+        if not name.startswith(head + prefix):
+            continue
+
+        short = name[len(head) :]
+        if (head and protected and "." not in short) or short in hidden:
+            continue
+        out.append(short)
+
+    return out
+
+
 def messages(resp: Response) -> list[Message]:
     return resp.get("messages") or []
 

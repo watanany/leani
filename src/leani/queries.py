@@ -18,10 +18,14 @@ PARSE_PROBE = r"""open Lean Parser in
   IO.println (Json.mkObj [("cmd", probe `command), ("term", probe `term),
                           ("tac", probe `tacticSeq)]).compress"""
 
+# 補完の候補。名前空間ごとの塊をいくつか、定数を 1 周するあいだにまとめて取る
+# (mathlib では 1 周に 1 秒かかる)。protected な名前は先頭に ! を付ける。
+# `open` した先から短い名前で書けるかどうかがこれで決まる。
 COMPLETE_QUERY = r"""open Lean in
 #eval show CoreM Unit from do
   let env ← getEnv
-  let mut ns : Array String := #[]
+  let keys : Array String := %s
+  let mut hits : Array (Array (String × Bool)) := keys.map fun _ => #[]
   for (n, _) in env.constants.toList do
     if n.isInternalDetail then continue
     let last := n.getString!
@@ -30,8 +34,30 @@ COMPLETE_QUERY = r"""open Lean in
        || last == "go" || last == "loop" || last == "induct" || last == "fun_cases"
        || last == "eq_def" || last == "sizeOf_spec" then continue
     let s := n.toString
-    if %s.isPrefixOf s then ns := ns.push s
-  IO.println (String.intercalate " " (ns.qsort.toList.take %d))"""
+    for i in [0:keys.size] do
+      if keys[i]!.isPrefixOf s then
+        hits := hits.modify i (·.push (s, isProtected env n))
+  let mark := fun ((s, p) : String × Bool) => if p then "!" ++ s else s
+  let out := hits.map fun h => (h.qsort (·.1 < ·.1)).toList.take %d |>.map mark
+  IO.println (toJson out).compress"""
+
+# いまの namespace と open。短い名前がどの名前空間から来るかを決める。
+# `open Lean in` を付けると、それ自体が答えに混ざるので名前は全部修飾して書く。
+SCOPE_QUERY = r"""#eval show Lean.CoreM Unit from do
+  let mut opens : Array Lean.Json := #[]
+  let mut ns ← Lean.getCurrNamespace
+  while !ns.isAnonymous do
+    opens := opens.push (Lean.toJson (ns.toString, ([] : List String)))
+    ns := ns.getPrefix
+  let mut aliases : Array Lean.Json := #[]
+  for d in ← Lean.getOpenDecls do
+    match d with
+    | .simple n ex =>
+      opens := opens.push (Lean.toJson (n.toString, ex.map (·.toString)))
+    | .explicit id decl =>
+      aliases := aliases.push (Lean.toJson (id.toString, decl.toString))
+  let out := Lean.Json.mkObj [("open", .arr opens), ("alias", .arr aliases)]
+  IO.println out.compress"""
 
 DOC_QUERY = r"""open Lean in
 #eval show CoreM Unit from do
