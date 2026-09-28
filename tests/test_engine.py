@@ -82,9 +82,9 @@ def describe_証明モード():
         assert "証明完了" in repl.feed("rfl")
 
     @story("E1")
-    def it_証明モードの外で証明用のコマンドを打つと証明モードではないと伝える(repl):
+    def it_証明モードの外で証明用のコマンドを入力すると証明モードではないと伝える(repl):
         # 証明が完成すると leani は自動で証明モードを抜けるので、その直後に
-        # ユーザーが打つことがある。
+        # ユーザーが入力することがある。
         assert "証明モードではない" in repl.feed(":done")
         assert "証明モードではない" in repl.feed(":goals")
 
@@ -804,7 +804,7 @@ def describe_init_と読み込みが混ざるとき():
 def describe_切り替えに失敗したとき():
 
     @story("G4", "G5")
-    def it_打った宣言も元の環境に残る(repl, mocker):
+    def it_入力した宣言も元の環境に残る(repl, mocker):
         repl.feed("def typedHere := 42")
         real = leani.engine.Engine.boot
 
@@ -818,8 +818,8 @@ def describe_切り替えに失敗したとき():
 
         assert "起動できなかった" in out, out
         # 元の環境に戻るときは新しい Engine を作る。:l したファイルの内容は preload で
-        # 戻るが、対話で打った宣言は実行し直さないと消える。
-        assert "42" in repl.feed("#eval typedHere"), "打った宣言が消えた"
+        # 戻るが、対話で入力した宣言は実行し直さないと消える。
+        assert "42" in repl.feed("#eval typedHere"), "入力した宣言が消えた"
 
 
 def describe_実行時間():
@@ -885,7 +885,7 @@ def describe_依存している公理():
     @story("E4", "E1", "E3")
     def it_置き換えたら_sorryAx_が消える(repl):
         # 置き換えられたかを公理の側から確認できる。間に環境を進める入力を
-        # 挟むと持ち越した proofState を捨てるので、続けて打つ。
+        # 挟むと持ち越した proofState を捨てるので、続けて入力する。
         repl.feed("theorem ax3 : 1 = 1 := by sorry")
         repl.feed(":prove")
         repl.feed("rfl")
@@ -940,7 +940,7 @@ def describe_保留した宣言とエンジンの世代():
 
         repl.repl.restore_undone()  # 書き直さずにやめた
         # 無効になった env id を設定すると repl は "Unknown environment." しか返さず、
-        # 何を打っても反応しない端末になる。テキストから実行し直す。
+        # 何を入力しても反応しない端末になる。テキストから実行し直す。
         assert "2" in repl.feed("#eval held + 1")
 
     @story("F1")
@@ -984,7 +984,7 @@ def describe_環境に無い宣言の扱い():
         repl.feed(f":save {out_path}")
         text = out_path.read_text()
 
-        # 保留した宣言を書き出さないと、:save は成功を報告したのに打った宣言が消える。
+        # 保留した宣言を書き出さないと、:save は成功を報告したのに入力した宣言が消える。
         # そのまま書くと lean でエラーになる。
         assert "-- def usesC := libC + 1" in text, text
         assert "def other := 1" in text, text
@@ -1028,12 +1028,12 @@ def describe_読み込んだファイルの_import():
 def describe_切り替えが成功したとき():
 
     @story("G5", "B2")
-    def it_打った宣言も新しい環境に追加される(repl):
+    def it_入力した宣言も新しい環境に追加される(repl):
         repl.feed("def carried := 42")
         out = repl.feed(":env wide")
 
         # 元の環境に戻るときだけ実行し直していたので、切り替えが成功したときに限って
-        # 打った宣言が何も表示されずに消えていた。
+        # 入力した宣言が何も表示されずに消えていた。
         assert "42" in repl.feed("#eval carried"), out
 
 
@@ -1157,7 +1157,7 @@ def describe_再起動に失敗したときの証明モード():
 def describe_元になる環境を失ったとき():
     """
     boot が失敗すると環境がどこにも無い。この状態で操作を受け付けても、事実と違う報告を
-    せず、打ったテキストを失わないことだけは守る (原因を直せば :restart で戻る)。
+    せず、入力したテキストを失わないことだけは守る (原因を直せば :restart で戻る)。
     """
 
     def _no_env(repl, mocker):

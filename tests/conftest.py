@@ -173,7 +173,7 @@ class Driver:
         return ANSI.sub("", out.getvalue())
 
     def block(self, *lines):
-        """複数行を打って空行で確定させる。"""
+        """複数行を入力して空行で確定させる。"""
         return self.feed(*lines, "")
 
     @property

@@ -44,7 +44,7 @@ def describe_行編集():
     @story("C3", "F3")
     def it_捨てた入力途中のブロックも履歴には残る(terminal):
         # Ctrl-C で捨てるのは入力バッファであって、確定した行の記録ではない。
-        # 長い宣言の途中で打ち間違えても、ユーザーに全体を打ち直させない。
+        # 長い宣言の途中で打ち間違えても、ユーザーに全体を入力し直させない。
         term = terminal()
         term.type("def typo : Nat -> Nat\r")
         term.wait_prompt("|", 20)
