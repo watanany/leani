@@ -1,9 +1,8 @@
 # leani
 
-Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
-
-エンジンは leanprover-community/repl。repl は JSON in / JSON out の機械向け
-プロトコルしか持たないので、leani がその上に人間向けの層を足す。
+leani は Lean 4 の REPL である。
+ファイルを作って `lake env lean` を実行しなくても、式の値や宣言の結果をその場で確かめられる。
+エンジンには leanprover-community/repl を使う。
 
 ```
 λ> 1 + 1
@@ -18,223 +17,63 @@ Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
 λ> Std.Time.PlainDateT<Tab>    → Std.Time.PlainDateTime に補完される
 ```
 
+leani は macOS と Linux で動く。
+
 ## インストール
+
+leani を使うには、次のソフトウェアが必要である。
+
+- elan (Lean と `lake` を管理するツール)。インストール方法は https://lean-lang.org/install を参照
+- git (leani がエンジンを取得するときに使う)
+- uv。インストール方法は https://docs.astral.sh/uv/getting-started/installation/ を参照。Python 3.11 以上が無い場合は、uv が Python を用意する
+
+次のコマンドで leani をインストールする。
 
 ```
 uv tool install git+https://github.com/watanany/leani
 ```
 
-`leani` コマンドを `~/.local/bin` に置く。
+uv は `leani` コマンドを `~/.local/bin` に置く。
+`~/.local/bin` が PATH に無い場合は、`uv tool update-shell` を実行する。
 
-clone したリポジトリから入れるなら、リポジトリの中で次を実行する。
+## はじめての起動
 
-```
-uv tool install --editable . --force
-```
+Lake プロジェクトの外で `leani` を実行すると、leani は elan のデフォルトの Lean で起動する。
+`1 + 1` を入力して `2` が表示されれば、準備は完了している。
 
-`~/.local/bin/leani` がリポジトリの `src/` を直接読むので、`git pull` やコードの
-変更は次の起動から反映される。入れ直すのは `pyproject.toml` の依存やエントリ
-ポイントを変えたときだけでいい。`--force` は、git から入れた leani が既にあるときに
-置き換えるために付けている。
+leani は Lean のバージョンごとに、初回の起動時にエンジンを GitHub から clone してビルドする。
+このため、初回の起動にはネットワークが必要で、時間もかかる。
+先にビルドだけ済ませたい場合は `leani --setup` を実行する。
 
-必要なものは `elan` (Lean 本体と `lake`) と `git` の 2 つ。どちらかが PATH に
-無ければ起動時にエラーを表示する。Python は 3.11 以上が必要。Python 側の依存は
-prompt_toolkit だけで、インストーラが一緒に入れる。
+Lake プロジェクトの中で `leani` を実行すると、leani はそのプロジェクトの `lean_lib` を import して起動する。
+leani はプロジェクトをビルドしないので、先にプロジェクトで `lake build` を実行しておく。
 
-エンジンは leani が用意する。使う Lean のバージョンごとに
-`~/.local/state/leani/engine/<バージョン>` へ clone してビルドし、初回の起動だけ
-10 秒ほど余分にかかる。先に済ませておくなら `leani --setup`、自動で用意させたく
-なければ `LEANI_NO_SETUP=1` (手順を出して終わる)。
-
-自分で clone したものを使うなら設定の `engine` か `LEANI_ENGINE` で指す。この
-ときはビルドもバージョンの管理も leani はしない。Lake プロジェクトの外なら、そのエンジンを
-ビルドしたバージョン (`lean-toolchain`) に合わせて起動する。プロジェクトとバージョンが食い違う
-ときは olean が読めず起動直後に落ちるだけなので、作り直す手順を示して起動を中止する。
-
-## 環境の設定
-
-「どの Lake プロジェクトの上で何を import して起動するか」を
-`~/.config/leani/config.toml` に置く。GHCi の `~/.ghci`、IPython の profile と
-同じ位置づけで、プロジェクトの名前はコードではなくここにだけ書く。
-
-```toml
-default = "main"
-engine = "~/src/lean-repl"   # 自分で用意したエンジンを使う場合
-
-[env.main]
-project = "~/src/my-project"
-imports = ["MyProject"]
-
-[env.math]
-project = "~/src/my-project"
-imports = ["MyProject.Analysis"]
-prompt = "λ∀> "
-```
+Mathlib を使う場合は、Mathlib を依存に持つ Lake プロジェクトを用意する (`lake new <名前> math` で作れる)。
+そのプロジェクトで次のコマンドを実行する。
 
 ```
-leani                  # default の環境
-leani -e math          # 名前で選ぶ
-leani -p . -i MyLib    # 設定を使わずその場で指定
-leani foo.lean         # 読み込んで起動
-leani --setup          # エンジンだけ用意して終わる
+lake exe cache get
+leani -i Mathlib
 ```
 
-設定が無くても動く。cwd から `lakefile.toml` / `lakefile.lean` を持つ一番近い
-親ディレクトリを探し、そこの `lean_lib` を import する。Lake プロジェクトの外なら
-Lean 本体だけで起動する。`LEAN_PATH` は `lake env` を呼んで解決し、
-`lake-manifest.json` と `lean-toolchain` のどちらより新しいキャッシュがあれば
-使い回す (`lake env` は 1 秒近くかかる)。`LEAN_PATH` は core の olean も指すので、
-キャッシュは toolchain ごとに分けて持つ。
+Mathlib を import すると、起動に 6〜11 秒かかる。
+`lake exe cache get` か `lake build` を実行していないと、leani は `import が通らない` と表示して起動を中止する。
 
-`import Lean` は設定に関わらず必ず入る。完結判定と補完のクエリが
-`Lean.Parser` と `CoreM` を使うため。
+## よく使うコマンド
 
-import が 1 つでも解決できないと、エンジンはヘッダを丸ごと捨てて (エラーも
-出さずに) 起動してしまう。`import Lean` ごと落ちて何も通らない環境になるので、
-起動したかを毎回確かめて、確認できなければ起動を中止する。`:l` で読んだファイルの先頭の import も
-同じように確かめる。設定の値の型が違うときも同じで、場所を示して起動を中止する
-(`env.math.imports は配列で書く: ["Mathlib"]`)。
+REPL の中で `:help` を実行すると、すべてのコマンドを確認できる。
 
-## できること
+| コマンド           | 説明                                                      |
+|--------------------|-----------------------------------------------------------|
+| `:t <expr>`        | 式の型を表示する (`#check`)                               |
+| `:l <file>` / `:r` | ファイルを読み込む / 読み込み直す                         |
+| `:prove`           | `sorry` の証明モードを始める。タクティクを 1 つずつ試せる |
+| `:save <file>`     | 実行した宣言を `.lean` ファイルに書き出す                 |
+| `:q`               | leani を終了する (Ctrl-D でも終了する)                    |
 
-| 機能          | 中身                                                                                                                                                                                                          |
-|---------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 複数行入力    | 入力が終わったかを Lean のパーサに聞く (正規表現で近似しない)。インデントが続く限り読み、空行で確定。確定した直後にインデント行を書けば、直前の入力に遡って続きとして読み直す                                |
-| 行編集・履歴  | prompt_toolkit。履歴は `~/.local/state/leani/history` に、確定した入力を 1 件として追記する。複数行のブロックも 1 件なので Ctrl-P 1 回で丸ごと戻る。Ctrl-C で捨てた書きかけも残る。追記しかしないので、別の形式の履歴 (readline や libedit のもの) があっても上書きしない                                                                    |
-| 略記入力      | `\to` `\all` `\dot` と打って space を押すと `→` `∀` `·` になる。VS Code の Lean 拡張と同じ表記で、本家の表をそのまま持つ (1829 件)。space はそのまま入るので `a \to b` は `a → b` になる。Tab は補完のままにしてある                     |
-| 単独の式      | `#eval` に包む。評価できない項 (`Real.pi` など) は `#check` に落ちる                                                                                                                                          |
-| 単体の `do`   | 最初の action でモナドが決まるのを避け、失敗したら `IO` として読み直す                                                                                                                                        |
-| 宣言          | コマンドとして送る。エラーなら環境を進めない (GHCi と同じ)                                                                                                                                                    |
-| エラー表示    | 該当行とキャレットを添える                                                                                                                                                                                    |
-| 補完 (Tab)    | 定数名を prefix 検索。名前空間ごとにまとめて取ってキャッシュするので、mathlib でも同じ名前空間の 2 回目以降は待ちが無い (実測 1.05 秒 → 0.00 秒)。REPL で通した宣言も候補に入る                              |
-| 証明モード    | `sorry` を出したら `:prove <n>` でタクティクを 1 行ずつ試せる。閉じたらその `sorry` だけをスクリプトで埋め戻して通し直すので、複数あれば 1 個ずつ埋めていける。`exact?` `simp?` は提案された項に置き換えてスクリプトに入れる (`:save` したファイルで再検索させないため) |
-| init ファイル | `~/.config/leani/init.lean`。base に重ねるので `:reset` しても残る。`:l` は環境を作り直すが、そのあとに重ね直す                                                                                                                                              |
-| 復帰          | 評価中の Ctrl-C、エンジンの異常終了、PANIC のいずれでもエンジンを作り直し、通した宣言を replay する (実測 1.4 秒でプロンプトに戻る)。証明していた宣言は `sorry` を拾い直して `:prove` で入り直せる。replay で落ちたものは名前を挙げて報告し、通らなかった分も途中で止まって実行できなかった分も保留して次の `:restart` で実行し直す (環境に無いものは `:save` の本体には書かず、コメントとして添える。`:reset` と `:l` は保留も捨てて、その旨を表示する)。作り直しにも失敗して環境が無いあいだは、打った行も `:reset` も受け付けず保留を残す (原因を直して `:restart`) |
+## ドキュメント
 
-| コマンド               |                                                                                                                         |
-|------------------------|-------------------------------------------------------------------------------------------------------------------------|
-| `:t <expr>`            | 型 (`#check`)                                                                                                           |
-| `:i <name>`            | 型と docstring                                                                                                          |
-| `:p <name>`            | 定義 (`#print`)                                                                                                         |
-| `:loogle <q>`          | 定理を探す。名前 (`Nat.succ_le`)、型 (`(?a -> ?b) -> List ?a -> List ?b`)、結論だけ (`\|- ?a + ?b = ?b + ?a`)、名前に含む語 (`"commutative"`) の 4 通りで書ける。エンジンではなく外部の loogle に問い合わせるので、探す先は mathlib。手元の環境に無い名前も出てくるため、どの module のものかを添える |
-| `:l <file>` / `:r`     | 読み込み / 読み直し                                                                                                     |
-| `:reset` / `:undo [n]` | 環境の操作                                                                                                              |
-| `:env [name]`          | 今の環境 / 設定した環境に切り替えて再起動。打った宣言は保留中のものも含めて切り替え先で実行し直す。起動できなければ元の環境に戻る              |
-| `:prove [n]`           | `sorry` の証明モードに入る (`:goals` `:script` `:undo` `:done`)。`:goals` は証明モードの外でも残っている `sorry` を出す |
-| `:save <file>`         | 通した宣言を `.lean` に書き出す (init と `:l` した分も入る)。`:l` でも `lean` でも読める (`:l` したファイルの `import` も書く)。既にあるファイルには書き込まない |
-| `:time`                | 実行時間の表示を切り替え                                                                                                |
-| `:restart`             | エンジンを作り直して宣言を replay                                                                                       |
-| `:{ ... :}`            | 複数行を明示的に囲む                                                                                                    |
-| `:!<cmd>`              | shell (Ctrl-C で止めても REPL は続く)                                                                                                                   |
-| `:q` / `:help`         | 終了 / 一覧。`leani -h` に CLI 側の一覧、`leani -V` にパス                                                          |
-
-証明モードの例:
-
-```
-λ> theorem tt (n : Nat) : n + 0 = n := by sorry
-sorry 1 [proofState 0]
-  n : Nat
-  ⊢ n + 0 = n
--- :prove で証明モードに入る (sorry 1 個)
-λ> :prove
-⊢> induction n with
-  | | zero => rfl
-  | | succ k ih => simp
-  |
-証明完了。
--- 埋め戻して通す:
-  theorem tt (n : Nat) : n + 0 = n := by
-    induction n with
-    | zero => rfl
-    | succ k ih => simp
-λ> #print axioms tt
-'tt' depends on axioms: [propext]
-```
-
-起動は Lean 本体だけなら 1 秒、中規模の環境で 1.4 秒、mathlib 入りで 6〜11 秒。
-olean をどれだけ OS がキャッシュしているかで変わる。
-
-## ファイルの場所
-
-|                         |                                                     |
-|-------------------------|-----------------------------------------------------|
-| 設定                    | `~/.config/leani/config.toml` (`LEANI_CONFIG`)      |
-| init                    | `~/.config/leani/init.lean` (`LEANI_INIT`)          |
-| 履歴                    | `~/.local/state/leani/history` (`LEANI_HISTORY`)    |
-| `lake env` のキャッシュ | `~/.local/state/leani/lake-env/`                    |
-| エンジン                | `~/.local/state/leani/engine/<バージョン>` (`LEANI_ENGINE`) |
-
-`XDG_CONFIG_HOME` / `XDG_STATE_HOME` があればそちらを見る。`leani -V` で実際に
-使っている場所が出る。
-
-
-## 中身を読むとき
-
-| ファイル           | 中身                                                                          |
-|--------------------|-------------------------------------------------------------------------------|
-| `SPEC.md`          | 何ができて、どういう性質を持つかの一覧。テストから生成する (`tools/spec.py`)   |
-| `tests/stories.py` | 誰の何を助けるか。コードから導けないので、ここが出典                          |
-| `REJECTED.md`      | 試して採用しなかった案。同じ案をもう一度思い付いたとき用                      |
-| `src/leani/`       | なぜこのコードがこうなのか。docstring とコメントに書いてある                  |
-
-副作用の有無でモジュールを分けて、docstring の頭にラベルを付けてある。
-
-| ラベル   | 意味                                                     |
-|----------|----------------------------------------------------------|
-| 純粋     | 入力だけで出力が決まる。同じ入力なら常に同じ結果         |
-| 読み取り | ファイルや環境変数を見るが、何も書き換えない             |
-| 副作用   | プロセス・端末・ファイルを操作する。上から下へ読む       |
-| 定数     | エンジンに投げるクエリの文字列。操作するものは無い       |
-
-| モジュール   | ラベル   | 中身                                     |
-|--------------|----------|------------------------------------------|
-| `types.py`   | 純粋     | 型と例外                                 |
-| `places.py`  | 読み取り | 設定・履歴・キャッシュのパス         |
-| `queries.py` | 定数     | エンジンに投げるクエリ                   |
-| `abbrev.py`  | 純粋     | 略記表と展開                             |
-| `pure.py`    | 純粋     | 判定と整形                               |
-| `config.py`  | 読み取り | どの環境で起動するか                     |
-| `boot.py`    | 副作用   | 起動の用意 (toolchain、エンジンのビルド) |
-| `engine.py`  | 副作用   | repl プロセス                            |
-| `show.py`    | 副作用   | 表示を出す                               |
-| `repl.py`    | 副作用   | フロント (入力・コマンド・証明モード)    |
-| `cli.py`     | 副作用   | 入口 (引数と `main`)                     |
-
-判定と整形はすべて純粋な側にある (完結判定・エラー位置の枠・提案の取り出し・
-補完の単位・設定の検査)。純粋・読み取り・定数のモジュールが副作用のモジュールを
-import していないことは `uv run ruff check .` が検出する (`pyproject.toml` の
-flake8-tidy-imports)。この約束はテストではなく lint で縛っているので `SPEC.md`
-には出ない。状態を持つのは repl プロセスを抱える `Engine` と、
-入力バッファと証明モードを持つ `Repl` の 2 つだけ。分岐は `if` の連続ではなく
-`match` / `case` で書き、`return` のあとも `else` を省かないので、`ruff` の
-RET505 は入れていない。入れなかったルールは `pyproject.toml` に理由ごと並べてある。
-
-## テスト
-
-```
-uv sync
-uv run pytest                         # 187 件、4 分
-uv run pytest -n auto                 # 並列で 40 秒
-uv run pytest tests/test_parsing.py   # 純関数だけなら 0.2 秒
-uv run pytest -k 履歴                 # 名前で絞る
-uv run ruff format . && uv run ruff check .
-uv run mypy                           # src と tools を strict で見る
-```
-
-`-n auto` を既定にはしていない。端末の層は pty を fork するので、xdist の
-worker (スレッドを持つ) の下では forkpty の警告が出る。手元で回す間は速い方が
-効くが、既定は直列のままにしておく。
-
-Lean 本体だけを import する環境で走るので、Lake プロジェクトは不要
-(エンジンは初回に自分で用意する)。純関数・エンジン・端末の 3 層で、上ほど速い。
-件数はエンジンの層が一番多く (状態の並びで出るバグを追うため)、端末の層は絞って
-ある。層の分け方と、エンジン層で 1 行ごとに確認している不変条件は
-`tests/conftest.py` の先頭と `INVARIANTS` にある。
-
-純関数の層には hypothesis で書いた性質テストが 5 件ある。略記表 1829 件すべてや
-括弧の入れ子のように、例を並べても届かない所だけに使う。落ちたときに何を確かめて
-いたのか読み取りにくいので、それ以外は例のまま置いてある。
-
-テストには `@story(...)` でユーザーストーリーの番号が付いていて、`SPEC.md` は
-そこから組む。テストが 0 件のストーリーは `SPEC.md` に空欄として出る (いまは無い。
-機能そのものが無い 2 件だけ「まだ作っていない」と出る)。
+- [使い方](docs/usage.md): 機能、すべてのコマンド、証明モード、起動オプション
+- [設定](docs/config.md): 設定ファイル、init ファイル、環境変数、ファイルの場所
+- [エラーが出たとき](docs/troubleshooting.md): エラーメッセージごとの対処
+- [開発](CONTRIBUTING.md): テストと lint の実行方法、開発用のドキュメント
