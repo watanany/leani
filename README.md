@@ -57,7 +57,7 @@ leani -i Mathlib
 ```
 
 Mathlib を import すると、起動に 6〜11 秒かかる。
-`lake exe cache get` か `lake build` を実行していないと、leani は `import が通らない` と表示して起動を中止する。
+`lake exe cache get` か `lake build` を実行していないと、leani は `import に失敗した` と表示して起動を中止する。
 
 ## よく使うコマンド
 

@@ -133,14 +133,14 @@ def complaints(tests: list[Test]) -> list[str]:
     out: list[str] = []
     for t in tests:
         if not t["stories"]:
-            out.append(f"ストーリーの印が無い: {t['where']} / {t['what']}")
+            out.append(f"@story が無い: {t['where']} / {t['what']}")
         out.extend(
             f"tests/stories.py に無い番号: {sid} ({t['what']})"
             for sid in t["stories"]
             if sid not in STORIES
         )
     out.extend(
-        f"UNBUILT に居るのに STORIES に無い: {sid}"
+        f"UNBUILT にあるのに STORIES に無い: {sid}"
         for sid in sorted(UNBUILT)
         if sid not in STORIES
     )

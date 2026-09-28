@@ -148,8 +148,8 @@ def describe_エンジンが異常終了してもセッションが続く():
 
         mocker.patch.object(repl.engine, "send_cmd", side_effect=crash_once)
         out = repl.feed("def afterCrash := 3")
-        assert "作り直す" in out, out
-        assert "1 件を replay" in out, out
+        assert "再起動する" in out, out
+        assert "1 件を再実行" in out, out
         assert "9" in repl.feed("survivor"), "replay されていない"
         assert "3" in repl.feed("afterCrash"), (
             "異常終了のときに送っていた宣言が再実行されていない"
@@ -205,7 +205,7 @@ def describe_エンジンを再起動できないとき():
             leani.engine.Engine, "boot", side_effect=leani.types.EngineDied()
         )
         out = repl.feed(":restart")
-        assert "作り直せなかった" in out, out
+        assert "再起動できなかった" in out, out
 
     @story("F1")
     def it_失敗しても宣言を捨てない(repl, mocker):
@@ -220,7 +220,7 @@ def describe_エンジンを再起動できないとき():
         assert repl.repl.eng.log == []
 
         mocker.stopall()
-        assert "1 件を replay" in repl.feed(":restart")
+        assert "1 件を再実行" in repl.feed(":restart")
         assert "4" in repl.feed("kept")
 
 
@@ -410,17 +410,17 @@ def describe_起動時の確認():
         cfg = leani.config.EnvConfig.make("bogus", imports=["NoSuchModuleXYZ"])
         eng = leani.engine.Engine(cfg)
         try:
-            with pytest.raises(leani.types.EngineDied, match="import が通らない"):
+            with pytest.raises(leani.types.EngineDied, match="import に失敗した"):
                 eng.boot()
         finally:
             eng.kill()
 
     @story("G4")
     def it_エンジンが異常終了したら終了シグナルや終了コードを報告に含める():
-        # バージョンの合わないエンジンを読み込むと、repl は何も出力せずに消える。
-        # 終了の状態を報告に含めないと、呼び出し側は理由を伝えられず、
-        # 「import が通らない」という推測だけが残って、ユーザーに書き間違っていない
-        # import を疑わせる。
+        # バージョンの合わないエンジンを読み込むと、repl は何も出力せずに終了する。
+        # 終了シグナルや終了コードを報告に含めないと、呼び出し側は理由を伝えられず、
+        # 「import に失敗した」という推測だけが表示される。ユーザーは書き間違えて
+        # いない import を疑うことになる。
         cfg = leani.config.EnvConfig.make("bogus")
         eng = leani.engine.Engine(cfg)
         try:
@@ -628,7 +628,7 @@ def describe_タクティクの途中でエンジンが変わる():
         out = repl.feed("constructor")
 
         assert "証明完了" not in out, f"再起動したエンジンの応答をそのまま使った: {out}"
-        assert "証明モードを抜けた" in out, out
+        assert "証明モードを終了した" in out, out
         assert repl.repl.proof is None
 
         # 証明モードを終了したのに last.proof が立っていると、続きのインデントした行で
@@ -638,7 +638,7 @@ def describe_タクティクの途中でエンジンが変わる():
         assert "theorem twoGoals : 1 = 1 ∧ 2 = 2 := by sorry" in repl.declarations
 
     @story("A4", "F1", "E1")
-    def it_中断しても証明モードに入り直せる(repl, mocker):
+    def it_中断しても証明モードを再開できる(repl, mocker):
         repl.feed("theorem again : 1 = 1 := by sorry")
         repl.feed(":prove")
 
@@ -653,7 +653,7 @@ def describe_タクティクの途中でエンジンが変わる():
 
         mocker.patch.object(leani.engine.Engine, "send_tactic", stop_once)
         out = repl.feed("rfl")
-        assert "入り直せる" in out, out
+        assert "再開できる" in out, out
 
         # replay で戻った宣言の sorry を取得し直していないと、宣言はあるのに
         # :prove が「sorry が無い」と言うだけになる。
@@ -676,7 +676,7 @@ def describe_replay_で戻せなかったもの():
         path.write_text("def libA := (10 : Nat) +\n")  # 直せない形に壊す
         out = repl.feed(":restart")
 
-        assert "読み直せなかった" in out, out
+        assert "読み込み直せなかった" in out, out
         assert "def usesA" in out, out
         # env に無いものを sources() が並べ続けると、:save したファイルが
         # :l で「すでに宣言されている」というエラーになる。
@@ -919,12 +919,12 @@ def describe_プローブの途中でエンジンが異常終了する():
         # 証明モードが終了したあとに command として処理すると、タクティクが
         # 宣言として送られて "expected command" になる。
         assert "expected command" not in out, out
-        assert "送らなかった" in out, out
+        assert "実行しなかった" in out, out
         # そのうえ submit_cmd の clear_pending が取得し直した sorry を消すので、
-        # 直前に表示した「:prove で入り直せる」が正しくなくなる。
-        assert "入り直せる" in out, out
+        # 直前に表示した「:prove で再開できる」が正しくなくなる。
+        assert "再開できる" in out, out
         assert "sorry" in repl.declarations[-1], repl.declarations
-        assert repl.feed(":prove").count("⊢") >= 1, "案内どおりに入り直せない"
+        assert repl.feed(":prove").count("⊢") >= 1, "案内どおりに再開できない"
 
 
 def describe_保留した宣言とエンジンの世代():
@@ -1146,15 +1146,15 @@ def describe_再起動に失敗したときの証明モード():
 
         # 証明モードを終了しないと、以降どの行にも赤い "Unknown proof state." だけを返す
         # 使えない証明モードのままになる (抜ける方法の案内も表示されない)。
-        assert "作り直せなかった" in out, out
-        assert "証明モードを抜けた" in out, out
+        assert "再起動できなかった" in out, out
+        assert "証明モードを終了した" in out, out
         assert repl.repl.proof is None
 
         mocker.stopall()
         assert "1 件" in repl.feed(":restart")
 
 
-def describe_起点の環境を失ったとき():
+def describe_元になる環境を失ったとき():
     """
     boot が失敗すると環境がどこにも無い。この状態で操作を受け付けても、事実と違う報告を
     せず、打ったテキストを失わないことだけは守る (原因を直せば :restart で戻る)。
@@ -1178,7 +1178,7 @@ def describe_起点の環境を失ったとき():
         # base は終了したプロセスの id。設定し直すと submit の「env が無い」ガードが
         # 無効になり、import が 1 つも無い環境に宣言が追加される (何を書いても
         # エラーになる)。
-        assert "起点の環境が無い" in out, out
+        assert "元になる環境が無い" in out, out
         assert repl.repl.eng.unplayed == ["def held := 1"]
 
         mocker.stopall()
@@ -1202,12 +1202,12 @@ def describe_起点の環境を失ったとき():
         repl.check("replay_into のあと")
 
     @story("F1", "D2")
-    def it_型も答えない(repl, mocker):
+    def it_型も返さない(repl, mocker):
         _no_env(repl, mocker)
 
         # 答えると Init だけの環境からの答えになる。設定の import が無いので
         # 正しくない答えになるうえ、「エンジンは正常」に見えてしまう。
-        assert "取れなかった" in repl.feed(":t 1 + 1")
+        assert "取得できなかった" in repl.feed(":t 1 + 1")
         assert repl.repl.eng.env is None
 
     @story("F1", "E1")
@@ -1266,7 +1266,7 @@ def describe_解決できない_import_のファイル():
         # 出さずに) 環境を返す。boot と同じ確認をしないと、「読み込んだ」と
         # 報告したうえで、完結判定も補完も宣言も失敗する環境のままになる。
         assert "読み込めなかった" in out, out
-        assert "ヘッダ" in out, out
+        assert "import をすべて無視した" in out, out
         assert "2" in repl.feed("#eval 1 + 1"), "手元の環境まで失った"
 
 
@@ -1301,6 +1301,6 @@ def describe_定理を外部サービスで探す():
         mocker.patch.object(leani.repl, "loogle", side_effect=err)
 
         out = repl.feed(":loogle Nat")
-        assert "届かない" in out, out
+        assert "検索に失敗した" in out, out
         assert "timed out" in out, out
         assert "2" in repl.feed("1 + 1"), "loogle の失敗でセッションが壊れた"

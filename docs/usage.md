@@ -74,14 +74,14 @@ REPL の中で `:help` を実行すると、同じ一覧を確認できる。
 sorry 1 [proofState 0]
   n : Nat
   ⊢ n + 0 = n
--- :prove で証明モードに入る (sorry 1 個)
+-- :prove で証明モードを始められる (sorry 1 個)
 λ> :prove
 ⊢> induction n with
   | | zero => rfl
   | | succ k ih => simp
   |
 証明完了。
--- 埋め戻して通す:
+-- sorry をスクリプトで置き換えて実行する:
   theorem tt (n : Nat) : n + 0 = n := by
     induction n with
     | zero => rfl
@@ -104,7 +104,7 @@ leani -e math          # 設定した環境を名前で選ぶ
 leani -p . -i MyLib    # 設定の環境を使わずに、Lake プロジェクトと import を指定する
 leani foo.lean         # ファイルを読み込んで起動する
 leani --setup          # エンジンを用意して終了する
-leani -V               # Lean のバージョンと、使っているファイルの場所を表示する
+leani -V               # 環境、Lean のバージョン、ファイルの場所を表示する
 ```
 
 `-i` は繰り返して指定できる。

@@ -71,7 +71,10 @@ def toolchain(cfg: EnvConfig) -> str:
     """
     tc = guess_toolchain(cfg)
     if tc is None:
-        raise EngineError("Lean のバージョンが分からない (lean --version が答えない)")
+        raise EngineError(
+            "Lean のバージョンが分からない "
+            "(lean-toolchain が無く、lean --version からも取得できない)"
+        )
 
     return tc
 
@@ -86,7 +89,7 @@ def manual_setup(path: str, tc: str, tag: str | None) -> str:
     """
     branch = tag or f"<{toolchain_version(tc)} 以下で一番新しいタグ>"
     return (
-        f"手で用意する場合:\n"
+        f"手動で用意する場合:\n"
         f"  git clone --branch {branch} {ENGINE_REPO} {path}\n"
         f"  echo {tc} > {path}/lean-toolchain\n"
         f"  cd {path} && lake build repl"
@@ -106,14 +109,16 @@ def fetch_tags() -> list[str]:
             env=SETUP_ENV,
         )
     except subprocess.TimeoutExpired as e:
-        raise EngineError(f"repl のタグを聞くのに {SETUP_TIMEOUT} 秒かかった") from e
+        raise EngineError(
+            f"repl のタグの取得が {SETUP_TIMEOUT} 秒で終わらなかった"
+        ) from e
     except OSError as e:
-        raise EngineError(f"git を呼べなかった: {e}") from e
+        raise EngineError(f"git を実行できなかった: {e}") from e
     except KeyboardInterrupt as e:
         raise EngineError("^C 中断した") from e
 
     if r.returncode != 0:
-        raise EngineError(f"repl のタグが取れなかった:\n{r.stderr.strip()}")
+        raise EngineError(f"repl のタグを取得できなかった:\n{r.stderr.strip()}")
 
     # 各行は "<sha>\trefs/tags/v4.33.0" の形。タグ名だけを取り出す。
     return [
@@ -129,7 +134,7 @@ def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
     try:
         r = subprocess.run(list(cmd), cwd=cwd, check=False, env=SETUP_ENV)
     except OSError as e:
-        raise EngineError(f"{cmd[0]} を呼べなかった: {e}") from e
+        raise EngineError(f"{cmd[0]} を実行できなかった: {e}") from e
     except KeyboardInterrupt as e:
         # 同じプロセスグループなので、Ctrl-C は leani にも届く。起動の失敗として扱う。
         raise EngineError(f"^C 中断した: {' '.join(cmd)}") from e
@@ -148,7 +153,7 @@ def build_engine(path: str, tc: str, tag: str) -> None:
     """
     version = toolchain_version(tc)
     note = "" if tag == version else f" (タグ {tag} を {version} でビルドする)"
-    print(dim(f"エンジンを用意する: {version}{note} — 初回のみ"), flush=True)
+    print(dim(f"エンジンを用意する (初回のみ): {version}{note}"), flush=True)
 
     # leani を 2 つ同時に起動しても衝突しないよう、作業用のディレクトリは
     # プロセスごとに分ける。
@@ -166,7 +171,7 @@ def build_engine(path: str, tc: str, tag: str) -> None:
         # ビルドしている間に別の leani がエンジンを配置していたら、そのエンジンは使用中
         # かもしれないので、消さずに使う。
         if os.path.isfile(f"{path}/.lake/build/bin/repl"):
-            print(dim(f"別に用意されていた: {path}"), flush=True)
+            print(dim(f"別の leani がエンジンを用意していた: {path}"), flush=True)
             return
 
         shutil.rmtree(path, ignore_errors=True)
@@ -193,7 +198,7 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
     elif NO_SETUP and not asked:
         raise EngineError(
             f"エンジンが無い: {path}\n"
-            f"  LEANI_NO_SETUP が立っているので自動で用意しない "
+            f"  LEANI_NO_SETUP が設定されているので自動で用意しない "
             f"(leani --setup で用意する)\n{manual_setup(path, tc, None)}"
         )
 
@@ -277,10 +282,10 @@ def write_lake_env(cache: str, project: str) -> None:
         )
     except subprocess.TimeoutExpired as e:
         raise EngineError(
-            f"lake env が {SETUP_TIMEOUT} 秒で返らなかった ({project})"
+            f"lake env が {SETUP_TIMEOUT} 秒で終わらなかった ({project})"
         ) from e
     except OSError as e:
-        raise EngineError(f"lake env を呼べなかった ({project}): {e}") from e
+        raise EngineError(f"lake env を実行できなかった ({project}): {e}") from e
 
     if r.returncode != 0:
         raise EngineError(f"lake env が失敗した ({project}):\n{r.stderr.strip()}")

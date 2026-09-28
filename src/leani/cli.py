@@ -23,19 +23,19 @@ USAGE = f"""\
 leani [オプション] [file.lean]
 
   -e, --env <name>     設定した環境で起動する
-  -i, --import <Mod>   import を足す (繰り返せる)
+  -i, --import <Mod>   import するモジュールを追加する (繰り返せる)
   -p, --project <dir>  Lake プロジェクトを指定する
-      --setup          エンジンを用意して終わる (普段は起動時に自動)
-  -V, --version        バージョンとパス
-  -h, --help           これ
+      --setup          エンジンを用意して終了する (通常は起動時に自動で用意する)
+  -V, --version        環境、Lean のバージョン、ファイルの場所を表示する
+  -h, --help           このヘルプを表示する
 
-環境は {CONFIG} に書く。無ければ cwd の
-lakefile から Lake プロジェクトと lean_lib を推測し、その外なら Lean 本体だけで
-起動する。init ファイルは {INIT}。
+環境は {CONFIG} に書く。設定が無ければ、カレントディレクトリの
+lakefile から Lake プロジェクトと lean_lib を推測する。Lake プロジェクトの外では
+Lean 本体だけで起動する。init ファイルは {INIT}。
 
 エンジン (leanprover-community/repl) は初回だけ git clone と lake build で用意し、
-使う Lean のバージョンごとに {ENGINE_CACHE} の下へ置く。
-自分で clone したものを使うなら engine か LEANI_ENGINE で指す。
+使う Lean のバージョンごとに {ENGINE_CACHE} の下に置く。
+自分でビルドしたエンジンを使う場合は、設定の engine か LEANI_ENGINE で指定する。
 
 """
 

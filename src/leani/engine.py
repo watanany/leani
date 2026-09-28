@@ -175,7 +175,7 @@ class Engine:
 
         バージョンの合わない .olean や壊れたエンジンを読み込むと、repl は何も出力
         せずにシグナルで終了する。終了の仕方を記録しないと呼び出し側は理由を示せず、
-        「import が通らない」という推測だけが表示される。ユーザーは正しく書いた
+        「import に失敗した」という推測だけが表示される。ユーザーは正しく書いた
         import を疑うところから調べることになる。
 
         EOF を読んだ直後は、まだ終了ステータスを取得できないことがあるので、少し待つ。
@@ -189,7 +189,9 @@ class Engine:
             return EngineDied("エンジンが応答しない")
 
         how = (
-            f"落ちた ({signal_name(-code)})" if code < 0 else f"終了した (exit {code})"
+            f"異常終了した ({signal_name(-code)})"
+            if code < 0
+            else f"終了した (exit {code})"
         )
         return EngineDied(f"エンジンが{how}\n  {self.dir}/.lake/build/bin/repl")
 
@@ -252,7 +254,9 @@ class Engine:
         if fresh:
             return self.send({"cmd": src})
         elif self.env is None:
-            raise NoEnvironment(f"環境が無いのに送ろうとした: {head_line(src)}")
+            raise NoEnvironment(
+                f"環境が無いのにコマンドを送ろうとした: {head_line(src)}"
+            )
         else:
             return self.send({"cmd": src, "env": self.env})
 
@@ -352,7 +356,7 @@ class Engine:
             # バージョンが一致しなくなったときは、このメッセージにしか情報が無い
             # (import 自体は正しく書かれている)。
             why = error_text(resp)
-            head = f"import が通らない: {' '.join(['Lean', *self.cfg.imports])}"
+            head = f"import に失敗した: {' '.join(['Lean', *self.cfg.imports])}"
             raise EngineDied(f"{head}\n{textwrap.indent(why, '  ')}" if why else head)
 
         self.env = self.base = resp["env"]
@@ -412,19 +416,23 @@ class Engine:
         except OSError as e:
             why = e.strerror or str(e)
         except (EngineDied, Interrupted):
-            why = "読み直している途中で止まった"
+            why = (
+                "読み込み直している途中で、"
+                "エンジンが異常終了したか、Ctrl-C で中断された"
+            )
         else:
             if not out.bad:
                 return out.note
-            why = "読み直したら通らなかった"
+            why = "読み込み直したらエラーになった"
 
         self.loaded, self.loaded_src = None, None
-        return f"{loaded} を読み直せなかった: {why}"
+        return f"{loaded} を読み込み直せなかった: {why}"
 
     def reapply_init(self) -> str | None:
         """
-        init を今の base の上でもう一度実行する。失敗したら init_src を捨てて
-        理由を返す。
+        init を今の base の上でもう一度実行する。エラーになったら init_src を捨てて
+        理由を返す。エンジンが異常終了したときや中断されたときは、init_src を残した
+        まま理由を返す。
 
         init_src を捨てずに残すと、reload と同じく sources() が env に無い宣言を
         返すようになる。
@@ -435,11 +443,14 @@ class Engine:
         try:
             resp = self.send_cmd(self.init_src)
         except (EngineDied, Interrupted):
-            return "init を重ね直している途中で止まった"
+            return (
+                "init ファイルの再実行中に、"
+                "エンジンが異常終了したか、Ctrl-C で中断された"
+            )
 
         if has_error(resp):
             self.init_src = None
-            return "init を重ね直せなかった"
+            return "init ファイルを再実行したらエラーになった"
 
         self.env = self.base = resp["env"]
         return None
@@ -459,7 +470,10 @@ class Engine:
             return None
 
         why = error_text(resp)
-        head = "import が解決できないのでヘッダが丸ごと捨てられた"
+        head = (
+            "解決できない import があったので、"
+            "repl はファイルの import をすべて無視した"
+        )
         return f"{head}: {head_line(why)}" if why else head
 
     def replay(self, log: Sequence[str]) -> Replay:
@@ -479,7 +493,7 @@ class Engine:
             # 「何件成功したか」を返す関数なので、例外を raise せずに全件を
             # 保留にし、理由を Replay に含めて返す。
             self.unplayed = list(log) + self.unplayed
-            return Replay([], [], list(log), ["環境が無いので実行し直せない"], [])
+            return Replay([], [], list(log), ["環境が無いので再実行できない"], [])
 
         for n, src in enumerate(log):
             try:

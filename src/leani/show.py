@@ -34,7 +34,7 @@ def panic_check(resp: Response) -> bool:
     if line is None:
         return False
     else:
-        print(red("エンジンが PANIC した。:restart で作り直すのが安全。"))
+        print(red("エンジンが PANIC した。:restart で再起動したほうが安全"))
         print(dim(line))
         return True
 
@@ -62,7 +62,7 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
         # repl がリクエスト全体を拒否した (env や proofState が無い)。messages は
         # 空なので、ここで表示しないと画面に何も表示されない。
         print(red(note.strip()))
-        print(dim("  エンジンと環境が食い違っている。:restart で作り直せる"))
+        print(dim("  leani が持っている環境がエンジンに無い。:restart で再起動できる"))
 
     if has_error(resp):
         # エラーになった宣言は環境に追加されていない。その sorry のゴールを表示しても

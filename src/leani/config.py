@@ -115,7 +115,7 @@ def load_config(path: str = CONFIG) -> Json:
         with open(path, "rb") as f:
             return tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as e:
-        raise ConfigError(f"設定が読めない: {path}\n  {e}") from e
+        raise ConfigError(f"設定ファイルを読めない: {path}\n  {e}") from e
 
 
 def lake_root(start: str) -> str | None:
@@ -201,9 +201,10 @@ def problem(cfg: EnvConfig) -> str | None:
             (
                 f"エンジンのバージョンがプロジェクトと違う "
                 f"(プロジェクト={proj_tc} / エンジン={eng_tc})。\n"
-                f"  {proj_tc} で作り直す: cd {cfg.engine} && "
+                f"  {proj_tc} でビルドし直す: cd {cfg.engine} && "
                 f"echo {proj_tc} > lean-toolchain && lake build repl\n"
-                f"  または LEANI_ENGINE を外して leani に用意させる"
+                "  または engine の指定 (env.<名前>.engine、engine、LEANI_ENGINE) "
+                "を外して leani に用意させる"
             ),
         ),
     ]
