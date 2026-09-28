@@ -23,10 +23,11 @@ class EnvConfig:
     どの Lake プロジェクトの上で何を import して起動するか。
 
     ghci の ~/.ghci、ipython の profile と同じ位置づけ。特定のプロジェクト名を
-    コードに持たないため、名前は設定ファイル (config.toml) と CLI 引数だけに置く。
-    設定が無くても cwd の Lake プロジェクトから推測して動く。
+    コードに書かないため、名前は設定ファイル (config.toml) と CLI 引数だけに書く。
+    設定が無くても、leani はカレントディレクトリの Lake プロジェクトから推測して
+    起動する。
 
-    決まったら変わらないので frozen。作るときは値を整える make を通す。
+    作ったあとは変えないので frozen にする。作るときは値を整える make を使う。
     """
 
     name: str
@@ -70,7 +71,7 @@ def abspath(path: str | None) -> str | None:
 
 
 def as_str(value: Any, where: str) -> str | None:
-    """設定の文字列 1 つ。型が違えばエラーにする (traceback にしない)。"""
+    """設定の文字列 1 つ。型が違えばエラーにする (traceback は出さない)。"""
     if value is None or isinstance(value, str):
         return value
     else:
@@ -81,10 +82,10 @@ def as_str(value: Any, where: str) -> str | None:
 
 def as_imports(value: Any, where: str) -> Sequence[str]:
     """
-    import の並び。
+    import のリスト。
 
-    文字列 1 つを黙って受けると 1 文字ずつの import になり、どれも解決でき
-    ないのでヘッダが丸ごと捨てられる (import Lean ごと消える)。エラーにするほうがいい。
+    文字列 1 つをエラーにせずに受け取ると 1 文字ずつの import になる。どれも解決
+    できないので、repl はヘッダ全体を捨てる (import Lean も消える)。なのでエラーにする。
     """
     if value is None:
         return ()
@@ -97,7 +98,7 @@ def as_imports(value: Any, where: str) -> Sequence[str]:
 
 
 def as_table(value: Any, where: str) -> Json:
-    """設定の表 1 つ。型が違えばエラーにする。"""
+    """設定のテーブル 1 つ。型が違えばエラーにする。"""
     if value is None:
         return {}
     elif isinstance(value, dict):
@@ -155,10 +156,11 @@ def problem(cfg: EnvConfig) -> str | None:
     この環境で起動できない理由。無ければ None。
 
     起動時と :env の切り替え時の両方で使う。切り替えでは今のエンジンを
-    終了させる前に呼ぶので、問題があれば何も壊さずにエラーにできる。見るだけで
-    何も変えない。
+    終了させる前に呼ぶので、問題があれば今のセッションを残したままエラーにできる。
+    この関数は状態を見るだけで、何も変えない。
     """
-    # バージョンが違うエンジンでは olean が読めず repl が起動直後に落ちる。
+    # Lean のバージョンが違うエンジンは `.olean` を読めず、repl は起動直後に
+    # 異常終了する。
     proj_tc = read_toolchain(cfg.project)
     eng_tc = read_toolchain(cfg.engine) if cfg.engine else None
 
@@ -169,17 +171,19 @@ def problem(cfg: EnvConfig) -> str | None:
         ),
         (not shutil.which("elan"), "elan が PATH に無い"),
         (not shutil.which("lake"), "lake が PATH に無い"),
-        # エンジンを leani が用意する場合の依存。取りに行く前に見ておく。
+        # leani がエンジンを用意する場合に必要なもの。取得する前に確認する。
         (
             cfg.engine is None and not shutil.which("git"),
             f"git が PATH に無い。エンジン ({ENGINE_REPO}) の取得に使う",
         ),
-        # 明示されたエンジンは leani が面倒を見ないので、揃っているかだけ見る。
+        # 指定されたエンジンは leani が管理しないので、必要なファイルがあるかだけ
+        # 確認する。
         (
             cfg.engine is not None and not os.path.isdir(cfg.engine),
             f"指定されたエンジンが無い: {cfg.engine}",
         ),
-        # バージョンを合わせる先がこれしかない。無いと elan の既定に落ちて黙って壊れる。
+        # エンジンの Lean のバージョンを決めるのはこのファイルだけ。無いと elan の
+        # デフォルトの toolchain が使われ、エラーが出ないまま正しく動かなくなる。
         (
             cfg.engine is not None
             and os.path.isdir(cfg.engine)
@@ -191,7 +195,7 @@ def problem(cfg: EnvConfig) -> str | None:
             and not os.path.isfile(f"{cfg.engine}/.lake/build/bin/repl"),
             f"repl が未ビルド: cd {cfg.engine} && lake build repl",
         ),
-        # 起動してから落ちるだけなので、警告ではなくエラーにする。
+        # 起動しても異常終了するだけなので、警告ではなくエラーにする。
         (
             eng_tc is not None and proj_tc is not None and eng_tc != proj_tc,
             (
@@ -213,7 +217,7 @@ def from_config(
     imports: Sequence[str],
     engine: str | None,
 ) -> EnvConfig:
-    """名前で選んだ環境。書いてある通りに使う (cwd は見ない)。"""
+    """名前で選んだ環境。設定に書いてある通りに使う (カレントディレクトリは見ない)。"""
     if name not in table:
         known = " ".join(sorted(table)) or "(ひとつも無い)"
         raise ConfigError(f"環境 {name} は設定に無い: {CONFIG}\n  ある環境: {known}")
@@ -232,8 +236,9 @@ def guess_env(
     project: str | None, imports: Sequence[str], engine: str | None
 ) -> EnvConfig:
     """
-    設定に無いときの推測。cwd から lakefile を持つ親を探し、その lean_lib を
-    import する。Lake プロジェクトの外なら Lean 本体だけで起動する。
+    設定に環境が無いときに推測する。カレントディレクトリから lakefile を持つ親
+    ディレクトリを探し、その lean_lib を import する。Lake プロジェクトの外なら
+    Lean 本体だけで起動する。
     """
     root = project if project is not None else lake_root(os.getcwd())
     mods = imports or (lake_libs(root) if root else ())
@@ -254,7 +259,7 @@ def resolve(
     """
     CLI 引数と設定ファイルから、起動する環境を 1 つ決める。
 
-    優先順は 引数 > 名前付き環境 > default > cwd の Lake プロジェクト。
+    優先順は 引数 > 名前付き環境 > default > カレントディレクトリの Lake プロジェクト。
     """
     conf = load_config() if cfg is None else cfg
     table = as_table(conf.get("env"), "env")
@@ -270,7 +275,7 @@ def resolve(
 
 
 def read_text(path: str) -> str | None:
-    """読めなければ None。無い / 権限が無いのどちらでも同じ扱いでよい所で使う。"""
+    """読めなければ None。ファイルが無い場合と権限が無い場合を区別しない所で使う。"""
     try:
         with open(path) as f:
             return f.read()

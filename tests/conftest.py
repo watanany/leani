@@ -1,23 +1,23 @@
-"""テストの土台。
+"""テストの共通部分。
 
-中身は src/leani/ にある。pty 越しに起動するときも、インストールした leani
-コマンドと同じものを `python -m leani` として子プロセスで起こす。
+leani のコードは src/leani/ にある。pty 越しに起動するときも、インストールした
+leani コマンドと同じものを `python -m leani` として子プロセスで起動する。
 
-テストは 3 層に分かれている。上ほど速い。数はエンジンの層が一番多く、端末の層は
-遅いので絞ってある。
+テストは 3 層に分かれている。上の層ほど速い。テストの数はエンジンの層が一番多く、
+端末の層は遅いので数を絞ってある。
 
   test_parsing.py      純関数と読み取りだけ。端末もエンジンも不要。ミリ秒。
   test_engine.py       Repl を直接呼ぶ。1 テスト 1.5 秒。
   test_completion.py   同上。問い合わせ回数は mocker で数える。
-  test_terminal.py     pty 越しに本物の行編集を相手にする。
+  test_terminal.py     pty 越しに本物の行編集をテストする。
 
-どのテストも Lean 本体だけを import する環境で走る。特定の Lake プロジェクト
-に依存しないので、このリポジトリの外へ持って行ってもそのまま動く。
+どのテストも Lean 本体だけを import する環境で実行する。特定の Lake プロジェクト
+に依存しないので、このリポジトリの外に持ち出してもそのまま動く。
 
-エンジン層では 1 行渡すごとに INVARIANTS を全部確認する。この REPL は
-env のスタックと証明モードを持つ状態機械で、踏んだバグはどれも単発の操作では
-なく操作の並びで出た。個別の assert とは別に「どの状態でも成り立つはずのこと」
-を毎回見ておくと、想定していない並びでも捕まる。
+エンジン層では 1 行渡すごとに INVARIANTS をすべて確認する。この REPL は
+env のスタックと証明モードを持つ状態機械で、これまでのバグはどれも単発の操作では
+なく操作の組み合わせで起きた。個別の assert とは別に「どの状態でも成り立つはずのこと」
+を毎回確認しておくと、想定していない操作の順番でもバグを検出できる。
 """
 
 import contextlib
@@ -42,7 +42,8 @@ from prompt_toolkit.history import FileHistory
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
-# インストールした leani と同じ入口を使う。-m なら package のまま起こせる。
+# インストールした leani と同じエントリポイントを使う。
+# -m なら package のまま起動できる。
 REPL = ["-m", "leani"]
 sys.path.insert(0, SRC)
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]")
@@ -51,17 +52,18 @@ ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]")
 PROMPT = "λ>"
 WIDE_PROMPT = "λ+>"
 CPR = b"\x1b[6n"  # カーソル位置の問い合わせ
-# 読み終わりで切れたエスケープ列。次に読んだ分と繋げてから解釈する。
+# 読み込んだデータの末尾で途切れたエスケープシーケンス。
+# 次に読んだデータと連結してから解釈する。
 ESC_TAIL = re.compile(rb"\x1b\[?[0-9;?]*$")
 
-# 設定・履歴・init の場所は import 時に定数になるので、読む前に決める。
+# 設定、履歴、init のパスは import 時に定数になるので、import する前に決める。
 _STATE = tempfile.mkdtemp(prefix="leani-test-")
 os.environ["LEANI_INIT"] = os.path.join(_STATE, "no-such-init.lean")
 os.environ["LEANI_HISTORY"] = os.path.join(_STATE, "history")
 os.environ["LEANI_CONFIG"] = os.path.join(_STATE, "config.toml")
 
-# 環境を 2 つ置く。core が既定で、wide は :env の切り替え先。Lake を経由
-# しないので起動は 1 秒かからない。
+# 環境を 2 つ用意する。core がデフォルトで、wide は :env の切り替え先。Lake を経由
+# しないので起動は 1 秒もかからない。
 with open(os.environ["LEANI_CONFIG"], "w") as _f:
     _f.write(
         textwrap.dedent("""\
@@ -77,20 +79,20 @@ with open(os.environ["LEANI_CONFIG"], "w") as _f:
     )
 
 
-import leani  # noqa: E402, I001  (定数を読む前に環境変数を決める)
+import leani  # noqa: E402, I001  (定数を読み込む前に環境変数を決める)
 from stories import STORIES  # noqa: E402
 
 
-# ------------------------------------------------------------ ストーリーの印
+# ---------------------------------------------------------- ストーリーの指定
 
 
 def story(*ids):
     """
-    このテストが効くユーザーストーリー (tests/stories.py) を申告する。
+    このテストが対象にするユーザーストーリー (tests/stories.py) を指定する。
 
-    テストの中身にも分け方にも手を入れない。付けた印は tools/spec.py が SPEC.md
-    を組むときだけ読む。1 つのテストが複数のストーリーに効いてよく、1 つの
-    ストーリーに複数のテストが効いてよい。ストーリーはテストの目次ではなく、
+    テストの中身にも分け方にも影響しない。指定した ID は tools/spec.py が SPEC.md
+    を生成するときだけ読む。1 つのテストが複数のストーリーを対象にしてよく、
+    1 つのストーリーを複数のテストが対象にしてよい。ストーリーはテストの目次ではなく、
     テストが足りているかを数える表なので、対応は N:M になる。
     """
     unknown = [i for i in ids if i not in STORIES]
@@ -112,8 +114,8 @@ INVARIANTS = [
         lambda r: len(r.eng.stack) == len(r.eng.log),
     ),
     (
-        # boot が通らなかったときだけ env が無い。そのときは宣言も
-        # 「環境に入っている」とは言えないので、log も空でなければならない。
+        # boot が失敗したときだけ env が無い。そのときは宣言も
+        # 「環境に含まれている」とは言えないので、log も空でなければならない。
         "環境が無いなら宣言も持たない",
         lambda r: r.eng.env is not None or not r.eng.log,
     ),
@@ -134,7 +136,7 @@ INVARIANTS = [
         lambda r: r.eng.proc is not None and r.eng.proc.poll() is None,
     ),
     (
-        "送り方が決まっているなら入力が溜まっている",
+        "送り方が決まっているならバッファに入力がある",
         lambda r: r.ready is None or bool(r.buf),
     ),
     (
@@ -154,7 +156,7 @@ class Driver:
 
     @property
     def engine(self):
-        # :env で切り替えると作り直されるので、その都度いまのものを返す。
+        # :env で切り替えるとエンジンが再起動されるので、その都度現在のエンジンを返す。
         return self.repl.eng
 
     def check(self, after):
@@ -193,17 +195,17 @@ def repl():
 
 
 class Terminal:
-    """pty の向こうで動いている leani 1 つ。
+    """pty の先で動いている leani のプロセス 1 つ。
 
-    prompt_toolkit は入力行をカーソル移動で描き直すので、受け取ったバイト列から
-    色を落としただけでは画面にならない (プロンプトは末尾の空白を書かずに
-    カーソルを送るだけ、打った文字は消しては書き直される)。そこで pyte で端末を
-    再現し、画面そのものを見る。カーソル位置の問い合わせ (CPR) にも本物の端末と
-    同じように答える。答えないと prompt_toolkit は 2 秒待ってから警告を出す。
+    prompt_toolkit は入力行をカーソル移動で再描画するので、受け取ったバイト列から
+    色を取り除いただけでは画面の内容にならない (プロンプトは末尾の空白を書かずに
+    カーソルを進めるだけで、入力した文字は消しては書き直される)。そこで pyte で端末を
+    再現し、画面そのものを確認する。カーソル位置の問い合わせ (CPR) にも本物の端末と
+    同じように応答する。応答しないと prompt_toolkit は 2 秒待ってから警告を出す。
 
-    入力待ちに入ったかどうかは、カーソルがプロンプトの行に載っているかで見る
-    (wait_prompt)。leani が print したものは描き直されないので、受け取った順に
-    溜めておいて (raw)、プロンプトまで来たところでまとめて返す。
+    leani が入力待ちになったかどうかは、カーソルがプロンプトの行にあるかで判定する
+    (wait_prompt)。leani が print したものは再描画されないので、受け取った順に
+    保存しておき (raw)、プロンプトが表示されたところでまとめて返す。
     """
 
     ROWS = 24
@@ -212,7 +214,7 @@ class Terminal:
         self.history = history
         self.screen = pyte.Screen(cols, self.ROWS)
         self.stream = pyte.ByteStream(self.screen)
-        self.raw = ""  # leani が print したもの。色を落として溜める
+        self.raw = ""  # leani が print したもの。色を取り除いて保存する
         self._pending = b""
         env = dict(
             os.environ,
@@ -222,7 +224,7 @@ class Terminal:
         )
         self.pid, self.fd = pty.fork()
         if self.pid == 0:
-            # lakefile の無い所から起動して、cwd に依存しないことも兼ねて見る。
+            # lakefile の無いディレクトリから起動して、cwd に依存しないことも確認する。
             os.chdir(_STATE)
             os.execve(sys.executable, [sys.executable, *REPL], env)
         fcntl.ioctl(
@@ -231,7 +233,7 @@ class Terminal:
         self.wait_prompt(PROMPT, 90)
 
     def _feed(self, chunk):
-        """受け取ったバイトを画面に出力する。CPR には今のカーソル位置で答える。"""
+        """受け取ったバイトを画面に出力する。CPR には現在のカーソル位置で応答する。"""
         self._pending += chunk
         cut = ESC_TAIL.search(self._pending)
         head = self._pending[: cut.start()] if cut else self._pending
@@ -239,7 +241,7 @@ class Terminal:
 
         for i, part in enumerate(head.split(CPR)):
             if i:
-                # 直前の分を出力したあとのカーソル位置で答える。
+                # 直前までのバイトを出力したあとのカーソル位置で応答する。
                 row, col = self.screen.cursor.y + 1, self.screen.cursor.x + 1
                 os.write(self.fd, f"\x1b[{row};{col}R".encode())
             self.stream.feed(part)
@@ -259,16 +261,16 @@ class Terminal:
         return True
 
     def screen_text(self):
-        """今の画面。末尾の空行は落とす。"""
+        """現在の画面。末尾の空行は取り除く。"""
         return "\n".join(line.rstrip() for line in self.screen.display).rstrip()
 
     def cursor_line(self):
         return self.screen.display[self.screen.cursor.y]
 
     def wait_prompt(self, prompt=PROMPT, timeout=30):
-        """プロンプトが出て入力待ちに入るまで待つ。sleep で待たないので速い。
+        """プロンプトが表示されて入力待ちになるまで待つ。sleep で待たないので速い。
 
-        溜めていた出力を返して空にする。次に待つときは、その先だけを見る。
+        保存していた出力を返して空にする。次に待つときは、それ以降の出力だけを見る。
         """
         end = time.time() + timeout
         while True:
@@ -277,17 +279,17 @@ class Terminal:
                 out, self.raw = self.raw, ""
                 return out
             assert time.time() <= end, (
-                f"{prompt!r} で止まらない。画面:\n{self.screen_text()}"
+                f"{prompt!r} で入力待ちにならない。画面:\n{self.screen_text()}"
             )
             assert self._pump(end - time.time()), (
-                f"{prompt!r} の前に切れた。画面:\n{self.screen_text()}"
+                f"{prompt!r} の前に出力が途切れた。画面:\n{self.screen_text()}"
             )
 
     def settle(self, quiet=0.2):
-        """子が打った分を読み終えるまで待つ。
+        """子プロセスが出力したものを読み終えるまで待つ。
 
-        画面とカーソルで見る。描き直しはカーソルを動かすだけのことがあるので、
-        受け取ったバイト数だけでは「まだ動いている」を取りこぼす。
+        画面とカーソルで判定する。再描画はカーソルを動かすだけのことがあるので、
+        受け取ったバイト数だけでは「まだ出力が続いている」ことを見逃す。
         """
 
         def state():
@@ -314,7 +316,7 @@ class Terminal:
         return self.wait_prompt(PROMPT, timeout)
 
     def saved_history(self):
-        """履歴ファイルを打った順のリストに戻す。読む側と同じ実装で読む。"""
+        """履歴ファイルを入力した順のリストにする。leani と同じ実装で読み込む。"""
         return list(reversed(list(FileHistory(self.history).load_history_strings())))
 
     def close(self, kill=False):
@@ -340,7 +342,7 @@ def terminal(tmp_path):
         if history_name is None:
             history, history_env = str(tmp_path / "history"), None
         else:
-            # 子は _STATE から起動するので、相対名の履歴はそこに落ちる。
+            # 子プロセスは _STATE から起動するので、相対パスの履歴は _STATE に作られる。
             history, history_env = os.path.join(_STATE, history_name), history_name
         with open(history, "w") as f:
             f.write(seed)
@@ -355,10 +357,10 @@ def terminal(tmp_path):
 
 def piped(src, tmp_path, timeout=180):
     """
-    パイプ越しに leani へ渡して、出たものを全部返す。
+    パイプ越しに leani へ渡して、出力をすべて返す。
 
-    端末が無いときの経路を見るためのもの。stdin が tty でないと入力は
-    strict デコードになるので、壊れたバイトの扱いはここでしか出ない。
+    端末が無いときの処理を確認するためのもの。stdin が tty でないと入力は
+    strict デコードになるので、壊れたバイトの扱いはここでしか確認できない。
     """
     env = dict(
         os.environ,

@@ -39,10 +39,10 @@ dev = [
 python_version = "3.11"
 strict = true
 files = ["src", "tools"]
-# tools/spec.py は tests/stories.py を読む (実行時は sys.path に足している)。
+# tools/spec.py は tests/stories.py を読む (実行時は sys.path に追加している)。
 mypy_path = "tests"
-# テストは strict の対象にしない。pytest の fixture ごとに注釈を書くことになり、
-# 得られるものより手間が勝る。落ちれば pytest が教える。
+# テストは strict の対象にしない。pytest の fixture ごとに型注釈を書くことになり、
+# 効果より手間のほうが大きい。問題があればテストが失敗して分かる。
 
 [tool.pyright]
 # エディタ用。.venv と、src / tests への import を解決させる。
@@ -55,11 +55,11 @@ testpaths = ["tests"]
 addopts = "-q"
 
 [tool.ruff.lint]
-# 入れなかったもの。どれも既定では推奨されるが、このリポジトリの方針が先に来る。
-#   RET505           return のあとの elif。分岐は明示的に else で書いている
+# 有効にしなかったルール。どれも一般には推奨されるが、このリポジトリの方針を優先する。
+#   RET505           return のあとの elif。分岐は明示的に else で書く
 #   N802 / PLC2401   日本語のテスト名。これが SPEC.md の見出しになる
-#   PTH              os.path で通している
-#   EM / TRY003      例外の文言は、そのまま読ませるために呼び出し側で組む
+#   PTH              os.path で統一している
+#   EM / TRY003      例外のメッセージは raise する所で組み立てて、そのまま読めるようにする
 #   D / ANN          docstring と型注釈は必要な所に手で付ける
 #   S101             テストの assert
 #   T201             これは print する CLI
@@ -67,17 +67,17 @@ select = [
     "E", "F", "W", "I", "UP", "B", "SIM", "TID",
     "C4", "PIE", "PERF", "FLY", "FURB", "RUF", "PLE", "PLW", "PT", "ISC",
 ]
-# RUF001-003 は日本語と数学記号を「紛らわしい文字」として全部落とす。
+# RUF001-003 は日本語と数学記号を「紛らわしい文字」としてすべてエラーにする。
 # ISC001 は formatter と衝突する (行を分けるのは formatter の仕事)。
 ignore = ["RUF001", "RUF002", "RUF003", "ISC001"]
 
 [tool.ruff.lint.flake8-tidy-imports]
-# 相対 import を禁じるのは好みではなく、下の banned-api を効かせるため。
-# `from .engine import X` は TID251 をすり抜ける。
+# 相対 import を禁止するのは好みではなく、下の banned-api を有効にするため。
+# `from .engine import X` は TID251 で検出されない。
 ban-relative-imports = "all"
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
-# ラベルの向き: 純粋・読み取り・定数 は 副作用 を import しない。
+# import の向き: 純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない。
 "leani.boot".msg = "純粋・読み取り・定数のモジュールは、副作用のモジュールを import しない"
 "leani.engine".msg = "純粋・読み取り・定数のモジュールは、副作用のモジュールを import しない"
 "leani.repl".msg = "純粋・読み取り・定数のモジュールは、副作用のモジュールを import しない"
@@ -86,7 +86,7 @@ ban-relative-imports = "all"
 "leani.show".msg = "純粋・読み取り・定数のモジュールは、副作用のモジュールを import しない"
 
 [tool.ruff.lint.per-file-ignores]
-# 副作用のモジュールどうしは呼び合ってよい。名前をまとめる __init__ とテストも外す。
+# 副作用のモジュールどうしは import し合ってよい。名前をまとめる __init__ とテストも対象から外す。
 "src/leani/boot.py" = ["TID251"]
 "src/leani/engine.py" = ["TID251"]
 "src/leani/search.py" = ["TID251"]

@@ -1,6 +1,6 @@
 """起動の用意 (副作用)。
 
-Lean のバージョンを決め、エンジン (leanprover-community/repl) を取ってきてビルドし、
+Lean のバージョンを決め、エンジン (leanprover-community/repl) を clone してビルドし、
 lake の環境変数を用意する。"""
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)")
 
 
 def local_toolchain() -> str | None:
-    """elan が今選んでいるバージョン。プロジェクトも指定も無いときの落とし所。"""
+    """elan が今選択しているバージョン。プロジェクトも指定も無いときに使う。"""
     try:
         r = subprocess.run(
             ["lean", "--version"],
@@ -47,11 +47,13 @@ def local_toolchain() -> str | None:
 
 def guess_toolchain(cfg: EnvConfig) -> str | None:
     """
-    使う Lean のバージョン。プロジェクト → 明示されたエンジン → elan の既定。
+    使う Lean のバージョン。プロジェクト、ユーザーが指定したエンジン、elan の
+    デフォルトの順に探す。
 
-    2 番目は手動で指したエンジン用。leani はそれをビルドし直さないので、
+    2 番目はユーザーが自分で指定したエンジン用。leani はそれをビルドし直さないので、
     合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
-    用意したエンジンなら engine が None なので、ここは飛ばして既定バージョンに落ちる。
+    用意したエンジンなら engine が None なので、2 番目は飛ばして elan のデフォルトの
+    バージョンを使う。
     """
     return (
         read_toolchain(cfg.project) or read_toolchain(cfg.engine) or local_toolchain()
@@ -60,11 +62,12 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
 
 def toolchain(cfg: EnvConfig) -> str:
     """
-    使うバージョンを決める。分からなければ起動を中止する。
+    使うバージョンを決める。分からなければ leani は起動を中止する。
 
-    lean は cwd の lean-toolchain を見てバージョンを決めるので、プロジェクトの外から
-    呼ぶと既定のバージョンが選ばれて olean が読めなくなる。ここで決めたバージョンを
-    elan run で固定し、エンジンもそのバージョンでビルドする。
+    lean はカレントディレクトリの lean-toolchain を見てバージョンを決めるので、
+    プロジェクトの外から実行するとデフォルトのバージョンが選ばれて .olean を読めなく
+    なる。ここで決めたバージョンを elan run で固定し、エンジンもそのバージョンで
+    ビルドする。
     """
     tc = guess_toolchain(cfg)
     if tc is None:
@@ -75,10 +78,11 @@ def toolchain(cfg: EnvConfig) -> str:
 
 def manual_setup(path: str, tc: str, tag: str | None) -> str:
     """
-    自動で用意できなかったときに出す手順。
+    自動で用意できなかったときに表示する手順。
 
-    タグを省くと HEAD が来てバージョンが合わないので、必ず指す。使うバージョンで
-    ビルドし直すところまで含めて、ensure_engine と同じことを手でやる形。
+    タグを省くと HEAD を clone することになりバージョンが合わないので、必ずタグを
+    指定する。使うバージョンでビルドし直すところまで含めて、ensure_engine と同じ
+    ことを手動で行う手順にする。
     """
     branch = tag or f"<{toolchain_version(tc)} 以下で一番新しいタグ>"
     return (
@@ -90,7 +94,7 @@ def manual_setup(path: str, tc: str, tag: str | None) -> str:
 
 
 def fetch_tags() -> list[str]:
-    """repl のタグ一覧。clone せずに聞く。"""
+    """repl のタグ一覧。clone せずにリモートに問い合わせる。"""
     try:
         r = subprocess.run(
             ["git", "ls-remote", "--tags", "--refs", ENGINE_REPO],
@@ -111,7 +115,7 @@ def fetch_tags() -> list[str]:
     if r.returncode != 0:
         raise EngineError(f"repl のタグが取れなかった:\n{r.stderr.strip()}")
 
-    # 1 行が "<sha>\trefs/tags/v4.33.0"。タグ名だけ取る。
+    # 各行は "<sha>\trefs/tags/v4.33.0" の形。タグ名だけを取り出す。
     return [
         ref.rpartition("/")[2]
         for ref in r.stdout.split()
@@ -120,14 +124,14 @@ def fetch_tags() -> list[str]:
 
 
 def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
-    """エンジンの用意に使う外部コマンド。出力はそのまま見せる。"""
+    """エンジンの用意に使う外部コマンドを実行する。出力はそのまま表示する。"""
     print(dim(f"  {' '.join(cmd)}"), flush=True)
     try:
         r = subprocess.run(list(cmd), cwd=cwd, check=False, env=SETUP_ENV)
     except OSError as e:
         raise EngineError(f"{cmd[0]} を呼べなかった: {e}") from e
     except KeyboardInterrupt as e:
-        # 同じプロセスグループなので Ctrl-C はこちらにも来る。起動の失敗として扱う。
+        # 同じプロセスグループなので、Ctrl-C は leani にも届く。起動の失敗として扱う。
         raise EngineError(f"^C 中断した: {' '.join(cmd)}") from e
 
     if r.returncode != 0:
@@ -136,17 +140,18 @@ def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
 
 def build_engine(path: str, tc: str, tag: str) -> None:
     """
-    タグのソースを使うバージョンでビルドして置く。
+    タグのソースを、使うバージョンでビルドして配置する。
 
-    olean を読めるかはビルドに使った Lean のバージョンで決まるので、clone した
-    lean-toolchain を書き換えてからビルドする。通ってから os.replace で置くので、
-    途中で止めても半端なものが残らない。
+    .olean を読めるかどうかはビルドに使った Lean のバージョンで決まるので、clone
+    した lean-toolchain を書き換えてからビルドする。ビルドに成功してから os.replace
+    で配置するので、途中で中断しても不完全なディレクトリが残らない。
     """
     version = toolchain_version(tc)
     note = "" if tag == version else f" (タグ {tag} を {version} でビルドする)"
     print(dim(f"エンジンを用意する: {version}{note} — 初回のみ"), flush=True)
 
-    # leani を 2 つ同時に起動しても衝突しないよう、置き場はプロセスごとに分ける。
+    # leani を 2 つ同時に起動しても衝突しないよう、作業用のディレクトリは
+    # プロセスごとに分ける。
     tmp = f"{path}.{os.getpid()}.tmp"
     os.makedirs(os.path.dirname(path), exist_ok=True)
     try:
@@ -158,7 +163,8 @@ def build_engine(path: str, tc: str, tag: str) -> None:
         if not os.path.isfile(f"{tmp}/.lake/build/bin/repl"):
             raise EngineError(f"ビルドしたのに repl が無い: {tmp}")
 
-        # 待っている間に別の leani が置いたなら、動いているそれを消さない。
+        # ビルドしている間に別の leani がエンジンを配置していたら、そのエンジンは使用中
+        # かもしれないので、消さずに使う。
         if os.path.isfile(f"{path}/.lake/build/bin/repl"):
             print(dim(f"別に用意されていた: {path}"), flush=True)
             return
@@ -173,11 +179,11 @@ def build_engine(path: str, tc: str, tag: str) -> None:
 
 def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
     """
-    使うエンジンのディレクトリ。leani が持つ分は無ければ用意する。
+    使うエンジンのディレクトリを返す。leani が管理するエンジンは、無ければ用意する。
 
-    engine が明示されているときは leani の管理外なので、揃っているかを見る
-    だけで何も作らないし消さない。build_engine は置き場を作り直すので、
-    人が指したディレクトリに向けてはならない。
+    ユーザーが engine を指定したときは leani の管理外なので、ビルド済みかを確認する
+    だけで、何も作らないし消さない。build_engine は配置先のディレクトリを作り直すので、
+    ユーザーが指定したディレクトリに対して呼んではいけない。
     """
     path = engine_dir(engine, tc)
     if os.path.isfile(f"{path}/.lake/build/bin/repl"):
@@ -196,8 +202,8 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
         version = toolchain_version(tc)
         tag = pick_tag(version, fetch_tags())
         if tag is None and version_key(version) is None:
-            # nightly や stable。バージョンとして読めないので比べようがない。repl は
-            # master が最新の Lean に追いているので、そこで試す。
+            # nightly や stable。バージョンとして解釈できないので比較できない。repl の
+            # master は最新の Lean に追従しているので、master で試す。
             tag = "master"
             print(dim(f"{version} に対応するタグは無い。master で試す"), flush=True)
         elif tag is None:
@@ -205,7 +211,8 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
 
         build_engine(path, tc, tag)
     except EngineError as e:
-        # 自動で用意できなくても手動なら通ることがある。使うタグまで出しておく。
+        # 自動で用意できなくても、手動なら成功することがある。使うタグも含めて
+        # 手順を表示する。
         raise EngineError(f"{e}\n{manual_setup(path, tc, tag)}") from e
 
     return path
@@ -216,12 +223,12 @@ LAKE_ENV_KEYS = ("LEAN_PATH", "LEAN_SRC_PATH", "DYLD_LIBRARY_PATH", "LD_LIBRARY_
 
 def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
     """
-    lake env が解決する環境変数。
+    lake env が設定する環境変数。
 
-    lake env は起動に 1 秒近くかかるので、新しいキャッシュがあれば使い回す。
-    LEAN_PATH は core の olean を指すので、toolchain ごとに別の鍵で持つ。
-    同じ鍵で持ち回していたころは、rc を差し替えると前のバージョンの olean を指した
-    ままになり、repl は起動するのに import が丸ごと落ちていた。
+    lake env は起動に 1 秒近くかかるので、新しいキャッシュがあれば再利用する。
+    LEAN_PATH は core の .olean を指すので、toolchain ごとに別のキーでキャッシュする。
+    同じキーを使っていたころは、rc のバージョンを変更すると前のバージョンの .olean を
+    指したままになり、repl は起動するのに import がすべて失敗していた。
     """
     if not project:
         return {}
@@ -234,8 +241,9 @@ def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
     return parse_env_lines(read_text(cache) or "")
 
 
-# キャッシュより新しければ取り直す。manifest は依存のバージョン、lean-toolchain は
-# core のバージョン。どちらが動いても LEAN_PATH は変わる。
+# これらのファイルがキャッシュより新しければ取得し直す。manifest は依存パッケージの
+# バージョン、lean-toolchain は core のバージョンを決める。どちらが変わっても
+# LEAN_PATH は変わる。
 LAKE_ENV_INPUTS = ("lake-manifest.json", "lean-toolchain")
 
 
@@ -251,7 +259,7 @@ def lake_env_stale(cache: str, project: str) -> bool:
             if os.path.isfile(f"{project}/{name}")
         )
     except OSError:
-        # 見ている間に消されることがある。分からなければ取り直す。
+        # 確認している間にファイルが削除されることがある。判断できなければ取得し直す。
         return True
 
 
@@ -277,7 +285,8 @@ def write_lake_env(cache: str, project: str) -> None:
     if r.returncode != 0:
         raise EngineError(f"lake env が失敗した ({project}):\n{r.stderr.strip()}")
 
-    # ここもプロセスごとに分ける。同時に起動した別の leani と書き合わない。
+    # 一時ファイルもプロセスごとに分ける。同時に起動した別の leani と同じ
+    # ファイルに書き込まないため。
     tmp = f"{cache}.{os.getpid()}.tmp"
     try:
         os.makedirs(os.path.dirname(cache), exist_ok=True)
@@ -294,11 +303,11 @@ def write_lake_env(cache: str, project: str) -> None:
 
 def prepare(cfg: EnvConfig) -> None:
     """
-    その環境で起動できるようにする。エンジンが無ければここで用意する。
+    その環境で leani を起動できるようにする。エンジンが無ければここで用意する。
 
     Engine を作る前に呼べる。:env の切り替えでは今のエンジンを終了させる前に
-    通すので、ここでエラーにできた分は何も壊さずに済む。lake env も先に解決して
-    キャッシュしておく (Engine の中で失敗させない)。
+    実行するので、ここでエラーになった場合は何も壊さずに済む。lake env の結果も
+    先に取得してキャッシュしておく (Engine の中で失敗させない)。
     """
     tc = toolchain(cfg)
     ensure_engine(cfg.engine, tc)

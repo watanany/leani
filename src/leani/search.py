@@ -1,8 +1,8 @@
 """外部サービスに問い合わせる (副作用)。
 
-loogle に定理を問い合わせる。エンジンとは無関係で、返るのは JSON だけ。整形は
+loogle で定理を検索する。エンジンとは関係なく、loogle は JSON だけを返す。整形は
 pure にある。外部と通信するのはこのモジュールだけで、失敗はすべて SearchError に
-まとめる (ネットワークの事情で REPL を終了させない)。"""
+まとめる (ネットワークの問題で REPL を終了させないため)。"""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from leani.types import Loogle, SearchError
 
 
 def loogle(query: str) -> Loogle:
-    """loogle に 1 回問い合わせる。届かなければ SearchError。"""
+    """loogle に 1 回問い合わせる。失敗したら SearchError を raise する。"""
     url = f"{LOOGLE}?q={urllib.parse.quote(query)}"
     try:
         with urllib.request.urlopen(url, timeout=LOOGLE_TIMEOUT) as res:

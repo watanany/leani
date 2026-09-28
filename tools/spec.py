@@ -1,29 +1,29 @@
 """
-テストとユーザーストーリーから SPEC.md を組む。
+テストとユーザーストーリーから SPEC.md を生成する。
 
-この REPL が「何ができて、どういう性質を持つか」の一覧が欲しい。書き下ろすと
-必ずコードから遅れるので、出典を 2 つだけに絞って生成する。手で書き足す場所は
-作らない。
+leani で「何ができて、どういう性質を持つか」の一覧が必要。手で書くと必ずコードより
+古くなるので、情報源を 2 つだけに絞って生成する。手で書き足す場所は作らない。
 
-    tests/stories.py   誰の何を助けるか。コードから導けないので、ここが出典
-    tests/test_*.py    それを確かめている中身。テスト名がそのまま仕様の文になる
+    tests/stories.py   誰の何を助けるか。コードからは分からないので、ここが情報源
+    tests/test_*.py    それを確かめているテスト。テスト名がそのまま仕様の文になる
 
     uv run python tools/spec.py            # SPEC.md を書き直す
-    uv run python tools/spec.py --check    # ずれていたら 1 を返す (テストが呼ぶ)
+    uv run python tools/spec.py --check    # 生成結果と違えば 1 を返す (テストから呼ぶ)
 
 ストーリーとテストは 1:1 ではない。テストの分け方はテストの都合で決まっていて
-(落ちる理由が 1 つになるように、速い層に寄せるように)、ストーリーの分け方とは
-揃わない。なので `@story(...)` で申告してもらい、ここで突き合わせる。テストが
-0 件のストーリーは空欄として出る。それが分かることがこの表の目的。
+(失敗する理由が 1 つになるように、なるべく速い層でテストするように)、ストーリーの
+分け方とは一致しない。なので各テストに `@story(...)` を付けてもらい、ここで対応を
+取る。テストが 0 件のストーリーは空欄として表示される。それが分かることがこの表の
+目的。
 
-テスト名の読み替えの規則は 3 つだけ。
+テスト名を文に戻す規則は 3 つだけ。
 
     __                     ハイフン   Ctrl__C   -> Ctrl-C
-    どちらかが ASCII の _  空白       do_by     -> do by / IO_の式 -> IO の式
+    片側が ASCII の _      空白       do_by     -> do by / IO_の式 -> IO の式
     それ以外の _           詰める     行を_待つ -> 行を待つ
 
-describe の docstring はここには出さない。ストーリー基準で並べ替えると同じ
-説明が何度も出るので、あれはテストのそばに置いたままにする。
+describe の docstring は SPEC.md には出さない。ストーリーごとに並べ替えると同じ
+説明が何度も出るので、docstring はテストのそばに置いたままにする。
 """
 
 import ast
@@ -37,17 +37,17 @@ sys.path.insert(0, os.path.join(ROOT, "tests"))
 
 from stories import GROUPS, STORIES, UNBUILT  # noqa: E402
 
-HEAD = """<!-- tools/spec.py が tests/ から生成する。手で書かない。 -->
+HEAD = """<!-- tools/spec.py が tests/ から生成する。手で編集しない。 -->
 
 # leani の性質一覧
 
 leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめているテストの
 名前を並べたもの。テスト名はすべて `uv run pytest` で実際に確かめられている。
-増減はストーリーかテストを足すか消すかでしか起きない。
+項目が増えたり減ったりするのは、ストーリーかテストを追加または削除したときだけ。
 
     uv run python tools/spec.py
 
-ストーリー {stories} 件、テスト {tests} 件。括弧の中はテストの居場所
+ストーリー {stories} 件、テスト {tests} 件。括弧の中はテストの場所
 (層 / describe)。
 """
 
@@ -56,12 +56,12 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 
 def ascii_word(ch: str) -> bool:
-    """ASCII の英数字 1 文字か。名前の端では空文字が来るので、それは False。"""
+    """ASCII の英数字 1 文字か。名前の端では空文字が渡されるので、その場合は False。"""
     return bool(ch) and ch.isascii() and ch.isalnum()
 
 
 def spaced(part: str) -> str:
-    """`_` を継ぎ目として読む。どちらかの隣が ASCII の英数字なら空白を入れる。"""
+    """`_` を単語の区切りとして扱う。前後のどちらかが ASCII の英数字なら空白にする。"""
     out = ""
     for i, ch in enumerate(part):
         if ch != "_":
@@ -101,7 +101,7 @@ def marked(fn: ast.FunctionDef) -> list[str]:
 
 
 def descend(nodes: list[ast.stmt], layer: str, where: str, out: list[Test]) -> None:
-    """describe を降りながら it を集める。describe は入れ子になれる。"""
+    """describe を再帰的にたどって it を集める。describe は入れ子にできる。"""
     for node in nodes:
         if not isinstance(node, ast.FunctionDef):
             continue
@@ -118,7 +118,7 @@ def descend(nodes: list[ast.stmt], layer: str, where: str, out: list[Test]) -> N
 
 
 def collect() -> list[Test]:
-    """テストを 1 件 1 件の辞書にして、ファイル順・出現順で返す。"""
+    """テストを 1 件ずつ辞書にして、ファイルの順、ファイル内で出てくる順に返す。"""
     found: list[Test] = []
     for path in sorted(glob.glob("tests/test_*.py")):
         layer = os.path.basename(path)[len("test_") : -len(".py")]
@@ -129,7 +129,7 @@ def collect() -> list[Test]:
 
 
 def complaints(tests: list[Test]) -> list[str]:
-    """生成する前に止めるべきこと。ストーリーの印の付け忘れと書き間違い。"""
+    """生成を止める理由。`@story` の付け忘れと、ストーリー番号の書き間違い。"""
     out: list[str] = []
     for t in tests:
         if not t["stories"]:

@@ -1,6 +1,6 @@
-"""入口 (副作用)。
+"""エントリーポイント (副作用)。
 
-引数を読んで Repl を起こす。"""
+引数を読んで Repl を起動する。"""
 
 from __future__ import annotations
 
@@ -107,10 +107,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         print(USAGE + HELP, end="")
         return 0
 
-    # 端末でない stdin は strict デコードになり、壊れたバイト 1 つで
-    # UnicodeDecodeError になる。しかも投げた時点で読み込み済みの分が
-    # 一緒に落ちるので、後続の行まで消える。置き換えて Lean に渡し、
-    # 構文エラーとして普通に報告させる。
+    # stdin が端末でないときは strict でデコードされ、不正なバイトが 1 つあるだけで
+    # UnicodeDecodeError になる。しかも例外が発生した時点で読み込み済みのデータも
+    # 失われるので、後続の行まで消える。不正なバイトを置換文字に置き換えて Lean に
+    # 渡し、構文エラーとして普通に報告させる。
     if not sys.stdin.isatty() and isinstance(sys.stdin, io.TextIOWrapper):
         with contextlib.suppress(OSError, ValueError):
             sys.stdin.reconfigure(errors="replace")
@@ -139,7 +139,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             ensure_engine(cfg.engine, tc, asked=True)
             return 0
 
-        # loop() も中に入れる。再起動でエンジンを用意し直せないことがある。
+        # loop() も try の中で呼ぶ。エンジンの再起動時に、エンジンを用意し直せない
+        # ことがある。
         return Repl(cfg, args.preload).loop()
     except START_FAILED as e:
         die(str(e) or "エンジンが起動しなかった")

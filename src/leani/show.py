@@ -1,6 +1,6 @@
 """表示を出す (副作用)。
 
-組み上がった表示を端末に書く。組み立てそのものは pure にある。"""
+組み立てた表示を端末に出力する。組み立ての処理は pure にある。"""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ def die(msg: str) -> NoReturn:
 
 
 def panic_check(resp: Response) -> bool:
-    """エンジンが PANIC を吐いたら黙って結果扱いしない。"""
+    """エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。"""
     line = panic_line(resp)
     if line is None:
         return False
@@ -59,14 +59,14 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
 
     note = resp.get("message")
     if isinstance(note, str) and note.strip():
-        # repl がリクエストごと拒否した (env や proofState が無い)。messages には
-        # 何も入らないので、ここで出さないと画面が無反応になる。
+        # repl がリクエスト全体を拒否した (env や proofState が無い)。messages は
+        # 空なので、ここで表示しないと画面に何も表示されない。
         print(red(note.strip()))
         print(dim("  エンジンと環境が食い違っている。:restart で作り直せる"))
 
     if has_error(resp):
-        # 通らなかった宣言は環境に入っていない。その sorry の目標を出しても
-        # 埋めようがなく、エラーの後ろに読めない目標が並ぶだけ。
+        # エラーになった宣言は環境に追加されていない。その sorry のゴールを表示しても
+        # 証明を書けないので、エラーの後ろに役に立たないゴールが並ぶだけになる。
         return
 
     for i, sy in enumerate(sorries(resp)):

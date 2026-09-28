@@ -1,12 +1,13 @@
-"""エンジンに投げるクエリ (定数)。
+"""エンジンに送るクエリ (定数)。
 
-Lean のソースとしてエンジンに送る文字列。操作するものは無い。"""
+Lean のソースコードとしてエンジンに送る文字列。操作するものは無い。"""
 
 from __future__ import annotations
 
 import re
 
-# 完結判定。command と term の両方を 1 往復で聞く。
+# 完結判定。command / term / tacticSeq としてパースできるかを、1 回のリクエストで
+# 確かめる。
 PARSE_PROBE = r"""open Lean Parser in
 #eval show CoreM Unit from do
   let src := %s
@@ -18,9 +19,9 @@ PARSE_PROBE = r"""open Lean Parser in
   IO.println (Json.mkObj [("cmd", probe `command), ("term", probe `term),
                           ("tac", probe `tacticSeq)]).compress"""
 
-# 補完の候補。名前空間ごとの塊をいくつか、定数を 1 周するあいだにまとめて取る
-# (mathlib では 1 周に 1 秒かかる)。protected な名前は先頭に ! を付ける。
-# `open` した先から短い名前で書けるかどうかがこれで決まる。
+# 補完の候補。複数の接頭辞の候補を、定数を 1 回走査するあいだにまとめて取得する
+# (Mathlib では 1 回の走査に 1 秒かかる)。protected な名前には先頭に ! を付ける。
+# `open` した名前空間の名前を短い名前で書けるかどうかは、この ! で決まる。
 COMPLETE_QUERY = r"""open Lean in
 #eval show CoreM Unit from do
   let env ← getEnv
@@ -41,8 +42,9 @@ COMPLETE_QUERY = r"""open Lean in
   let out := hits.map fun h => (h.qsort (·.1 < ·.1)).toList.take %d |>.map mark
   IO.println (toJson out).compress"""
 
-# いまの namespace と open。短い名前がどの名前空間から来るかを決める。
-# `open Lean in` を付けると、それ自体が答えに混ざるので名前は全部修飾して書く。
+# 現在の namespace と open。短い名前がどの名前空間の名前かを判断するのに使う。
+# `open Lean in` を付けるとその open 自体も結果に含まれるので、名前はすべて
+# 完全修飾名で書く。
 SCOPE_QUERY = r"""#eval show Lean.CoreM Unit from do
   let mut opens : Array Lean.Json := #[]
   let mut ns ← Lean.getCurrNamespace
@@ -67,15 +69,18 @@ DOC_QUERY = r"""open Lean in
 
 # パーサが「まだ続きがある」と言っているとみなすメッセージ。
 INCOMPLETE = re.compile(r"unexpected end of input|unterminated (comment|string)")
-# ブロック中でも脱出できるようにする。Lean のソースが行頭 : で始まることは無い
-# (`:=` の継続はインデントされる)。
+# 複数行の入力の途中でも、: で始まる行でブロックを終わらせられるようにする (ブロックが
+# 完結していれば送信し、途中なら破棄する)。Lean のソースの行が : で始まることは
+# 無い (`:=` の続きの行はインデントされる)。
 META_LINE = re.compile(r"^:[A-Za-z!?{}]")
-# `structure P where` や `induction n with` は Lean 文法ではそれ自体で完結する。
-# パーサは「終わり」と言うが、続きのブロックを書きたいのが普通なので確定を遅らせる。
-# 完結判定を覆すわけではないので、外しても Enter が 1 回余分に必要になるだけ。
+# `structure P where` や `induction n with` は Lean の文法ではそれだけで完結する。
+# パーサは完結していると判定するが、普通は続きのブロックを書きたいので確定を遅らせる。
+# 完結判定の結果を変えるわけではないので、推測が外れても Enter が 1 回余分に必要に
+# なるだけ。
 BLOCK_OPEN = re.compile(r"(?:^|[\s)\]}])(where|with|do|by)[ \t]*$")
 ERR_POS = re.compile(r"<input>:(\d+):(\d+):")
-# 自分で通した宣言の名前。補完に足すためだけなので、取りこぼしても害はない。
+# ユーザーが入力し、エラーなく受理された宣言の名前。補完の候補に追加するためだけに
+# 使うので、取りこぼしても問題はない。
 DECL_NAME = re.compile(
     r"^\s*(?:@\[[^\]]*\]\s*)*"
     r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+|scoped\s+)*"
@@ -84,7 +89,7 @@ DECL_NAME = re.compile(
     re.MULTILINE,
 )
 
-# #eval できない式。型だけでも出したほうが親切なので #check に落とす。
+# #eval できない式。型だけでも表示したほうが親切なので、#check に切り替える。
 NOT_EVALUABLE = re.compile(
     r"noncomputable|failed to compile"
     r"|could not synthesize.*(Repr|ToString|ToExpr|Eval)|cannot evaluate",

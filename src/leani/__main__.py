@@ -1,4 +1,4 @@
-"""`python -m leani` の入口。"""
+"""`python -m leani` のエントリーポイント。"""
 
 from __future__ import annotations
 

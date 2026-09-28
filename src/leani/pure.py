@@ -1,6 +1,6 @@
 """判定と整形 (純粋)。
 
-色付け・応答の読み取り・エンジンのバージョン・完結判定・表示の組み立て。
+色付け、応答の読み取り、エンジンのバージョン、完結判定、表示の組み立てを扱う。
 入力だけで出力が決まるので、テストは入力と出力だけで書ける。"""
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ from leani.types import (
 )
 
 
-# 色を付けるかどうかを読み取る (TTY) のと、実際に組み立てるのは別。判定は
-# 起動時に一度きりなので、ここから下は入力だけで出力が決まる。
+# 色を付けるかどうかの判定 (TTY) と、色付きの文字列の組み立ては分けてある。判定は
+# 起動時に 1 回だけ行うので、ここから下は入力だけで出力が決まる。
 def c(code: str, s: str) -> str:
     return f"\033[{code}m{s}\033[0m" if TTY else s
 
@@ -72,9 +72,10 @@ def shorten(
     chunk: Sequence[str], prefix: str, ns: str, hidden: Sequence[str]
 ) -> list[str]:
     """
-    `ns` を open したとき (`ns` が空なら root) に、prefix で始まる短い名前。
+    `ns` を open したとき (`ns` が空なら root) に使える、prefix で始まる短い名前。
 
-    chunk は COMPLETE_QUERY の塊の 1 つで、protected な名前は先頭に ! が付いている。
+    chunk は COMPLETE_QUERY の結果のチャンクの 1 つで、protected な名前は先頭に ! が
+    付いている。
     Lean と同じく protected な名前は最後の 1 語だけでは書けないので出さない
     (`open Nat` しても `add_comm` は `Nat.add_comm` にならない)。
     """
@@ -107,7 +108,7 @@ def has_error(resp: Response) -> bool:
 
 
 def info_text(resp: Response) -> str:
-    """info メッセージだけを繋いだもの。#eval の出力はここに来る。"""
+    """info メッセージだけを連結したもの。#eval の出力はここに含まれる。"""
     return "\n".join(
         m.get("data", "") for m in messages(resp) if m.get("severity") == "info"
     )
@@ -137,11 +138,11 @@ def scan_header(text: str) -> tuple[list[str], set[int]]:
     """
     先頭のヘッダ領域にある import を、モジュール名と行番号で返す。
 
-    ヘッダ領域は空行・コメント・`import` が続く範囲。行単位で
-    `import` を探すと、doc コメントに書いた `import Foo` を本物と取り違える。
-    それを :save のヘッダに書けば、repl はヘッダを丸ごと捨てて起動するので、
-    書き出したファイルは :l でも lean でも通らない。落とす側も同じで、
-    コメントの行を消してコメントを壊す。
+    ヘッダ領域は、空行、コメント、`import` が続く範囲。行単位で `import` を
+    探すと、doc コメントに書いた `import Foo` を本物の import と取り違える。
+    それを :save のヘッダに書き出すと、repl はヘッダ全体を無視して起動するので、
+    書き出したファイルは :l でも lean でもエラーになる。import 行を取り除く処理
+    でも同じで、コメントの行を消してコメントを壊す。
     """
     mods: list[str] = []
     at: set[int] = set()
@@ -175,29 +176,33 @@ def import_lines(text: str) -> list[str]:
 
 
 def strip_imports(text: str) -> str:
-    """import 行を落とす。既にある環境へ重ねるとき用 (import は先頭にしか置けない)。"""
+    """
+    import 行を取り除く。既存の環境の上で実行するときに使う。
+
+    import はファイルの先頭にしか書けない。
+    """
     at = scan_header(text)[1]
     return "\n".join(line for n, line in enumerate(text.splitlines()) if n not in at)
 
 
 def clip(line: str, width: int) -> str:
-    """長い 1 行を端末に収める。折り返すと、並べたときに行の対応が崩れる。"""
+    """長い 1 行を端末の幅に収める。折り返すと、並べたときに行の対応がずれる。"""
     return line if len(line) <= width else line[: width - 1] + "…"
 
 
 def head_line(src: str, width: int = 60) -> str:
-    """宣言 1 件を 1 行で指す。報告に使うので長ければ切る。"""
+    """宣言 1 件を 1 行で表す。報告に使うので、長ければ切り詰める。"""
     return clip(src.strip().split("\n")[0], width)
 
 
 def error_text(resp: Response, keep: int = 3) -> str:
-    """エラーメッセージを繋いだもの。長ければ頭だけ。"""
+    """エラーメッセージを連結したもの。長ければ先頭の数行だけ。"""
     blob = "\n".join(m.get("data", "").strip() for m in errors(resp)).strip()
     return "\n".join(blob.split("\n")[:keep])
 
 
 def offset(src: str, pos: Pos | None) -> int | None:
-    """repl の {"line": 1 から, "column": 0 から} を文字位置に直す。"""
+    """repl の位置 {"line": 1 始まり, "column": 0 始まり} を文字の位置に変換する。"""
     if not isinstance(pos, dict):
         return None
 
@@ -214,11 +219,11 @@ def offset(src: str, pos: Pos | None) -> int | None:
 
 def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     """
-    sorry 1 個をタクティクのスクリプトに差し替える。位置が読めなければ None。
+    sorry 1 つをタクティクのスクリプトに置き換える。位置が取得できなければ None。
 
-    repl は sorry ごとに pos / endPos を返す。テキストを数えて当てると
-    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切る。数えて
-    当てていたころは sorry が 2 個以上あると埋め戻しを丸ごと諦めていた。
+    repl は sorry ごとに pos / endPos を返す。テキストを検索して sorry を探すと、
+    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切り出す。テキストを
+    検索していたころは、sorry が 2 つ以上あると置き換えを全部諦めていた。
     """
     a, b = offset(src, sy.get("pos")), offset(src, sy.get("endPos"))
     if a is None or b is None or src[a:b] != "sorry":
@@ -226,21 +231,21 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
 
     pad = src[src.rfind("\n", 0, a) + 1 : a]  # sorry の行の、sorry までの部分
     if "\n" not in script:
-        # 1 行なら sorry のあった桁にそのまま置く。前後の空白は動かさない。
-        # 動かすと ⟨sorry, …⟩ が ⟨ rfl, …⟩ になり、行頭に寄っている sorry は
-        # インデントが 1 桁になって by ブロックから外れる。
+        # 1 行なら sorry のあった桁にそのまま置く。前後の空白は変えない。
+        # 変えると ⟨sorry, …⟩ が ⟨ rfl, …⟩ になり、行頭にある sorry は
+        # インデントが 1 桁になって by ブロックの外に出てしまう。
         return src[:a] + script + src[b:]
     elif not pad.strip():
-        # sorry だけの行。その桁をスクリプトの桁にする。
+        # sorry だけの行。sorry の桁にスクリプトを揃える。
         return src[:a] + hang(script, pad) + src[b:]
     else:
-        # 行の途中 (:= by sorry)。by の下にぶら下げる。
+        # 行の途中 (:= by sorry)。次の行に、その行より 2 桁深くインデントして置く。
         deeper = pad[: len(pad) - len(pad.lstrip(" \t"))] + "  "
         return src[:a].rstrip(" \t") + "\n" + deeper + hang(script, deeper) + src[b:]
 
 
 def hang(script: str, pad: str) -> str:
-    """スクリプトの 2 行目以降を pad の桁に揃える。1 行目は呼ぶ側が置く。"""
+    """スクリプトの 2 行目以降を pad の桁に揃える。1 行目は呼び出し側が置く。"""
     head, *rest = script.split("\n")
     return "\n".join([head] + [pad + one if one.strip() else one for one in rest])
 
@@ -252,10 +257,10 @@ def has_import(src: str) -> bool:
 
 def first_response(buf: str) -> Response | None:
     """
-    受信バッファから最初の完全なレスポンスを取る。まだ揃っていなければ None。
+    受信バッファから最初の完全なレスポンスを取り出す。まだ全部届いていなければ None。
 
-    レスポンスは空行で終わる。JSON の中に空行が来ることもあるので、空行の候補を
-    順に試して最初に読めたものを採る。
+    レスポンスは空行で終わる。JSON の中に空行が含まれることもあるので、空行の位置を
+    順に試して、最初にパースできたものを使う。
     """
     for m in re.finditer(r"\n[ \t]*\n", buf):
         head = buf[: m.start()]
@@ -266,8 +271,8 @@ def first_response(buf: str) -> Response | None:
         except json.JSONDecodeError:
             continue
 
-        # repl の応答は必ずオブジェクト。配列や数値が来たら読めなかった扱いで
-        # 次の区切りを試す (呼ぶ側は添字で鍵を取り出す)。
+        # repl の応答は必ずオブジェクト。配列や数値が返ってきたらパースできなかった
+        # ものとして扱い、次の区切りを試す (呼び出し側は添字でキーを取り出す)。
         if isinstance(got, dict):
             return cast(Response, got)
 
@@ -303,9 +308,9 @@ def toolchain_version(tc: str) -> str:
 
 def version_key(tag: str) -> tuple[int, int, int, int] | None:
     """
-    バージョンの並び。rc は同じバージョンの正式リリースより前。
+    バージョンを比較するためのキー。rc は同じバージョンの正式リリースより前になる。
 
-    読めない形なら None。
+    解釈できない形なら None。
     """
     m = VERSION.match(tag)
     if m is None:
@@ -317,11 +322,12 @@ def version_key(tag: str) -> tuple[int, int, int, int] | None:
 
 def pick_tag(version: str, tags: Sequence[str]) -> str | None:
     """
-    そのバージョンに使う repl のタグ。同名があればそれ、無ければ以下で一番新しいもの。
+    そのバージョンに使う repl のタグ。同名のタグがあればそれ、無ければそのバージョン
+    以下で一番新しいもの。
 
     repl のタグは Lean のバージョンと同名だが、patch リリースには付かないことがある
     (v4.33.0 はあるが v4.33.1 は無い)。patch で API は変わらないので、1 つ前の
-    タグのソースを目的のバージョンでビルドすれば通る。
+    タグのソースを目的のバージョンでビルドすれば、ビルドに成功する。
     """
     want = version_key(version)
     if want is None:
@@ -338,9 +344,9 @@ def engine_dir(engine: str | None, tc: str) -> str:
     if engine is not None:
         return engine
 
-    # バージョン名がそのままディレクトリ名になるので、区切り文字は落とす。さらに
-    # build_engine はこの場所を作り直す (rmtree する) ので、`..` のように
-    # 上へ抜ける名前は通さない。
+    # バージョン名をそのままディレクトリ名に使うので、パスの区切り文字などは `-` に
+    # 置き換える。さらに build_engine はこのディレクトリを作り直す (rmtree する)
+    # ので、`..` のように親ディレクトリを指す名前は受け付けない。
     version = toolchain_version(tc)
     name = re.sub(r"[^A-Za-z0-9._-]", "-", version)
     if not name.strip(".-"):
@@ -349,7 +355,7 @@ def engine_dir(engine: str | None, tc: str) -> str:
 
 
 def err_pos(msg: str | None) -> tuple[int, int]:
-    """エラーが何行何桁まで進めたか。深く進めた側がユーザの意図した種類。"""
+    """パーサがエラーになるまでに何行何桁まで読めたか。先まで読めた方を、ユーザーが意図した種類とみなす。"""
     m = ERR_POS.search(msg or "")
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 
@@ -373,10 +379,10 @@ def block_continues(buf: Sequence[str], src: str) -> bool:
 
 def classify(probe: Probe | None) -> tuple[State, Kind]:
     """
-    パーサの応答を (入力の状態, 送り方) に読む。
+    パーサの応答を (入力の状態, 送り方) に変換する。
 
-    判定できなければ err にして、そのまま投げて Lean に本当のエラーを出させる
-    (自前の推測でエラーを作らない)。
+    判定できなければ err にし、入力をそのまま送って Lean に本当のエラーを出させる
+    (leani の推測でエラーを作らない)。
     """
     match probe:
         case None:
@@ -407,12 +413,14 @@ def classify_tac(probe: Probe | None) -> tuple[State, Kind]:
             return ERR, TAC
 
 
-# `exact?` や `simp?` は結果を "Try this:" として info で返す。スクリプトにはこの
-# 中身を入れる。`exact?` のままでは :save したファイルで毎回検索が走り、
-# 結果も環境次第で変わる。提案の先頭には `[apply]` のような目印が付く。
+# `exact?` や `simp?` は結果を "Try this:" として info で返す。スクリプトには
+# この提案の中身を使う。`exact?` のままだと、:save したファイルを読み込むたびに
+# 検索が実行され、結果も環境によって変わる。提案の先頭には `[apply]` のような
+# ラベルが付く。
 SUGGESTION_TAG = re.compile(r"^\[[^\]]*\]\s*")
 
-# 提案が読み切れたかの目安。折り返しを取りこぼすと必ずここが崩れる。
+# 提案を最後まで読み取れたかの目安。折り返した行を読み損ねると、必ず括弧の対応が
+# 合わなくなる。
 PAIRS = {"(": ")", "[": "]", "{": "}", "⟨": "⟩"}
 
 PAINT: dict[str, Callable[[str], str]] = {"error": red, "warning": yellow}
@@ -423,7 +431,7 @@ def plain(s: str) -> str:
 
 
 def panic_line(resp: Response) -> str | None:
-    """エンジンが PANIC を吐いていたら、その 1 行目。無ければ None。"""
+    """エンジンが PANIC を出力していたら、その 1 行目。無ければ None。"""
     for m in messages(resp):
         data = m.get("data") or ""
         if "PANIC at" in data:
@@ -449,9 +457,10 @@ def try_this(messages_: Sequence[Message] | None) -> str | None:
     "Try this:" の提案を返す。無ければ None。
 
     提案は pretty printer が 100 桁前後で折り返すので、`simp?` の結果は
-    ふつうに複数行になる。1 行目だけ取ると `simp only [a, b,` のような
-    閉じていないスクリプトになり、しかもそれが「完成した証明」として出るので
-    気付けない。改行ごと返す (Lean のタクティクは複数行でよい)。
+    普通に複数行になる。1 行目だけを取ると `simp only [a, b,` のような括弧の
+    閉じていないスクリプトになり、しかもそれが「完成した証明」として表示される
+    ので、ユーザーは気付けない。改行を含めて返す (Lean のタクティクは複数行でも
+    問題ない)。
     """
     for m in messages_ or []:
         data = (m.get("data") or "").strip()
@@ -469,7 +478,7 @@ def span(
     """
     メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。
 
-    位置は送ったソースの座標なので、#eval で包んだ分のずれ (line_off /
+    位置は送ったソース上の座標なので、#eval でラップした分のずれ (line_off /
     col_off) を引いてから、その行の長さに収める。
     """
     pos = m.get("pos") or {}
@@ -487,8 +496,8 @@ def span(
     return ln, col, min(width, max(1, len(src_line) - col))
 
 
-# loogle の応答を読む。エラーも検索結果も同じ 200 で返るので、`error` の鍵が
-# あるかどうかだけで見分ける。
+# loogle の応答を読む。エラーも検索結果も同じステータス 200 で返るので、`error`
+# キーがあるかどうかだけで区別する。
 def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
     """loogle の応答を表示する形にする。1 件 2 行 (名前と型 / どの module か)。"""
     err = got.get("error")
@@ -503,8 +512,8 @@ def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
     if not hits:
         return dim("見つからなかった")
 
-    # count は見つかった総数で、hits は loogle が既に 200 件で切ったもの。
-    # 表示するのはさらにその先頭だけなので、全体の件数は count のまま書く。
+    # count は見つかった総数で、hits は loogle が 200 件までに切り詰めたもの。
+    # 表示するのはさらにその先頭だけなので、全体の件数には count をそのまま使う。
     total = got.get("count", len(hits))
     shown = hits[:keep]
     head = f"{total} 件" + (f" (先頭 {len(shown)} 件)" if len(shown) < total else "")

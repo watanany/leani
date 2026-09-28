@@ -1,7 +1,7 @@
 """パス (読み取り)。
 
-設定・履歴・キャッシュの位置と、環境変数で決まる値。起動時に一度読むだけで、
-ここから先は定数として扱う。"""
+設定、履歴、キャッシュのパスと、環境変数で決まる値。起動時に一度読むだけで、
+それ以降は定数として扱う。"""
 
 from __future__ import annotations
 
@@ -14,39 +14,43 @@ STATE = os.environ.get("XDG_STATE_HOME", f"{HOME}/.local/state") + "/leani"
 CONFIG = os.environ.get("LEANI_CONFIG", f"{CONFIG_HOME}/leani/config.toml")
 HIST = os.environ.get("LEANI_HISTORY", f"{STATE}/history")
 INIT = os.environ.get("LEANI_INIT", f"{CONFIG_HOME}/leani/init.lean")
-# エンジンは leanprover-community/repl。この REPL 本体ではない。無ければ leani が
-# 取ってきてビルドする (ensure_engine)。使う Lean のバージョンごとに掘る。
+# エンジンは leanprover-community/repl で、leani 自体ではない。エンジンが無ければ
+# leani が clone してビルドする (ensure_engine)。使う Lean のバージョンごとに
+# ディレクトリを作る。
 ENGINE_REPO = "https://github.com/leanprover-community/repl"
 ENGINE_CACHE = f"{STATE}/engine"
-# 明示されたときは leani は何も管理せず、そのディレクトリをそのまま使う。
+# LEANI_ENGINE が指定されたときは、leani は何も管理せず、そのディレクトリを
+# そのまま使う。
 ENGINE = os.environ.get("LEANI_ENGINE")
 NO_SETUP = bool(os.environ.get("LEANI_NO_SETUP"))
-# エンジンの用意で外部と通信するときの上限。応答が返らないまま黙って止まらないように。
+# エンジンを用意するときの、外部との通信のタイムアウト (秒)。応答が返らないまま
+# 何も表示せずに止まらないように。
 SETUP_TIMEOUT = 120
-# git に認証を聞き返させない。capture_output だと聞かれても見えないまま止まる。
+# git に認証情報を入力させない。capture_output だと、入力を求めるプロンプトが
+# 表示されないまま止まる。
 SETUP_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0")
 PROMPT = "λ> "
-# 完結判定と補完のクエリが Lean.Parser / CoreM / Json を使うので、ユーザの
-# import が何であれこれだけは必要。import は先頭に並べる決まりなので、
-# 常に 1 行目に足しておけば他の import と共存できる。
+# 完結判定と補完のクエリが Lean.Parser / CoreM / Json を使うので、ユーザーの
+# import が何であっても、この import は必要。import はファイルの先頭に並べる
+# 決まりなので、常に 1 行目に追加しておけば他の import と一緒に使える。
 PROBE_IMPORT = "import Lean\n"
 
-# 起動したヘッダが本当に効いたかを見るための 1 行。repl は解決できない import
-# を**エラーも出さずに**ヘッダごと捨てて新しい env を返すので、これが通るかで
-# しか判別できない。import Lean まで落ちるため、指すのはその中の定数にする
-# (完結判定が使っているものそのまま)。
+# 起動時のヘッダが本当に読み込まれたかを確かめるための 1 行。repl は解決できない
+# import があると、**エラーも出さずに**ヘッダ全体を捨てて新しい env を返す。なので、
+# この行がエラーなく実行できるかでしか判別できない。そのとき import Lean も捨て
+# られるため、確かめる対象は Lean の中の定数にする (完結判定が使っているものと同じ)。
 BOOT_PROBE = "#check @Lean.Parser.runParserCategory\n"
 
 COMPLETE_CAP = 40000
 
-# 定理検索 (loogle)。エンジンとは別のサービスで、こちらは外部への HTTP。自分で
-# 用意したものを指せるようにしてある。公開のものが探す先は mathlib なので、手元に
-# 無い名前も出てくる (module を一緒に出すのはそのため)。
+# 定理検索 (loogle)。エンジンとは別のサービスで、外部に HTTP で問い合わせる。自分で
+# 用意した loogle も指定できる。公開されている loogle は Mathlib を検索するので、
+# 手元に無い名前も結果に含まれる (module を一緒に表示するのはそのため)。
 LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
 # 応答が返らないときもプロンプトが戻るように。重いパターン (部分項をたくさん
-# 書いたもの) は向こうの heartbeats 上限に達するまで走るので、実測で 20 秒近く
-# かかる。短くすると、答えが出るはずのものまで打ち切ってしまう。
+# 書いたもの) は loogle 側で heartbeats の上限に達するまで実行されるので、実測で
+# 20 秒近くかかる。短くすると、結果が返るはずの検索まで打ち切ってしまう。
 LOOGLE_TIMEOUT = 30
 
-# 色を出すかどうかは起動時に決まる。パイプに出力するときは混ぜない。
+# 色を付けるかどうかは起動時に決める。パイプに出力するときは色を付けない。
 TTY = sys.stdout.isatty()
