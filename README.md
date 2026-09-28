@@ -15,7 +15,7 @@ Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
   |
 λ> List.range 12 |>.map fib
 [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
-λ> Std.Time.PlainDateT⇥        → Std.Time.PlainDateTime に補完される
+λ> Std.Time.PlainDateT<Tab>    → Std.Time.PlainDateTime に補完される
 ```
 
 ## インストール
@@ -24,13 +24,18 @@ Lean 4 の対話 REPL。GHCi や IPython と同じように使える。
 uv tool install git+https://github.com/watanany/leani
 ```
 
-pipx でもいい。
+`leani` コマンドを `~/.local/bin` に置く。
+
+clone したリポジトリから入れるなら、リポジトリの中で次を実行する。
 
 ```
-pipx install git+https://github.com/watanany/leani
+uv tool install --editable . --force
 ```
 
-どちらも `leani` コマンドを `~/.local/bin` に置く。
+`~/.local/bin/leani` がリポジトリの `src/` を直接読むので、`git pull` やコードの
+変更は次の起動から反映される。入れ直すのは `pyproject.toml` の依存やエントリ
+ポイントを変えたときだけでいい。`--force` は、git から入れた leani が既にあるときに
+置き換えるために付けている。
 
 必要なものは `elan` (Lean 本体と `lake`) と `git` の 2 つ。どちらかが PATH に
 無ければ起動時にエラーを表示する。Python は 3.11 以上が必要。Python 側の依存は
