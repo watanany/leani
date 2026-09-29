@@ -158,7 +158,9 @@ class Proof:
     state: int  # repl 側の proofState
     goals: list[str]
     script: list[str] = field(default_factory=list)
-    stack: list[int] = field(default_factory=list)  # :undo 用
+    # :undo 用。タクティクを実行する前の proofState とゴール。ゴールも戻さないと、
+    # :undo のあとの :goals が取り消したタクティクのあとのゴールを表示する。
+    stack: list[tuple[int, list[str]]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -823,7 +825,7 @@ class Repl:
             if self.proof is None:
                 return
             if self.proof.stack:
-                self.proof.state = self.proof.stack.pop()
+                self.proof.state, self.proof.goals = self.proof.stack.pop()
             if self.proof.script:
                 self.proof.script.pop()
             return
@@ -987,7 +989,7 @@ class Repl:
             render(self.out, resp, src)
             return
 
-        proof.stack.append(before)
+        proof.stack.append((before, list(proof.goals)))
         proof.state = resp["proofState"]
 
         found = try_this(messages(resp))
@@ -1229,7 +1231,7 @@ class Repl:
             self.out.write(dim("取り消せるタクティクが無い"))
             return
 
-        proof.state = proof.stack.pop()
+        proof.state, proof.goals = proof.stack.pop()
         if proof.script:
             proof.script.pop()
 
