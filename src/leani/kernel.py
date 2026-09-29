@@ -122,9 +122,10 @@ class LeaniKernel(Kernel):
         self,
         code: str,
         silent: bool,
-        store_history: bool = True,
-        user_expressions: dict[str, Any] | None = None,
-        allow_stdin: bool = False,
+        # 下の 3 つは Kernel が渡すが、leani では使わない。
+        store_history: bool = True,  # noqa: ARG002
+        user_expressions: dict[str, Any] | None = None,  # noqa: ARG002
+        allow_stdin: bool = False,  # noqa: ARG002
     ) -> dict[str, Any]:
         self.out.failed = False
         self.out.silent = silent

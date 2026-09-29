@@ -369,8 +369,8 @@ def describe_項の位置の_sorry():
         repl.feed(":prove")
         out = repl.feed("exact 0")
         assert "sorry のまま" in out, out
-        # sorry のままの宣言が残っているので、名前としては引き続き参照できる
-        # (#eval は sorry に依存する項を拒むので、値では見ない)。
+        # sorry のままの宣言が残っているので、名前としては引き続き参照できる。
+        # 値では確かめない。sorry に依存する項は、Lean が評価を拒むため。
         assert repl.declarations == ["def termSorry : Nat := sorry"]
         assert "termSorry" in repl.feed(":p termSorry")
 

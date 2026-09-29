@@ -62,7 +62,7 @@ addopts = "-q"
 
 [tool.ruff.lint]
 # 有効にしなかったルール。どれも一般には推奨されるが、このリポジトリの方針を優先する。
-#   RET505           return のあとの elif。分岐は明示的に else で書く
+#   RET505-508       return や raise のあとの else。分岐は明示的に else で書く
 #   N802 / PLC2401   日本語のテスト名。これが SPEC.md の見出しになる
 #   PTH              os.path で統一している
 #   EM / TRY003      例外のメッセージは raise する所で組み立てて、そのまま読めるようにする
@@ -72,10 +72,11 @@ addopts = "-q"
 select = [
     "E", "F", "W", "I", "UP", "B", "SIM", "TID",
     "C4", "PIE", "PERF", "FLY", "FURB", "RUF", "PLE", "PLW", "PT", "ISC",
+    "RET", "ARG", "ERA", "C90", "PLR0911", "PLR0912", "PLR0915",
 ]
 # RUF001-003 は日本語と数学記号を「紛らわしい文字」としてすべてエラーにする。
 # ISC001 は formatter と衝突する (行を分けるのは formatter の仕事)。
-ignore = ["RUF001", "RUF002", "RUF003", "ISC001"]
+ignore = ["RUF001", "RUF002", "RUF003", "ISC001", "RET505", "RET506", "RET507", "RET508"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 # 相対 import を禁止するのは好みではなく、下の banned-api を有効にするため。
@@ -94,13 +95,16 @@ ban-relative-imports = "all"
 
 [tool.ruff.lint.per-file-ignores]
 # 副作用のモジュールどうしは import し合ってよい。名前をまとめる __init__ とテストも対象から外す。
-"src/leani/boot.py" = ["TID251"]
-"src/leani/engine.py" = ["TID251"]
-"src/leani/search.py" = ["TID251"]
-"src/leani/show.py" = ["TID251"]
-"src/leani/repl.py" = ["TID251"]
-"src/leani/cli.py" = ["TID251"]
-"src/leani/kernel.py" = ["TID251"]
-"src/leani/__init__.py" = ["TID251"]
-"src/leani/__main__.py" = ["TID251"]
-"tests/**" = ["TID251"]
+# 関数の複雑さの上限 (C901, PLR0911, PLR0912, PLR0915) は、純粋、読み取り、定数のモジュール
+# だけに適用する。副作用のモジュールでは、入力を順に分岐して処理する関数が長くなる。
+"src/leani/boot.py" = ["TID251", "C901", "PLR091"]
+"src/leani/engine.py" = ["TID251", "C901", "PLR091"]
+"src/leani/search.py" = ["TID251", "C901", "PLR091"]
+"src/leani/show.py" = ["TID251", "C901", "PLR091"]
+"src/leani/repl.py" = ["TID251", "C901", "PLR091"]
+"src/leani/cli.py" = ["TID251", "C901", "PLR091"]
+"src/leani/kernel.py" = ["TID251", "C901", "PLR091"]
+"src/leani/__init__.py" = ["TID251", "C901", "PLR091"]
+"src/leani/__main__.py" = ["TID251", "C901", "PLR091"]
+"tests/**" = ["TID251", "C901", "PLR091"]
+"tools/**" = ["C901", "PLR091"]

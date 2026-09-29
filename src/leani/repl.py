@@ -201,7 +201,9 @@ class NameCompleter(Completer):
         self.names = names
 
     def get_completions(
-        self, document: Document, complete_event: CompleteEvent
+        self,
+        document: Document,
+        complete_event: CompleteEvent,  # noqa: ARG002 (prompt_toolkit が渡す)
     ) -> Iterator[Completion]:
         # Lean の名前は . を含むので区切りにしない。
         text = document.text_before_cursor
