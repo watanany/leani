@@ -57,8 +57,8 @@ class Replay(NamedTuple):
     """
     replay の結果。環境に戻せなかったものも全部含めて返す。
 
-    件数だけを返すと、失敗した宣言も読み直せなかったファイルも、何も表示されずに
-    消える。環境からなくなったものは必ず報告する。
+    件数だけを返すと、失敗した宣言も読み込み直せなかったファイルも、何も表示されずに
+    消える。環境から無くなったものは必ず報告する。
     """
 
     done: list[str]  # 成功した宣言
@@ -69,7 +69,7 @@ class Replay(NamedTuple):
 
     @property
     def dropped(self) -> bool:
-        """環境からなくなったものがあるか。"""
+        """環境から無くなったものがあるか。"""
         return bool(self.failed or self.skipped or self.notes)
 
 
@@ -83,8 +83,8 @@ class Engine:
         self._warn_toolchain()
         self.proc_env = self._proc_env()
         self.proc: subprocess.Popen[str] | None = None
-        self.env: int | None = None  # 今の環境 id
-        self.base: int | None = None  # 起動直後 / :l 直後の環境 id
+        self.env: int | None = None  # 今の env id
+        self.base: int | None = None  # 起動直後 / :l 直後の env id
         self.stack: list[int] = []  # :undo 用
         self.log: list[str] = []  # 受理した宣言。再起動時に replay する
         self.unplayed: list[str] = []  # 入力したが env に追加されていない宣言
@@ -103,7 +103,7 @@ class Engine:
         確認する。
 
         leani が用意したエンジンは使うバージョンでビルドしてあるので、バージョンは
-        必ず一致する。ユーザーが用意したエンジンだけ、バージョンが違っていたら
+        必ず一致する。ユーザーがビルドしたエンジンだけ、バージョンが違っていたら
         報告する (leani がビルドし直すことはしない)。
         """
         if self.cfg.engine is None:
@@ -293,7 +293,7 @@ class Engine:
         世代が変わっていたら戻さない。保存した env id は終了したプロセスのもので、
         新しいエンジンには存在しない。それを今の env に設定すると、以後の cmd は
         存在しない環境に送られ (repl は "Unknown environment." を返すだけ)、
-        何を入力しても何も起きなくなる。宣言は呼び出し側が実行し直す。
+        何を入力しても何も起きなくなる。宣言は呼び出し側が再実行する。
         """
         if saved.gen != self.gen:
             return False
@@ -310,8 +310,8 @@ class Engine:
         """
         :save が書き出すヘッダ。設定の import に、:l したファイルの import を追加する。
 
-        追加しないと、:l したファイルが import していたモジュールがヘッダから
-        抜ける。その場合 :save は「宣言 n 件を書き出した」と成功を報告するのに、
+        追加しないと、:l したファイルが import していたモジュールがヘッダに
+        含まれなくなる。その場合 :save は「宣言 n 件を書き出した」と成功を報告するのに、
         書き出したファイルは :l でも lean でもエラーになる (Unknown identifier が並ぶ)。
         """
         mods = ["Lean", *self.cfg.imports]
@@ -323,7 +323,7 @@ class Engine:
         今の環境を構成しているソース。:save はこれを書き出す。
 
         log だけでは足りない。init と :l したファイルの内容は base の環境に含まれて
-        いるので、それも並べないと、書き出したファイルを :l で読み直せない。
+        いるので、それも並べないと、書き出したファイルを :l で読み込み直せない。
 
         並べる順は実際に実行した順にする。:l は環境を作り直すので、init はその
         あとに実行される (load_file が再適用する)。逆の順に並べると、init が :l
@@ -377,9 +377,9 @@ class Engine:
             # boot が失敗した。プロセスは再起動したので前の env id は無効になって
             # いて、宣言はどの環境にも含まれていない。log に残すと len(stack) と
             # 一致しなくなり、:save が環境に無い宣言を本体に書き出す。保留にすれば
-            # コメントとして書き出され、ユーザーは直してから :restart で実行し直せる。
+            # コメントとして書き出され、ユーザーは直してから :restart で再実行できる。
             # base も捨てる。:reset が無効な id を設定し直すと、submit の
-            # 「env が無い」ガードが働かなくなり、何を入力してもエラーになる。
+            # 「env が無い」の確認で見つからなくなり、何を入力してもエラーになる。
             self.env = self.base = None
             self.stack, self.log, self.unplayed = [], [], log
             raise
@@ -387,7 +387,7 @@ class Engine:
         self.log, self.unplayed = [], []
 
         # init と :l したファイルの内容は base の環境に含まれていたので、再適用する。
-        # ファイルを読み直せた場合は、load_file の中で init も再適用される。
+        # ファイルを読み込み直せた場合は、load_file の中で init も再適用される。
         notes = []
         lost = self.reload(loaded)
         if lost:
@@ -402,9 +402,10 @@ class Engine:
 
     def reload(self, loaded: str | None) -> str | None:
         """
-        :l したファイルを読み直す。読み直せなかったときは理由を返す (None なら成功)。
+        :l したファイルを読み込み直す。読み込み直せなかったときは理由を返す
+        (None なら成功)。
 
-        読み直せなかったのに loaded_src を残すと、sources() が env に無い宣言を
+        読み込み直せなかったのに loaded_src を残すと、sources() が env に無い宣言を
         返し続ける。そのまま :save すると、書き出したファイルを :l したときに
         「すでに宣言されている」というエラーになる。
         """
@@ -479,7 +480,7 @@ class Engine:
         """
         宣言を今の環境でもう一度実行する。失敗したものは飛ばして続ける。
 
-        :restart と、:env で環境を切り替えたあとに宣言を実行し直す処理の両方が
+        :restart と、:env で環境を切り替えたあとに宣言を再実行する処理の両方が
         これを使う。失敗した宣言を何も表示せずに消さないよう、結果は Replay で返す。
         """
         done: list[str] = []

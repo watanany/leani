@@ -168,8 +168,8 @@ def build_engine(path: str, tc: str, tag: str) -> None:
         if not os.path.isfile(f"{tmp}/.lake/build/bin/repl"):
             raise EngineError(f"ビルドしたのに repl が無い: {tmp}")
 
-        # ビルドしている間に別の leani がエンジンを配置していたら、そのエンジンは使用中
-        # かもしれないので、消さずに使う。
+        # ビルドしているあいだに別の leani がエンジンを配置していたら、そのエンジンは
+        # 使用中かもしれないので、消さずに使う。
         if os.path.isfile(f"{path}/.lake/build/bin/repl"):
             print(dim(f"別の leani がエンジンを用意していた: {path}"), flush=True)
             return
@@ -264,7 +264,8 @@ def lake_env_stale(cache: str, project: str) -> bool:
             if os.path.isfile(f"{project}/{name}")
         )
     except OSError:
-        # 確認している間にファイルが削除されることがある。判断できなければ取得し直す。
+        # 確認しているあいだにファイルが削除されることがある。判断できなければ
+        # 取得し直す。
         return True
 
 

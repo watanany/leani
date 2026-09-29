@@ -65,14 +65,14 @@ def describe_証明モード():
         # 結果も環境によって変わる。
         repl.feed("theorem t1 (n : Nat) : n + 0 = n := by sorry")
         repl.feed(":prove")
-        # 1 つのタクティクで証明が終わるので、そのまま証明モードを抜ける。
+        # 1 つのタクティクで証明が終わるので、そのまま証明モードを終了する。
         out = repl.feed("exact?")
         assert "スクリプトには" in out, out
         assert "証明完了" in out, out
         assert "exact?" not in out[out.index("証明完了") :], "置き換えた宣言に残った"
 
     @story("E1")
-    def it_複数のタクティクを使う証明で目標とスクリプトを確認できる(repl):
+    def it_複数のタクティクを使う証明でゴールとスクリプトを確認できる(repl):
         repl.feed("theorem t2 : 1 = 1 ∧ 2 = 2 := by sorry")
         repl.feed(":prove")
         repl.feed("constructor")
@@ -83,7 +83,7 @@ def describe_証明モード():
 
     @story("E1")
     def it_証明モードの外で証明用のコマンドを入力すると証明モードではないと伝える(repl):
-        # 証明が完成すると leani は自動で証明モードを抜けるので、その直後に
+        # 証明が完成すると leani は自動で証明モードを終了するので、その直後に
         # ユーザーが入力することがある。
         assert "証明モードではない" in repl.feed(":done")
         assert "証明モードではない" in repl.feed(":goals")
@@ -101,7 +101,7 @@ def describe_証明モード():
 def describe_ファイルの読み書き():
 
     @story("B3", "B4")
-    def it_save_したファイルを読み直せる(repl, tmp_path):
+    def it_save_したファイルを読み込み直せる(repl, tmp_path):
         path = tmp_path / "saved.lean"
         repl.feed("def saved := 7")
         assert str(path) in repl.feed(f":save {path}")
@@ -113,7 +113,7 @@ def describe_ファイルの読み書き():
     @story("B4", "F1")
     def it_読み込みに失敗しても手元の環境を失わない(repl, tmp_path):
         # env を捨てたまま戻さないと、以後の入力が import 無しの環境に送られて
-        # 何を書いてもエラーになる (不変条件「環境 id を持っている」で見つけた)。
+        # 何を書いてもエラーになる。
         broken = tmp_path / "broken.lean"
         broken.write_text('def broken : Nat := "oops"\n')
         repl.feed("def before := 5")
@@ -179,7 +179,7 @@ def describe_環境の切り替え():
 
     @story("G4", "G5")
     def it_切り替え先が起動できなければ元の環境に戻る(repl, mocker):
-        # import が成功するかは boot するまで分からない。現在のエンジンは kill 済み
+        # import が成功するかは boot するまで分からない。今のエンジンは kill 済み
         # なので、そのまま例外を投げるとセッションごと消える。
         real = leani.engine.Engine.boot
 
@@ -228,7 +228,7 @@ def describe_書き出しの安全対策():
     """:save は宣言を残す操作。そこで宣言を失わせない。"""
 
     @story("B3")
-    def it_既にあるファイルは上書きしない(repl, tmp_path):
+    def it_すでにあるファイルは上書きしない(repl, tmp_path):
         path = tmp_path / "existing.lean"
         path.write_text("-- 大事なもの\n")
         repl.feed("def x := 1")
@@ -280,7 +280,7 @@ def describe_init_の扱い():
 
 
 def describe_書き出しにすべての宣言を含める():
-    """log だけ書き出すと、読み直したファイルが元の環境と違うものになる。"""
+    """log だけ書き出すと、読み込み直したファイルが元の環境と違うものになる。"""
 
     @story("B3", "G2")
     def it_init_と_読み込んだファイルの宣言も書き出す(repl, tmp_path, mocker):
@@ -348,7 +348,7 @@ def describe_項の位置の_sorry():
 def describe_環境全体が置き換わるとき():
 
     @story("B4", "D3", "E1")
-    def it_読み込んだら証明モードを抜ける(repl, tmp_path):
+    def it_読み込んだら証明モードを終了する(repl, tmp_path):
         # 前の環境の proofState を持ったままだと、送っても新しい環境と合わない。
         path = tmp_path / "other.lean"
         path.write_text("def other := 1\n")
@@ -479,7 +479,7 @@ def describe_履歴の書き出し():
 
     @story("C3", "F3")
     def it_行ごとの追加は受け付けない(tmp_path):
-        # prompt_toolkit は prompt() を抜けるたびに 1 行追加しようとする。受け付けると
+        # prompt_toolkit は prompt() から戻るたびに 1 行追加しようとする。受け付けると
         # 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も必要になる。
         history = leani.repl.BlockHistory(str(tmp_path / "history"))
         history.append_string("  | 0 => 1")
@@ -656,7 +656,7 @@ def describe_タクティクの途中でエンジンが変わる():
         assert "再開できる" in out, out
 
         # replay で戻った宣言の sorry を取得し直していないと、宣言はあるのに
-        # :prove が「sorry が無い」と言うだけになる。
+        # :prove が「sorry が無い」と表示するだけになる。
         mocker.stopall()
         repl.feed(":prove")
         repl.feed("rfl")
@@ -667,7 +667,7 @@ def describe_replay_で戻せなかったもの():
     """何も表示せずに消えると、ユーザーが気付く場所が無い。"""
 
     @story("F1", "B4")
-    def it_読み直せないファイルと消えた宣言を報告する(repl, tmp_path):
+    def it_読み込み直せないファイルと消えた宣言を報告する(repl, tmp_path):
         path = tmp_path / "lib.lean"
         path.write_text("def libA := 10\n")
         repl.feed(f":l {path}")
@@ -690,7 +690,7 @@ def describe_エラーになった宣言の_sorry():
     """
 
     @story("E1", "E3")
-    def it_目標も証明モードの案内も表示しない(repl):
+    def it_ゴールも証明モードの案内も表示しない(repl):
         out = repl.feed("theorem ng : True := ⟨by sorry, nonsense⟩")
 
         assert "proofState" not in out, out
@@ -741,7 +741,7 @@ def describe_replay_が途中で止まったとき():
         assert repl.repl.eng.unplayed == ["def r2 := 2", "def r3 := 3"]
 
     @story("F1", "F2")
-    def it_次の_restart_で実行し直す(repl, mocker):
+    def it_次の_restart_で再実行する(repl, mocker):
         for one in ("def s1 := 1", "def s2 := 2"):
             repl.feed(one)
 
@@ -818,7 +818,7 @@ def describe_切り替えに失敗したとき():
 
         assert "起動できなかった" in out, out
         # 元の環境に戻るときは新しい Engine を作る。:l したファイルの内容は preload で
-        # 戻るが、対話で入力した宣言は実行し直さないと消える。
+        # 戻るが、対話で入力した宣言は再実行しないと消える。
         assert "42" in repl.feed("#eval typedHere"), "入力した宣言が消えた"
 
 
@@ -884,7 +884,7 @@ def describe_依存している公理():
 
     @story("E4", "E1", "E3")
     def it_置き換えたら_sorryAx_が消える(repl):
-        # 置き換えられたかを公理の側から確認できる。間に環境を進める入力を
+        # 置き換えられたかを公理の側から確認できる。あいだに環境を進める入力を
         # 挟むと持ち越した proofState を捨てるので、続けて入力する。
         repl.feed("theorem ax3 : 1 = 1 := by sorry")
         repl.feed(":prove")
@@ -892,7 +892,7 @@ def describe_依存している公理():
         assert "does not depend on any axioms" in repl.feed("#print axioms ax3")
 
 
-def describe_プローブの途中でエンジンが異常終了する():
+def describe_入力の判定の途中でエンジンが異常終了する():
     """
     完結判定もエンジンとの通信なので、そこでエンジンが異常終了することがある。guard が
     エンジンを再起動すると証明モードは終了するが、その行の処理はまだ続いている。
@@ -933,18 +933,18 @@ def describe_保留した宣言とエンジンの世代():
     """
 
     @story("F1", "C2")
-    def it_無効になった環境_id_を設定し直さない(repl):
+    def it_無効になった_env_id_を設定し直さない(repl):
         repl.feed("def held := 1")
         repl.repl.undone = repl.repl.eng.pop_decl()  # 前の宣言を書き直している途中
         repl.feed(":restart")
 
         repl.repl.restore_undone()  # 書き直さずにやめた
         # 無効になった env id を設定すると repl は "Unknown environment." しか返さず、
-        # 何を入力しても反応しない端末になる。テキストから実行し直す。
+        # 何を入力しても反応しない端末になる。テキストから再実行する。
         assert "2" in repl.feed("#eval held + 1")
 
     @story("F1")
-    def it_無効な環境_id_を持っていたらそのことを報告する(repl):
+    def it_無効な_env_id_を持っていたらそのことを報告する(repl):
         repl.repl.eng.env = 987654  # 無効になった世代の env id を持つ状態
         out = repl.feed("def afterGhost := 1")
 
@@ -1033,7 +1033,7 @@ def describe_切り替えが成功したとき():
         out = repl.feed(":env wide")
 
         # 切り替えが成功したときも、新しいエンジンには入力した宣言が無い。
-        # 実行し直さないと、入力した宣言が何も表示されずに消える。
+        # 再実行しないと、入力した宣言が何も表示されずに消える。
         assert "42" in repl.feed("#eval carried"), out
 
 
@@ -1114,7 +1114,7 @@ def describe_sorry_の置き換えの途中でエンジンが異常終了する(
         mocker.stopall()
 
         # guard がエンジンを再起動して再送し、置き換えた宣言は成功している。世代だけを
-        # 見て「sorry のまま」と報告すると、sorry のままのテキストを実行し直して
+        # 見て「sorry のまま」と報告すると、sorry のままのテキストを再実行して
         # 重複エラーになった宣言が保留にずっと残る (:restart のたびに
         # 「戻せなかった宣言」と表示される)。
         assert repl.declarations == ["theorem died : True := by trivial"]
@@ -1145,7 +1145,7 @@ def describe_再起動に失敗したときの証明モード():
         out = repl.feed("trivial")
 
         # 証明モードを終了しないと、以降どの行にも赤い "Unknown proof state." だけを返す
-        # 使えない証明モードのままになる (抜ける方法の案内も表示されない)。
+        # 使えない証明モードのままになる (終了する方法の案内も表示されない)。
         assert "再起動できなかった" in out, out
         assert "証明モードを終了した" in out, out
         assert repl.repl.proof is None
@@ -1186,7 +1186,7 @@ def describe_元になる環境を失ったとき():
         assert "1" in repl.feed("#eval held")
 
     @story("F1")
-    def it_実行し直さずに保留する(repl, mocker):
+    def it_再実行せずに保留する(repl, mocker):
         _no_env(repl, mocker)
 
         buf = io.StringIO()
@@ -1230,10 +1230,10 @@ def describe_元になる環境を失ったとき():
         )
         repl.feed("def afterGhost := 1")
 
-        # 残すと :goals が環境に無い宣言の目標を表示し、:prove がその無効な
+        # 残すと :goals が環境に無い宣言のゴールを表示し、:prove がその無効な
         # proofState で証明モードを始める。
         assert repl.repl.pending == []
-        assert "sorry" in repl.feed(":prove")  # 「sorry が無い」と言うだけ
+        assert "sorry" in repl.feed(":prove")  # 「sorry が無い」と表示するだけ
         assert repl.repl.proof is None
 
     @story("F1")
@@ -1280,7 +1280,7 @@ def describe_定理を外部サービスで探す():
         assert not asked.called, "空の :loogle で問い合わせた"
 
     @story("D4")
-    def it_問い合わせても環境は動かない(repl, mocker):
+    def it_問い合わせても環境は変わらない(repl, mocker):
         repl.feed("def beforeLoogle := 7")
         hit = {
             "name": "Nat.add_comm",

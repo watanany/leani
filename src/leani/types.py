@@ -45,7 +45,7 @@ class Sorry(TypedDict, total=False):
 
 
 class Response(TypedDict, total=False):
-    """repl の応答ひとつ。"""
+    """repl の応答 1 つ。"""
 
     env: int
     proofState: int
@@ -71,7 +71,7 @@ class Probe(TypedDict, total=False):
 
 
 class Scope(TypedDict, total=False):
-    """SCOPE_QUERY の応答。短い名前がどの名前空間から来るか。"""
+    """SCOPE_QUERY の応答。短い名前がどの名前空間の名前か。"""
 
     # (名前空間, hiding で隠した名前)。namespace の中なら、その名前空間と親の
     # 名前空間も含まれる。

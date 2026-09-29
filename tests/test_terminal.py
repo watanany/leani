@@ -44,7 +44,7 @@ def describe_行編集():
     @story("C3", "F3")
     def it_捨てた入力途中のブロックも履歴には残る(terminal):
         # Ctrl-C で捨てるのは入力バッファであって、確定した行の記録ではない。
-        # 長い宣言の途中で打ち間違えても、ユーザーに全体を入力し直させない。
+        # 長い宣言の途中で入力を間違えても、ユーザーに全体を入力し直させない。
         term = terminal()
         term.type("def typo : Nat -> Nat\r")
         term.wait_prompt("|", 20)
@@ -60,7 +60,7 @@ def describe_略記の入力():
     @story("C5")
     def it_space_で記号に変換され_space_も残る(terminal):
         # 確定に使った space を入力から消すと `a \to b` が `a →b` になり、ユーザーは
-        # 記号を入力するたびに space を追加で打つことになる。
+        # 記号を入力するたびに space を追加で入力することになる。
         term = terminal()
         term.type("#check Nat \\to Nat")
         term.settle()

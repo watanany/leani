@@ -208,7 +208,7 @@ def describe_入力が完結したかの判定():
         assert leani.pure.classify(probe) == (leani.types.MORE, leani.types.CMD)
 
     @story("C1")
-    def it_より先まで解析できた方をユーザーの意図とみなす():
+    def it_より先まで解析できたほうをユーザーの意図とみなす():
         probe = {
             "cmd": {"ok": False, "err": "<input>:1:2: unexpected token"},
             "term": {"ok": False, "err": "<input>:1:7: unexpected token"},
@@ -294,7 +294,7 @@ def describe_起動前の準備():
 
     @story("G3", "G4")
     def it_toolchain_が変わったらキャッシュを作り直す(tmp_path):
-        # LEAN_PATH は core の .olean も指す。前のバージョンのキャッシュを使い回すと、
+        # LEAN_PATH は core の .olean も指す。前のバージョンのキャッシュを再利用すると、
         # repl は起動するのに import がすべて失敗して、原因が分からなくなる。
         project = tmp_path / "proj"
         project.mkdir()
@@ -431,7 +431,7 @@ def describe_使うバージョンの決め方():
 
     @story("G3")
     def it_明示したエンジンのバージョンを使う(tmp_path):
-        # ユーザーが用意したエンジンは leani がビルドし直さないので、そのバージョンに
+        # ユーザーがビルドしたエンジンは leani がビルドし直さないので、そのバージョンに
         # 合わせるしかない。
         # elan のデフォルトのバージョンを使うと、4.34 の .olean を 4.33 で
         # 読み込むことになる。
@@ -522,7 +522,7 @@ def describe_エンジンを用意するときの安全対策():
         assert not os.path.exists(seen[0]), "作業中の置き場所が残っている"
 
     @story("G3")
-    def it_待っている間に別の_leani_が置いたエンジンは消さない(tmp_path, mocker):
+    def it_待っているあいだに別の_leani_が置いたエンジンは消さない(tmp_path, mocker):
         # 消すと、そのエンジンを使っている別の leani が動かなくなる。
         path = str(tmp_path / "engine" / "v4.33.0")
         os.makedirs(f"{path}/.lake/build/bin")
@@ -577,7 +577,7 @@ def describe_sorry_の置き換え():
         ), got
 
     @story("E3")
-    def it_複数行のスクリプトは_sorry_の桁に揃える():
+    def it_複数行のスクリプトは_sorry_の桁にそろえる():
         src = "example : True := by\n  have h : True := by\n    sorry\n  exact h"
         got = leani.pure.splice_sorry(src, mark(src), "constructor\n-- おわり")
         assert got == (
@@ -718,7 +718,7 @@ def describe_略記の展開():
     @story("C5")
     def it_長い略記が短い略記として変換されない():
         # `\a` も `\all` も `\alpha` も表にある。キー入力のたびに確定すると `\a` の
-        # 時点で変換されてしまい、長い方を入力できなくなる。
+        # 時点で変換されてしまい、長いほうを入力できなくなる。
         assert leani.abbrev.expand_abbrev("\\a") == ("α", 2)
         assert leani.abbrev.expand_abbrev("\\all") == ("∀", 4)
         assert leani.abbrev.expand_abbrev("\\alpha") == ("α", 6)
@@ -839,7 +839,7 @@ def describe_性質一覧():
     """
 
     @story("X1")
-    def it_SPEC_md_がテストと揃っている():
+    def it_SPEC_md_がテストとそろっている():
         # 別プロセスで実行する。tools/spec.py は cwd を基準にしているので、
         # ここから import すると chdir が必要。
         done = subprocess.run(

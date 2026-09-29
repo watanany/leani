@@ -96,7 +96,7 @@ def abbrev_keys() -> KeyBindings:
 
     space 自体もそのまま挿入する。変換のきっかけになった space を消費すると
     `a \\to b` が `a →b` になり、ユーザーは記号を入力するたびに space を追加で
-    打つことになる。略記の表に無ければ何も変換しないので、space キーで空白が
+    入力することになる。略記の表に無ければ何も変換しないので、space キーで空白が
     挿入されない場面は無い。
     """
     kb = KeyBindings()
@@ -221,7 +221,8 @@ class Repl:
     キャッシュ。
     """
 
-    # 行編集のセッションは 1 つを使い回す。:env で _start を呼び直しても履歴は引き継ぐ。
+    # 行編集のセッションは 1 つを再利用する。:env で _start を呼び直しても履歴は
+    # 引き継ぐ。
     _session: PromptSession[str] | None = None
     _history: BlockHistory | None = None
 
@@ -247,7 +248,7 @@ class Repl:
         self.pending: list[Sorry] = []
         self.proof_at: Sorry | None = None  # :prove で選んだ sorry (位置つき)
         self.proof_src: str | None = None  # sorry を含む宣言のソース
-        self.sorry_env: int | None = None  # その宣言が作った環境 id (照合用)
+        self.sorry_env: int | None = None  # その宣言が作った env id (照合用)
 
         # 補完と履歴
         self._comp_cache: dict[tuple[int | None, str], list[str]] = {}
@@ -311,7 +312,7 @@ class Repl:
         prompt_toolkit のセッションを用意する。端末でなければセッションを作らない。
 
         補完は Repl に紐付くので、:env で _start を呼び直したらそのたびに completer を
-        差し替える。セッションと履歴は使い回して、環境を切り替えても Ctrl-P で前の
+        差し替える。セッションと履歴は再利用して、環境を切り替えても Ctrl-P で前の
         履歴を呼び出せるようにする。
         """
         if not sys.stdin.isatty() or not TTY:
@@ -358,7 +359,7 @@ class Repl:
 
     def _names(self, prefix: str) -> list[str]:
         """
-        現在の環境で短い名前で書ける定数のうち、prefix で始まるものを返す。
+        今の環境で短い名前で書ける定数のうち、prefix で始まるものを返す。
 
         `open Lean` のあとの `Json.pa` は `Lean.Json.pa` として探し、`Lean.` を
         取り除いて返す。namespace の中なら、その名前空間と親の名前空間からも同じ
@@ -415,7 +416,7 @@ class Repl:
 
     def _scope_now(self) -> Scope:
         """
-        現在の namespace と open を返す。環境が変わったときだけ問い合わせ直す。
+        今の namespace と open を返す。環境が変わったときだけ問い合わせ直す。
 
         open は宣言と同じく環境ごとに repl が保存しているので、入力した文字列から
         解析するより正確に取得できる (`open X in` は含まれず、`hiding` や
@@ -484,7 +485,7 @@ class Repl:
         if self.proof is not None:
             self.drop_proof()
         # 保留している proofState も終了したプロセスのもの。残すと :goals が
-        # 環境に無い宣言の目標を表示し、:prove がその無効な proofState で証明モードを
+        # 環境に無い宣言のゴールを表示し、:prove がその無効な proofState で証明モードを
         # 始める。
         self.clear_pending()
 
@@ -634,9 +635,9 @@ class Repl:
                 print("^C")
                 continue
             except UnicodeDecodeError as e:
-                # tty でない stdin (パイプ) は strict でデコードする。ここでループを
-                # 抜けると leani が終了し、それまでに実行した宣言も失われる。
-                # その行だけを捨てる。
+                # main は tty でない stdin を errors="replace" に設定し直すので、
+                # この例外が起きるのは設定し直せなかったときだけ。ここでループを抜けると
+                # leani が終了し、それまでに実行した宣言も失われる。その行だけを捨てる。
                 print(red(f"UTF-8 として読めない行を飛ばした ({e.reason})"))
                 continue
 
@@ -674,7 +675,7 @@ class Repl:
     def discard(self) -> None:
         """入力中のブロックを捨てる。Ctrl-C / Ctrl-D で呼ぶ。"""
         # 入力した内容は履歴に残す。捨てるのは入力バッファであって、入力の記録
-        # ではない。長い宣言を打ち間違えたときに、ユーザーは Ctrl-P で呼び出せる。
+        # ではない。長い宣言の入力を間違えたときに、ユーザーは Ctrl-P で呼び出せる。
         self.remember("\n".join(self.buf))
         self.buf, self.ready, self.explicit = [], None, False
         self.restore_undone()
@@ -820,7 +821,7 @@ class Repl:
 
         undone, self.undone = self.undone, None
         if not self.eng.push_decl(undone) and undone.src is not None:
-            # 保存している間にエンジンが再起動された。保存した env id は無効に
+            # 保存しているあいだにエンジンが再起動された。保存した env id は無効に
             # なっているので設定できない。テキストから再実行する。
             self.replay_into([undone.src])
 
@@ -1089,7 +1090,7 @@ class Repl:
             print(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
 
     def prove(self, arg: str) -> None:
-        """直前の入力に出た sorry を 1 つ選んで証明モードに入る。"""
+        """直前の入力に出た sorry を 1 つ選んで証明モードを始める。"""
         found = self.pending
         if not found:
             print(red("直前の入力に sorry が無い"))
@@ -1370,7 +1371,7 @@ class Repl:
 
         path = os.path.abspath(os.path.expanduser(arg))
         if os.path.exists(path) and path not in self.saved:
-            # 打ち間違いでプロジェクトのソースを上書きしない。同じパスへの
+            # パスの入力を間違えて、プロジェクトのソースを上書きしない。同じパスへの
             # 2 回目以降の :save は上書きする。
             print(red(f"すでにある: {path}"))
             print(dim("  ファイルを消すか、別の名前を指定する"))

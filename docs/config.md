@@ -8,7 +8,7 @@ leani では、Lake プロジェクトと import の組み合わせを **環境*
 
 ```toml
 default = "main"
-engine = "~/src/lean-repl"   # 自分で用意したエンジンを使う場合
+engine = "~/src/lean-repl"   # 自分でビルドしたエンジンを使う場合
 
 [env.main]
 project = "~/src/my-project"
@@ -38,7 +38,7 @@ leani は、次の順に起動する環境を決める。
 3. オプションを付けず、設定ファイルに `default` がある場合は、`default` の環境で起動する
 4. どれにも当てはまらない場合、leani はカレントディレクトリから `lakefile.toml` か `lakefile.lean` を持つ一番近い親ディレクトリを探し、その Lake プロジェクトの `lean_lib` を import して起動する。Lake プロジェクトが見つからなければ、Lean 本体だけで起動する
 
-## 自分で用意したエンジンを使う
+## 自分でビルドしたエンジンを使う
 
 leani は通常、エンジンを自動でビルドする。
 自分でビルドしたエンジンを使う場合は、そのディレクトリを次のどれかで指定する。
@@ -85,4 +85,4 @@ init ファイルの `import` の行は無視される。
 | エンジン                | `~/.local/state/leani/engine/<バージョン>` |
 
 `XDG_CONFIG_HOME` や `XDG_STATE_HOME` を設定している場合、leani は `~/.config` と `~/.local/state` の代わりにそのディレクトリを使う。
-`leani -V` を実行すると、実際に使っている場所を確認できる。
+`leani -V` を実行すると、設定ファイル、init ファイル、履歴、エンジンの実際の場所を確認できる。

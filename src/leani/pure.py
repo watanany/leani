@@ -236,7 +236,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
         # インデントが 1 桁になって by ブロックの外に出てしまう。
         return src[:a] + script + src[b:]
     elif not pad.strip():
-        # sorry だけの行。sorry の桁にスクリプトを揃える。
+        # sorry だけの行。sorry の桁にスクリプトをそろえる。
         return src[:a] + hang(script, pad) + src[b:]
     else:
         # 行の途中 (:= by sorry)。次の行に、その行より 2 桁深くインデントして置く。
@@ -245,7 +245,7 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
 
 
 def hang(script: str, pad: str) -> str:
-    """スクリプトの 2 行目以降を pad の桁に揃える。1 行目は呼び出し側が置く。"""
+    """スクリプトの 2 行目以降を pad の桁にそろえる。1 行目は呼び出し側が置く。"""
     head, *rest = script.split("\n")
     return "\n".join([head] + [pad + one if one.strip() else one for one in rest])
 
@@ -355,7 +355,7 @@ def engine_dir(engine: str | None, tc: str) -> str:
 
 
 def err_pos(msg: str | None) -> tuple[int, int]:
-    """パーサがエラーになるまでに何行何桁まで読めたか。先まで読めた方を、ユーザーが意図した種類とみなす。"""
+    """パーサがエラーになるまでに何行何桁まで読めたか。先まで読めたほうを、ユーザーが意図した種類とみなす。"""
     m = ERR_POS.search(msg or "")
     return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
 

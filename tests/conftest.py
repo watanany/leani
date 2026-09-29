@@ -120,7 +120,7 @@ INVARIANTS = [
         lambda r: r.eng.env is not None or not r.eng.log,
     ),
     (
-        "持ち越した proofState は現在の環境のもの",
+        "持ち越した proofState は今の環境のもの",
         lambda r: r.sorry_env is None or r.sorry_env == r.eng.env,
     ),
     (
@@ -132,7 +132,7 @@ INVARIANTS = [
         lambda r: r.proof is None or r.proof_gen == r.eng.gen,
     ),
     (
-        "エンジンのプロセスが生きている",
+        "エンジンのプロセスが実行中である",
         lambda r: r.eng.proc is not None and r.eng.proc.poll() is None,
     ),
     (
@@ -156,12 +156,12 @@ class Driver:
 
     @property
     def engine(self):
-        # :env で切り替えるとエンジンが再起動されるので、その都度現在のエンジンを返す。
+        # :env で切り替えるとエンジンが再起動されるので、その都度今のエンジンを返す。
         return self.repl.eng
 
     def check(self, after):
         for why, holds in INVARIANTS:
-            assert holds(self.repl), f"{after} で不変条件が破れた: {why}"
+            assert holds(self.repl), f"{after} で不変条件が成り立たなくなった: {why}"
 
     def feed(self, *lines):
         """行を順に渡して、出力をまとめて返す。"""
@@ -233,7 +233,7 @@ class Terminal:
         self.wait_prompt(PROMPT, 90)
 
     def _feed(self, chunk):
-        """受け取ったバイトを画面に出力する。CPR には現在のカーソル位置で応答する。"""
+        """受け取ったバイトを画面に出力する。CPR には今のカーソル位置で応答する。"""
         self._pending += chunk
         cut = ESC_TAIL.search(self._pending)
         head = self._pending[: cut.start()] if cut else self._pending
@@ -261,7 +261,7 @@ class Terminal:
         return True
 
     def screen_text(self):
-        """現在の画面。末尾の空行は取り除く。"""
+        """今の画面。末尾の空行は取り除く。"""
         return "\n".join(line.rstrip() for line in self.screen.display).rstrip()
 
     def cursor_line(self):

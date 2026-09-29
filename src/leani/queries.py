@@ -42,7 +42,7 @@ COMPLETE_QUERY = r"""open Lean in
   let out := hits.map fun h => (h.qsort (·.1 < ·.1)).toList.take %d |>.map mark
   IO.println (toJson out).compress"""
 
-# 現在の namespace と open。短い名前がどの名前空間の名前かを判断するのに使う。
+# 今の namespace と open。短い名前がどの名前空間の名前かを判断するのに使う。
 # `open Lean in` を付けるとその open 自体も結果に含まれるので、名前はすべて
 # 完全修飾名で書く。
 SCOPE_QUERY = r"""#eval show Lean.CoreM Unit from do
@@ -67,7 +67,7 @@ DOC_QUERY = r"""open Lean in
   | some d => IO.println d
   | none => pure ()"""
 
-# パーサが「まだ続きがある」と言っているとみなすメッセージ。
+# パーサが「まだ続きがある」と報告しているとみなすメッセージ。
 INCOMPLETE = re.compile(r"unexpected end of input|unterminated (comment|string)")
 # 複数行の入力の途中でも、: で始まる行でブロックを終わらせられるようにする (ブロックが
 # 完結していれば送信し、途中なら破棄する)。Lean のソースの行が : で始まることは

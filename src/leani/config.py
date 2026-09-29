@@ -98,7 +98,7 @@ def as_imports(value: Any, where: str) -> Sequence[str]:
 
 
 def as_table(value: Any, where: str) -> Json:
-    """設定のテーブル 1 つ。型が違えばエラーにする。"""
+    """設定の表 1 つ。型が違えばエラーにする。"""
     if value is None:
         return {}
     elif isinstance(value, dict):
@@ -220,7 +220,7 @@ def from_config(
 ) -> EnvConfig:
     """名前で選んだ環境。設定に書いてある通りに使う (カレントディレクトリは見ない)。"""
     if name not in table:
-        known = " ".join(sorted(table)) or "(ひとつも無い)"
+        known = " ".join(sorted(table)) or "(1 つも無い)"
         raise ConfigError(f"環境 {name} は設定に無い: {CONFIG}\n  ある環境: {known}")
 
     entry = as_table(table[name], f"env.{name}")
