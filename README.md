@@ -78,4 +78,5 @@ REPL の中で `:help` を実行すると、すべてのコマンドを確認で
 - [使い方](docs/usage.md): 機能、すべてのコマンド、証明モード、起動オプション
 - [設定](docs/config.md): 設定ファイル、init ファイル、環境変数、ファイルの場所
 - [エラーが出たとき](docs/troubleshooting.md): エラーメッセージごとの対処
+- [Jupyter で使う](docs/jupyter.md): Jupyter のカーネルとしてのインストールと使い方
 - [開発](CONTRIBUTING.md): テストと lint の実行方法、開発用のドキュメント

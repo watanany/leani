@@ -561,7 +561,7 @@ class Repl:
         try:
             return fn()
         except Interrupted:
-            self.out.write(yellow("^C 中断した。エンジンを再起動する…"))
+            self.out.fail(yellow("^C 中断した。エンジンを再起動する…"))
         except EngineDied:
             self.out.write(red("エンジンが異常終了した。再起動する…"))
             retry = True

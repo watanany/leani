@@ -38,6 +38,7 @@ uv run mypy
 | [docs/usage.md](docs/usage.md)                     | 機能、コマンド、起動オプション                                 |
 | [docs/config.md](docs/config.md)                   | 設定、環境変数、ファイルの場所                                 |
 | [docs/troubleshooting.md](docs/troubleshooting.md) | エラーが出たときの対処                                         |
+| [docs/jupyter.md](docs/jupyter.md)                 | Jupyter のカーネルとして使う方法                               |
 | [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`tools/spec.py` がテストから生成する |
 | [REJECTED.md](REJECTED.md)                         | 採用しなかった案と、その理由                                   |
 | `tests/stories.py`                                 | ユーザーストーリーの一覧                                       |

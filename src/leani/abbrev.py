@@ -366,3 +366,18 @@ def expand_abbrev(head: str) -> tuple[str, int] | None:
         return None
 
     return sym, len(name) + 1
+
+
+def abbrev_candidates(name: str) -> list[str]:
+    """
+    `\\name` を置き換える記号の候補を返す。Jupyter の Tab 補完で使う。
+
+    name と一致するキーの記号を先頭に置き、name で始まるほかのキーの記号をキーの
+    順に続ける。同じ記号は 1 回だけ返す。name が空なら、候補が多すぎるので返さない。
+    """
+    if not name:
+        return []
+
+    keys = sorted(k for k in ABBREV if k.startswith(name) and k != name)
+    first = [name] if name in ABBREV else []
+    return list(dict.fromkeys(ABBREV[k] for k in first + keys))

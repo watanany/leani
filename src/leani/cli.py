@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import os
 import sys
+import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 
@@ -26,6 +28,7 @@ leani [オプション] [file.lean]
   -i, --import <Mod>   import するモジュールを追加する (繰り返せる)
   -p, --project <dir>  Lake プロジェクトを指定する
       --setup          エンジンを用意して終了する (通常は起動時に自動で用意する)
+      --install-kernel Jupyter のカーネルとして登録する (leani[jupyter] が必要)
   -V, --version        環境、Lean のバージョン、ファイルの場所を表示する
   -h, --help           このヘルプを表示する
 
@@ -49,6 +52,7 @@ class Args:
     imports: list[str] = field(default_factory=list)  # -i (繰り返せる)
     preload: str | None = None  # 起動時に読み込むファイル
     setup: bool = False  # --setup
+    install_kernel: bool = False  # --install-kernel
     version: bool = False
     help: bool = False
 
@@ -74,6 +78,8 @@ def parse_args(argv: Sequence[str]) -> Args:
                 args.project = value(a, "ディレクトリ")
             case "--setup":
                 args.setup = True
+            case "--install-kernel":
+                args.install_kernel = True
             case "-h" | "--help":
                 args.help = True
             case "-V" | "--version":
@@ -101,10 +107,35 @@ def print_version(cfg: EnvConfig) -> None:
     print(f"  履歴:     {HIST}")
 
 
+def install_kernel() -> None:
+    """leani.kernel を起動するカーネルを、ユーザーの Jupyter に登録する。"""
+    try:
+        from jupyter_client.kernelspec import KernelSpecManager
+    except ImportError:
+        die("ipykernel が無い。leani[jupyter] をインストールする")
+
+    spec = {
+        "argv": [sys.executable, "-m", "leani.kernel", "-f", "{connection_file}"],
+        "display_name": "Lean 4 (leani)",
+        "language": "lean4",
+        # stdout が端末ではないが、ノートブックは ANSI の色を表示できる。
+        "env": {"FORCE_COLOR": "1"},
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(f"{tmp}/kernel.json", "w") as f:
+            json.dump(spec, f, ensure_ascii=False, indent=2)
+        path = KernelSpecManager().install_kernel_spec(tmp, "leani", user=True)
+    print(dim(f"登録した: {path}"))
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(list(sys.argv if argv is None else argv)[1:])
     if args.help:
         print(USAGE + HELP, end="")
+        return 0
+
+    if args.install_kernel:
+        install_kernel()
         return 0
 
     # stdin が端末でないときは strict でデコードされ、不正なバイトが 1 つあるだけで

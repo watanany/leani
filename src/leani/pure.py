@@ -12,7 +12,7 @@ import textwrap
 from collections.abc import Callable, Sequence
 from typing import cast
 
-from leani.places import ENGINE_CACHE, TTY
+from leani.places import COLOR, ENGINE_CACHE
 from leani.queries import BLOCK_OPEN, ERR_POS, INCOMPLETE
 from leani.types import (
     CMD,
@@ -33,10 +33,10 @@ from leani.types import (
 )
 
 
-# 色を付けるかどうかの判定 (TTY) と、色付きの文字列の組み立ては分けてある。判定は
+# 色を付けるかどうかの判定 (COLOR) と、色付きの文字列の組み立ては分けてある。判定は
 # 起動時に 1 回だけ行うので、ここから下は入力だけで出力が決まる。
 def c(code: str, s: str) -> str:
-    return f"\033[{code}m{s}\033[0m" if TTY else s
+    return f"\033[{code}m{s}\033[0m" if COLOR else s
 
 
 def red(s: str) -> str:

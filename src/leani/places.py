@@ -53,4 +53,7 @@ LOOGLE = os.environ.get("LEANI_LOOGLE", "https://loogle.lean-lang.org/json")
 LOOGLE_TIMEOUT = 30
 
 # 色を付けるかどうかは起動時に決める。パイプに出力するときは色を付けない。
+# Jupyter のカーネルは stdout が端末ではないが、ノートブックは ANSI の色を表示できる
+# ので、kernelspec で FORCE_COLOR を指定して色を付ける。
 TTY = sys.stdout.isatty()
+COLOR = TTY or bool(os.environ.get("FORCE_COLOR"))

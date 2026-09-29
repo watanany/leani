@@ -15,6 +15,11 @@ Repository = "https://github.com/watanany/leani"
 [project.scripts]
 leani = "leani.cli:main"
 
+[project.optional-dependencies]
+jupyter = [
+    "ipykernel>=7.3.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -26,6 +31,7 @@ sources = ["src"]
 [dependency-groups]
 dev = [
     "hypothesis>=6",
+    "ipykernel>=7.3.0",
     "mypy>=2.3.1",
     "pyte>=0.8.2",
     "pytest>=8",
@@ -84,6 +90,7 @@ ban-relative-imports = "all"
 "leani.search".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.cli".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.show".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
+"leani.kernel".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 
 [tool.ruff.lint.per-file-ignores]
 # 副作用のモジュールどうしは import し合ってよい。名前をまとめる __init__ とテストも対象から外す。
@@ -93,6 +100,7 @@ ban-relative-imports = "all"
 "src/leani/show.py" = ["TID251"]
 "src/leani/repl.py" = ["TID251"]
 "src/leani/cli.py" = ["TID251"]
+"src/leani/kernel.py" = ["TID251"]
 "src/leani/__init__.py" = ["TID251"]
 "src/leani/__main__.py" = ["TID251"]
 "tests/**" = ["TID251"]

@@ -37,6 +37,7 @@ leani: Lean 4 の対話 REPL。
     show     副作用    表示を出す
     repl     副作用    フロントエンド
     cli      副作用    エントリーポイント
+    kernel   副作用    Jupyter のカーネル (leani[jupyter] のときだけ使える)
 
 純粋、読み取り、定数のモジュールが副作用のモジュールを import しないことは、
 `ruff` が検査している (pyproject.toml の flake8-tidy-imports)。判定と整形はすべて

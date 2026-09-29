@@ -11,6 +11,7 @@
 - **履歴**：Ctrl-P を押すと、前の入力を呼び出せる。複数行の入力も 1 件として呼び出せる。履歴は次のセッションにも引き継がれる
 - **証明モード**：`sorry` のある定理を書いた直後に `:prove` を実行すると、タクティクを 1 つずつ試せる ([証明モード](#証明モード) を参照)
 - **init ファイル**：leani は起動時に init ファイルの宣言を実行する (詳しくは [設定](config.md#init-ファイル) を参照)
+- **Jupyter**：leani は Jupyter のカーネルとしても使える ([Jupyter で使う](jupyter.md) を参照)
 
 ## エンジンが異常終了したとき
 
@@ -113,6 +114,7 @@ leani -e math          # 設定した環境を名前で選ぶ
 leani -p . -i MyLib    # 設定の環境を使わずに、Lake プロジェクトと import を指定する
 leani foo.lean         # ファイルを読み込んで起動する
 leani --setup          # エンジンを用意して終了する
+leani --install-kernel # Jupyter のカーネルとして登録する (Jupyter で使う を参照)
 leani -V               # 環境、Lean のバージョン、ファイルの場所を表示する
 ```
 
