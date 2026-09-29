@@ -22,6 +22,7 @@ from leani.types import (
     TAC,
     TERM,
     EngineError,
+    Hit,
     Kind,
     Loogle,
     Message,
@@ -80,19 +81,16 @@ def shorten(
     (`open Nat` しても `add_comm` は `Nat.add_comm` にならない)。
     """
     head = f"{ns}." if ns else ""
-    out: list[str] = []
-    for x in chunk:
-        protected = x.startswith("!")
-        name = x[1:] if protected else x
-        if not name.startswith(head + prefix):
-            continue
-
-        short = name[len(head) :]
-        if (head and protected and "." not in short) or short in hidden:
-            continue
-        out.append(short)
-
-    return out
+    found = [
+        (x.startswith("!"), x.removeprefix("!")[len(head) :])
+        for x in chunk
+        if x.removeprefix("!").startswith(head + prefix)
+    ]
+    return [
+        short
+        for protected, short in found
+        if not (head and protected and "." not in short) and short not in hidden
+    ]
 
 
 def messages(resp: Response) -> list[Message]:
@@ -149,21 +147,17 @@ def scan_header(text: str) -> tuple[list[str], set[int]]:
     depth = 0
 
     for n, line in enumerate(text.splitlines()):
-        if depth:
-            depth = comment_depth(line, depth)
-            continue
-
         one = line.strip()
         head = one.split(None, 1)
-        if not one or one.startswith("--"):
+        if depth:
+            depth = comment_depth(line, depth)
+        elif not one or one.startswith("--"):
             continue
         elif one.startswith("/-"):
             depth = comment_depth(line, 0)
-            continue
         elif head[0] == "import" and len(head) == 2 and "/-" not in one:
             mods.append(head[1].strip())
             at.add(n)
-            continue
         else:
             break  # ヘッダ領域はここで終わり。以降の import は Lean も認めない
 
@@ -203,18 +197,14 @@ def error_text(resp: Response, keep: int = 3) -> str:
 
 def offset(src: str, pos: Pos | None) -> int | None:
     """repl の位置 {"line": 1 始まり, "column": 0 始まり} を文字の位置に変換する。"""
-    if not isinstance(pos, dict):
-        return None
-
-    line, col = pos.get("line"), pos.get("column")
-    if not isinstance(line, int) or not isinstance(col, int):
-        return None
-
     lines = src.split("\n")
-    if not 1 <= line <= len(lines) or not 0 <= col <= len(lines[line - 1]):
-        return None
-
-    return sum(len(one) + 1 for one in lines[: line - 1]) + col
+    match pos:
+        case {"line": int(line), "column": int(col)} if 1 <= line <= len(
+            lines
+        ) and 0 <= col <= len(lines[line - 1]):
+            return sum(len(one) + 1 for one in lines[: line - 1]) + col
+        case _:
+            return None
 
 
 def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
@@ -228,7 +218,12 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     a, b = offset(src, sy.get("pos")), offset(src, sy.get("endPos"))
     if a is None or b is None or src[a:b] != "sorry":
         return None
+    else:
+        return put_script(src, a, b, script)
 
+
+def put_script(src: str, a: int, b: int, script: str) -> str:
+    """src[a:b] の sorry をスクリプトに置き換える。"""
     pad = src[src.rfind("\n", 0, a) + 1 : a]  # sorry の行の、sorry までの部分
     if "\n" not in script:
         # 1 行なら sorry のあった桁にそのまま置く。前後の空白は変えない。
@@ -262,32 +257,29 @@ def first_response(buf: str) -> Response | None:
     レスポンスは空行で終わる。JSON の中に空行が含まれることもあるので、空行の位置を
     順に試して、最初にパースできたものを使う。
     """
-    for m in re.finditer(r"\n[ \t]*\n", buf):
-        head = buf[: m.start()]
-        if not head.strip():
-            continue
-        try:
-            got = json.loads(head)
-        except json.JSONDecodeError:
-            continue
+    heads = (buf[: m.start()] for m in re.finditer(r"\n[ \t]*\n", buf))
+    return next((r for head in heads if (r := as_response(head)) is not None), None)
 
-        # repl の応答は必ずオブジェクト。配列や数値が返ってきたらパースできなかった
-        # ものとして扱い、次の区切りを試す (呼び出し側は添字でキーを取り出す)。
-        if isinstance(got, dict):
-            return cast(Response, got)
 
-    return None
+def as_response(text: str) -> Response | None:
+    """
+    text をレスポンスとしてパースする。パースできなければ None。
+
+    repl の応答は必ずオブジェクト。配列や数値ならパースできなかったものとして扱い、
+    次の区切りを試す (呼び出し側は添字でキーを取り出す)。
+    """
+    try:
+        got = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    else:
+        return cast(Response, got) if isinstance(got, dict) else None
 
 
 def parse_env_lines(text: str) -> dict[str, str]:
     """`KEY=value` の並びを dict にする。lake env のキャッシュを読むため。"""
-    out: dict[str, str] = {}
-    for line in text.splitlines():
-        key, sep, value = line.partition("=")
-        if sep:
-            out[key] = value
-
-    return out
+    parts = (line.partition("=") for line in text.splitlines())
+    return {key: value for key, sep, value in parts if sep}
 
 
 def signal_name(num: int) -> str:
@@ -315,9 +307,9 @@ def version_key(tag: str) -> tuple[int, int, int, int] | None:
     m = VERSION.match(tag)
     if m is None:
         return None
-
-    major, minor, patch, rc = m.groups()
-    return (int(major), int(minor), int(patch), int(rc) if rc else 1 << 30)
+    else:
+        major, minor, patch, rc = m.groups()
+        return (int(major), int(minor), int(patch), int(rc) if rc else 1 << 30)
 
 
 def pick_tag(version: str, tags: Sequence[str]) -> str | None:
@@ -334,24 +326,34 @@ def pick_tag(version: str, tags: Sequence[str]) -> str | None:
         return None
     elif version in tags:
         return version
-
-    below = [(k, t) for t in tags if (k := version_key(t)) is not None and k <= want]
-    return max(below)[1] if below else None
+    else:
+        below = [
+            (k, t) for t in tags if (k := version_key(t)) is not None and k <= want
+        ]
+        return max(below)[1] if below else None
 
 
 def engine_dir(engine: str | None, tc: str) -> str:
     """エンジンのパス。設定で明示されていればそれ、無ければバージョンごとのパス。"""
     if engine is not None:
         return engine
+    else:
+        return f"{ENGINE_CACHE}/{version_dir(toolchain_version(tc))}"
 
-    # バージョン名をそのままディレクトリ名に使うので、パスの区切り文字などは `-` に
-    # 置き換える。さらに build_engine はこのディレクトリを作り直す (rmtree する)
-    # ので、`..` のように親ディレクトリを指す名前は受け付けない。
-    version = toolchain_version(tc)
+
+def version_dir(version: str) -> str:
+    """
+    バージョンごとのディレクトリの名前。
+
+    バージョン名をそのままディレクトリ名に使うので、パスの区切り文字などは `-` に
+    置き換える。さらに build_engine はこのディレクトリを作り直す (rmtree する)
+    ので、`..` のように親ディレクトリを指す名前は受け付けない。
+    """
     name = re.sub(r"[^A-Za-z0-9._-]", "-", version)
-    if not name.strip(".-"):
+    if name.strip(".-"):
+        return name
+    else:
         raise EngineError(f"バージョンの名前として使えない: {version}")
-    return f"{ENGINE_CACHE}/{name}"
 
 
 def err_pos(msg: str | None) -> tuple[int, int]:
@@ -432,12 +434,8 @@ def plain(s: str) -> str:
 
 def panic_line(resp: Response) -> str | None:
     """エンジンが PANIC を出力していたら、その 1 行目。無ければ None。"""
-    for m in messages(resp):
-        data = m.get("data") or ""
-        if "PANIC at" in data:
-            return (data.splitlines() or [""])[0]
-
-    return None
+    datas = (m.get("data") or "" for m in messages(resp))
+    return next(((d.splitlines() or [""])[0] for d in datas if "PANIC at" in d), None)
 
 
 def balanced(src: str) -> bool:
@@ -462,14 +460,13 @@ def try_this(messages_: Sequence[Message] | None) -> str | None:
     ので、ユーザーは気付けない。改行を含めて返す (Lean のタクティクは複数行でも
     問題ない)。
     """
-    for m in messages_ or []:
-        data = (m.get("data") or "").strip()
-        if not data.startswith("Try this:"):
-            continue
+    datas = ((m.get("data") or "").strip() for m in messages_ or [])
+    data = next((d for d in datas if d.startswith("Try this:")), None)
+    if data is None:
+        return None
+    else:
         body = textwrap.dedent(data[len("Try this:") :].strip("\n"))
         return SUGGESTION_TAG.sub("", body.strip(), count=1).strip() or None
-
-    return None
 
 
 def span(
@@ -485,43 +482,48 @@ def span(
     ln = pos.get("line", 0) - line_off
     if not 1 <= ln <= len(lines):
         return None
-
-    src_line = lines[ln - 1]
-    col = max(0, min(pos.get("column", 0) - col_off, len(src_line)))
-    end = m.get("endPos") or {}
-    width = 1
-    if end.get("line", 0) - line_off == ln:
-        width = max(1, end.get("column", 0) - col_off - col)
-
-    return ln, col, min(width, max(1, len(src_line) - col))
+    else:
+        src_line = lines[ln - 1]
+        col = max(0, min(pos.get("column", 0) - col_off, len(src_line)))
+        end = m.get("endPos") or {}
+        width = (
+            max(1, end.get("column", 0) - col_off - col)
+            if end.get("line", 0) - line_off == ln
+            else 1
+        )
+        return ln, col, min(width, max(1, len(src_line) - col))
 
 
 # loogle の応答を読む。エラーも検索結果も同じステータス 200 で返るので、`error`
 # キーがあるかどうかだけで区別する。
 def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
     """loogle の応答を表示する形にする。1 件 2 行 (名前と型 / どの module か)。"""
-    err = got.get("error")
-    if err:
-        lines = [red(f"loogle: {err}")]
-        suggest = got.get("suggestions") or []
-        if suggest:
-            lines.append(dim("もしかして: " + "  ".join(suggest)))
-        return "\n".join(lines)
+    match got:
+        case {"error": str(err)} if err:
+            suggest = got.get("suggestions") or []
+            also = [dim("もしかして: " + "  ".join(suggest))] if suggest else []
+            return "\n".join([red(f"loogle: {err}"), *also])
+        case {"hits": [_, *_] as hits}:
+            return loogle_hits(hits, got.get("count", len(hits)), keep, width)
+        case _:
+            return dim("見つからなかった")
 
-    hits = got.get("hits") or []
-    if not hits:
-        return dim("見つからなかった")
 
-    # count は見つかった総数で、hits は loogle が 200 件までに切り詰めたもの。
-    # 表示するのはさらにその先頭だけなので、全体の件数には count をそのまま使う。
-    total = got.get("count", len(hits))
+def loogle_hits(hits: Sequence[Hit], total: int, keep: int, width: int) -> str:
+    """
+    検索結果の先頭 keep 件を表示する形にする。
+
+    total は見つかった総数で、hits は loogle が 200 件までに切り詰めたもの。
+    表示するのはさらにその先頭だけなので、全体の件数には total をそのまま使う。
+    """
     shown = hits[:keep]
     head = f"{total} 件" + (f" (先頭 {len(shown)} 件)" if len(shown) < total else "")
+    return "\n".join(
+        [dim(head), *(row for hit in shown for row in hit_rows(hit, width))]
+    )
 
-    lines = [dim(head)]
-    for hit in shown:
-        sig = f"{hit.get('name', '?')} :{hit.get('type', '')}".rstrip()
-        lines.append(clip(" ".join(sig.split()), width))
-        lines.append(dim("  " + hit.get("module", "?")))
 
-    return "\n".join(lines)
+def hit_rows(hit: Hit, width: int) -> list[str]:
+    """検索結果 1 件を 2 行 (名前と型 / どの module か) にする。"""
+    sig = f"{hit.get('name', '?')} :{hit.get('type', '')}".rstrip()
+    return [clip(" ".join(sig.split()), width), dim("  " + hit.get("module", "?"))]

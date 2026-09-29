@@ -222,15 +222,15 @@ def from_config(
     if name not in table:
         known = " ".join(sorted(table)) or "(1 つも無い)"
         raise ConfigError(f"環境 {name} は設定に無い: {CONFIG}\n  ある環境: {known}")
-
-    entry = as_table(table[name], f"env.{name}")
-    return EnvConfig.make(
-        name,
-        project=project or as_str(entry.get("project"), f"env.{name}.project"),
-        imports=imports or as_imports(entry.get("imports"), f"env.{name}.imports"),
-        prompt=as_str(entry.get("prompt"), f"env.{name}.prompt"),
-        engine=as_str(entry.get("engine"), f"env.{name}.engine") or engine,
-    )
+    else:
+        entry = as_table(table[name], f"env.{name}")
+        return EnvConfig.make(
+            name,
+            project=project or as_str(entry.get("project"), f"env.{name}.project"),
+            imports=imports or as_imports(entry.get("imports"), f"env.{name}.imports"),
+            prompt=as_str(entry.get("prompt"), f"env.{name}.prompt"),
+            engine=as_str(entry.get("engine"), f"env.{name}.engine") or engine,
+        )
 
 
 def guess_env(

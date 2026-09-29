@@ -357,15 +357,12 @@ def expand_abbrev(head: str) -> tuple[str, int] | None:
     するので、`\\to)` のように記号が続いた形は変換しない (先に space を入力する)。
     """
     cut = head.rfind("\\")
-    if cut < 0:
-        return None
-
     name = head[cut + 1 :]
-    sym = ABBREV.get(name)
+    sym = ABBREV.get(name) if cut >= 0 else None
     if sym is None:
         return None
-
-    return sym, len(name) + 1
+    else:
+        return sym, len(name) + 1
 
 
 def abbrev_candidates(name: str) -> list[str]:
@@ -377,7 +374,7 @@ def abbrev_candidates(name: str) -> list[str]:
     """
     if not name:
         return []
-
-    keys = sorted(k for k in ABBREV if k.startswith(name) and k != name)
-    first = [name] if name in ABBREV else []
-    return list(dict.fromkeys(ABBREV[k] for k in first + keys))
+    else:
+        keys = sorted(k for k in ABBREV if k.startswith(name) and k != name)
+        first = [name] if name in ABBREV else []
+        return list(dict.fromkeys(ABBREV[k] for k in first + keys))
