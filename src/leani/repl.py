@@ -173,6 +173,9 @@ class Last:
 
 COMPLETE_DELIMS = ' \t\n(),[]{};"'
 
+# 再実行できなかった宣言は Engine.unplayed に保留する。その案内。
+PENDING_HINT = "これらの宣言は環境に追加せず、保留にした。:restart で再実行できる"
+
 
 class BlockHistory(FileHistory):
     """
@@ -497,16 +500,17 @@ class Repl:
         self.clear_pending()
 
     def report_replay(self, out: Replay) -> None:
-        """replay で戻せなかったものを報告する。表示しないとユーザーが気付けない。"""
+        """
+        replay で再実行できなかったものを報告する。表示しないと、ユーザーは気付けない。
+        """
         for note in out.notes:
             self.out.write(yellow(note))
         for src in out.failed:
-            self.out.write(yellow(f"戻せなかった宣言: {head_line(src)}"))
-        if out.failed or out.notes:
-            self.out.write(dim("  これらは環境に無い (テキストは残してある)"))
+            self.out.write(yellow(f"再実行に失敗した宣言: {head_line(src)}"))
         if out.skipped:
-            self.out.write(yellow(f"まだ実行していない宣言: {len(out.skipped)} 件"))
-            self.out.write(dim("  これらも環境に無い。:restart でやり直せる"))
+            self.out.write(yellow(f"再実行しなかった宣言: {len(out.skipped)} 件"))
+        if out.failed or out.skipped:
+            self.out.write(dim(f"  {PENDING_HINT}"))
 
     def reattach(self, out: Replay) -> None:
         """
@@ -536,17 +540,19 @@ class Repl:
             # ここはユーザーに案内を表示する層。Engine のチェックで出る例外を
             # そのまま「内部エラー」として表示すると、テキストが残っていることも、
             # 次に何をすればよいかもユーザーに伝わらない。
-            self.out.write(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
-            self.out.write(dim("  テキストは残してある。:restart で再起動できる"))
+            self.out.write(
+                yellow(f"環境が無いので、宣言 {len(log)} 件を再実行できなかった")
+            )
+            self.out.write(dim(f"  {PENDING_HINT}"))
             self.eng.unplayed = list(log) + self.eng.unplayed
             return
 
         out = self.guard(lambda: self.eng.replay(log))
         if out is None:
-            self.out.write(yellow(f"入力した宣言 {len(log)} 件を戻せなかった"))
+            self.out.write(yellow(f"宣言 {len(log)} 件を再実行できなかった"))
             return
 
-        self.out.write(dim(f"宣言 {len(out.done)} 件を戻した (env {self.eng.env})"))
+        self.out.write(dim(f"宣言 {len(out.done)} 件を再実行した (env {self.eng.env})"))
         self.report_replay(out)
         self.reattach(out)
 
@@ -1339,8 +1345,8 @@ class Repl:
         # 入力した宣言も新しいエンジンに引き継ぐ。:l したファイルの内容は preload で
         # 戻るが、対話で入力した宣言は新しい Engine には含まれていない。起動後に
         # 再実行する。
-        # 環境に無い宣言も引き継ぐ。捨てると、直前に「テキストは残してある」と表示
-        # した宣言が :env で何も表示されずに消える。新しい環境ならエラーなく実行
+        # 保留中の宣言も引き継ぐ。捨てると、直前に「保留にした」と表示した宣言が
+        # :env で何も表示されずに消える。新しい環境ならエラーなく実行
         # できることもある (import が増える方向の切り替え)。失敗したらまた保留に戻る。
         log = list(self.eng.log) + list(self.eng.unplayed)
         self.eng.kill()
@@ -1413,7 +1419,7 @@ class Repl:
             # 成功を報告したのに入力した宣言が消える。コメントにせずそのまま書くと、
             # lean でエラーになるファイルになる。
             note = "\n\n".join(textwrap.indent(one, "-- ") for one in orphans)
-            parts.append(f"-- 環境に追加されなかった宣言 ({len(orphans)} 件):\n{note}")
+            parts.append(f"-- 保留中の宣言 ({len(orphans)} 件):\n{note}")
 
         body = "\n\n".join(parts)
         try:
@@ -1465,7 +1471,7 @@ class Repl:
                 self.out.write(dim(f"読み込んだ: {path} (env {self.eng.env})"))
             if left:
                 # :reset と同じく、何も表示せずに捨てるとユーザーが気付けない。
-                self.out.write(dim(f"  環境に無かった宣言 {left} 件も捨てた"))
+                self.out.write(dim(f"  保留中の宣言 {left} 件も捨てた"))
 
         self._comp_cache.clear()
 
@@ -1484,4 +1490,4 @@ class Repl:
         self.clear_pending()
         self.out.write(dim(f"env {self.eng.env} に戻した"))
         if left:
-            self.out.write(dim(f"  環境に無かった宣言 {left} 件も捨てた"))
+            self.out.write(dim(f"  保留中の宣言 {left} 件も捨てた"))
