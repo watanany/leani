@@ -162,11 +162,14 @@ class Engine:
         読み取りは fd を直接 select で待って行う。バッファ付きの readline では、
         Ctrl-C がどの時点で発生したのか (リクエストを送ったあとなのか、レスポンスを
         読み損ねたのか) が分からず、リクエストとレスポンスの対応がずれる恐れがある。
-        ここで Interrupted を raise したら、呼び出し側は必ずエンジンを再起動する。
+        中断したときは、読んでいないレスポンスが残るので、このプロセスを止めてから
+        Interrupted を raise する。呼び出し側が再起動せずに次の send を呼んでも、
+        古いレスポンスは読まず、EngineDied になる。
         """
         try:
             return self._exchange(obj)
         except KeyboardInterrupt:
+            self.kill()
             raise Interrupted() from None
 
     def _died(self) -> EngineDied:

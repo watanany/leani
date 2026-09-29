@@ -7,6 +7,7 @@
 
 import contextlib
 import io
+import json
 
 import pytest
 from conftest import story
@@ -155,6 +156,35 @@ def describe_エンジンが異常終了してもセッションが続く():
             "異常終了のときに送っていた宣言が再実行されていない"
         )
         assert repl.declarations == ["def survivor := 9", "def afterCrash := 3"]
+
+    @story("A4", "F1")
+    def it_再起動中にもう一度中断しても応答がずれない(repl, mocker):
+        repl.feed("def before := 5")
+        eng = repl.engine
+        real_cmd, real_exchange = eng.send_cmd, eng._exchange
+        state = {"first": True, "second": False}
+
+        def interrupt_once(src, fresh=False):
+            if state["first"] and src.startswith("#eval 0"):
+                state["first"], state["second"] = False, True
+                raise leani.types.Interrupted()
+            return real_cmd(src, fresh=fresh)
+
+        def interrupt_replay(obj):
+            # replay で宣言を送った直後、レスポンスを読む前に中断する。
+            if state["second"] and obj.get("cmd") == "def before := 5":
+                state["second"] = False
+                eng.proc.stdin.write(json.dumps(obj) + "\n\n")
+                eng.proc.stdin.flush()
+                raise KeyboardInterrupt
+            return real_exchange(obj)
+
+        mocker.patch.object(eng, "send_cmd", side_effect=interrupt_once)
+        mocker.patch.object(eng, "_exchange", side_effect=interrupt_replay)
+        repl.feed("#eval 0")
+        assert not state["second"], "replay の途中で中断していない"
+        assert "5" in repl.feed("before")
+        assert "2" in repl.feed("1 + 1")
 
 
 def describe_環境の切り替え():
