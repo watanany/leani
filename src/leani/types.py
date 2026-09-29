@@ -16,7 +16,7 @@ Json = dict[str, Any]
 #
 # mypy が検査できる範囲は 2 つ。添字 (`resp["env"]`) の名前と、取り出した値の型。
 # `.get("間違った名前")` は Mapping.get として型チェックでエラーにならないが、戻り値の
-# 型が object になるので、その値を使った所で型エラーになる。
+# 型が object になるので、その値を使った箇所で型エラーになる。
 
 
 class Pos(TypedDict, total=False):

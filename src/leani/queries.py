@@ -70,7 +70,7 @@ DOC_QUERY = r"""open Lean in
 # パーサが「まだ続きがある」と報告しているとみなすメッセージ。
 INCOMPLETE = re.compile(r"unexpected end of input|unterminated (comment|string)")
 # 複数行の入力の途中でも、: で始まる行でブロックを終わらせられるようにする (ブロックが
-# 完結していれば送信し、途中なら破棄する)。Lean のソースの行が : で始まることは
+# 完結していれば送信し、途中なら捨てる)。Lean のソースの行が : で始まることは
 # 無い (`:=` の続きの行はインデントされる)。
 META_LINE = re.compile(r"^:[A-Za-z!?{}]")
 # `structure P where` や `induction n with` は Lean の文法ではそれだけで完結する。

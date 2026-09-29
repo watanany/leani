@@ -10,16 +10,16 @@ leani は Lean 4 の REPL である。
 λ> 1 + 1
 2
 λ> def fib : Nat → Nat
-  | | 0 => 0
-  | | 1 => 1
-  | | n+2 => fib n + fib (n+1)
-  |
+ |   | 0 => 0
+ |   | 1 => 1
+ |   | n+2 => fib n + fib (n+1)
+ |
 λ> List.range 12 |>.map fib
 [0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89]
 λ> Std.Time.PlainDateT<Tab>    → Std.Time.PlainDateTime に補完される
 ```
 
-leani は macOS と Linux で動く。
+leani は macOS と Linux で使える。
 
 ## インストール
 

@@ -106,7 +106,7 @@ def describe_タクティクの提案():
         assert found == "exact Nat.le_refl n"
 
     @story("E2")
-    def it_折り返した提案を全部取り出す():
+    def it_折り返した提案をすべて取り出す():
         # pretty printer が 100 桁前後で折り返す。1 行目だけ取り出すと
         # `simp only [a, b,` になり、それが完成した証明として表示されてしまう。
         found = leani.pure.try_this(
@@ -431,7 +431,7 @@ def describe_使うバージョンの決め方():
 
     @story("G3")
     def it_明示したエンジンのバージョンを使う(tmp_path):
-        # ユーザーがビルドしたエンジンは leani がビルドし直さないので、そのバージョンに
+        # 自分でビルドしたエンジンは leani がビルドし直さないので、そのバージョンに
         # 合わせるしかない。
         # elan のデフォルトのバージョンを使うと、4.34 の .olean を 4.33 で
         # 読み込むことになる。
@@ -523,7 +523,7 @@ def describe_エンジンを用意するときの安全対策():
 
     @story("G3")
     def it_待っているあいだに別の_leani_が置いたエンジンは消さない(tmp_path, mocker):
-        # 消すと、そのエンジンを使っている別の leani が動かなくなる。
+        # 消すと、そのエンジンを使っている別の leani がエンジンを起動できなくなる。
         path = str(tmp_path / "engine" / "v4.33.0")
         os.makedirs(f"{path}/.lake/build/bin")
         with open(f"{path}/.lake/build/bin/repl", "w") as f:
@@ -777,7 +777,7 @@ def describe_定理検索():
         assert out[0] == "2 件"
         # `type` は先頭に空白が付いているので、`name : type` の形に整形する。
         assert out[1] == "List.map : (f : α → β) : List α → List β"
-        # どの module にあるかも表示する。手元の環境に無い名前も結果に含まれるため。
+        # どの module にあるかも表示する。今の環境に無い名前も結果に含まれるため。
         assert out[2] == "  Init.Prelude"
         assert out[3].startswith("List.mapTR : ")
 

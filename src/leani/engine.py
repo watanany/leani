@@ -55,7 +55,7 @@ class Loaded(NamedTuple):
 
 class Replay(NamedTuple):
     """
-    replay の結果。環境に戻せなかったものも全部含めて返す。
+    replay の結果。環境に戻せなかったものもすべて含めて返す。
 
     件数だけを返すと、失敗した宣言も読み込み直せなかったファイルも、何も表示されずに
     消える。環境から無くなったものは必ず報告する。
@@ -103,7 +103,7 @@ class Engine:
         確認する。
 
         leani が用意したエンジンは使うバージョンでビルドしてあるので、バージョンは
-        必ず一致する。ユーザーがビルドしたエンジンだけ、バージョンが違っていたら
+        必ず一致する。自分でビルドしたエンジンだけ、バージョンが違っていたら
         報告する (leani がビルドし直すことはしない)。
         """
         if self.cfg.engine is None:
@@ -378,8 +378,8 @@ class Engine:
             # いて、宣言はどの環境にも含まれていない。log に残すと len(stack) と
             # 一致しなくなり、:save が環境に無い宣言を本体に書き出す。保留にすれば
             # コメントとして書き出され、ユーザーは直してから :restart で再実行できる。
-            # base も捨てる。:reset が無効な id を設定し直すと、submit の
-            # 「env が無い」の確認で見つからなくなり、何を入力してもエラーになる。
+            # base も捨てる。:reset が無効な id を設定し直すと、submit は env が
+            # None かどうかしか見ないので検出できず、何を入力してもエラーになる。
             self.env = self.base = None
             self.stack, self.log, self.unplayed = [], [], log
             raise

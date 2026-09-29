@@ -48,7 +48,7 @@ leani は通常、エンジンを自動でビルドする。
 2. 設定ファイルの `engine`
 3. 環境変数 `LEANI_ENGINE`
 
-`-p` や `-i` で起動した場合は、`env.<名前>.engine` は使われず、`engine` か `LEANI_ENGINE` が使われる。
+`-e` を付けずに `-p` や `-i` で起動した場合は、`env.<名前>.engine` は使われず、`engine` か `LEANI_ENGINE` が使われる。
 
 指定したエンジンのディレクトリには、`lean-toolchain` と、ビルド済みの repl (`.lake/build/bin/repl`) が必要である。
 repl は、エンジンのディレクトリで `lake build repl` を実行するとビルドできる。

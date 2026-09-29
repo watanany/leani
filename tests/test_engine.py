@@ -111,7 +111,7 @@ def describe_ファイルの読み書き():
         assert "7" in repl.feed("saved")
 
     @story("B4", "F1")
-    def it_読み込みに失敗しても手元の環境を失わない(repl, tmp_path):
+    def it_読み込みに失敗しても今の環境を失わない(repl, tmp_path):
         # env を捨てたまま戻さないと、以後の入力が import 無しの環境に送られて
         # 何を書いてもエラーになる。
         broken = tmp_path / "broken.lean"
@@ -333,7 +333,7 @@ def describe_書き直しをやめたとき():
 def describe_項の位置の_sorry():
     """`:= sorry` の位置にはタクティクを書けないので、置き換えに失敗する。"""
 
-    @story("E3")
+    @story("D3", "E3")
     def it_置き換えられなければ_sorry_のまま残す(repl):
         repl.feed("def termSorry : Nat := sorry")
         repl.feed(":prove")
@@ -347,7 +347,7 @@ def describe_項の位置の_sorry():
 
 def describe_環境全体が置き換わるとき():
 
-    @story("B4", "D3", "E1")
+    @story("B4", "E1")
     def it_読み込んだら証明モードを終了する(repl, tmp_path):
         # 前の環境の proofState を持ったままだと、送っても新しい環境と合わない。
         path = tmp_path / "other.lean"
@@ -362,7 +362,7 @@ def describe_引数の受け取り():
 
     @story("F2")
     def it_undo_の引数が数でなくても異常終了しない(repl):
-        # 全角の 2。int() に渡すと例外になる。
+        # 上付きの ²。isdigit() は True を返すが、int() は変換できない。
         repl.feed("def a := 1")
         repl.feed("def b := 2")
         out = repl.feed(":undo ²")
@@ -374,12 +374,10 @@ def describe_送る前の確認():
     @story("F1")
     def it_起動できていないエンジンには送らない(repl):
         # boot に失敗したエンジン。import 無しの環境に宣言を追加すると、
-        # 以後何を書いてもエラーになる (不変条件を確認しないのはそのため)。
+        # 以後何を書いてもエラーになる。
         repl.repl.eng.env = None
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            repl.repl.feed("def x := 1")
-        assert "使えない" in out.getvalue(), out.getvalue()
+        out = repl.feed("def x := 1")
+        assert "使えない" in out, out
         assert repl.declarations == []
 
 
@@ -1267,7 +1265,7 @@ def describe_解決できない_import_のファイル():
         # 報告したうえで、完結判定も補完も宣言も失敗する環境のままになる。
         assert "読み込めなかった" in out, out
         assert "import をすべて無視した" in out, out
-        assert "2" in repl.feed("#eval 1 + 1"), "手元の環境まで失った"
+        assert "2" in repl.feed("#eval 1 + 1"), "今の環境まで失った"
 
 
 def describe_定理を外部サービスで探す():
@@ -1282,6 +1280,7 @@ def describe_定理を外部サービスで探す():
     @story("D4")
     def it_問い合わせても環境は変わらない(repl, mocker):
         repl.feed("def beforeLoogle := 7")
+        env = repl.engine.env
         hit = {
             "name": "Nat.add_comm",
             "type": " : ∀ (n m : Nat), n + m = m + n",
@@ -1292,8 +1291,9 @@ def describe_定理を外部サービスで探す():
         )
 
         assert "Nat.add_comm" in repl.feed(":loogle ?a + ?b = ?b + ?a")
-        # loogle が返すのは Mathlib の名前で、手元の環境とは無関係。
-        assert "7" in repl.feed("beforeLoogle"), ":loogle が環境を動かした"
+        # loogle が返すのは Mathlib の名前で、今の環境とは無関係。
+        assert repl.engine.env == env, ":loogle が環境を変えた"
+        assert "7" in repl.feed("beforeLoogle"), ":loogle が宣言を消した"
 
     @story("D4", "F4")
     def it_loogle_が応答しなくてもセッションは続く(repl, mocker):

@@ -183,7 +183,7 @@ def problem(cfg: EnvConfig) -> str | None:
             f"指定されたエンジンが無い: {cfg.engine}",
         ),
         # エンジンの Lean のバージョンを決めるのはこのファイルだけ。無いと elan の
-        # デフォルトの toolchain が使われ、エラーが出ないまま正しく動かなくなる。
+        # デフォルトの toolchain が使われ、エラーが出ないまま正しく実行できなくなる。
         (
             cfg.engine is not None
             and os.path.isdir(cfg.engine)
@@ -276,7 +276,7 @@ def resolve(
 
 
 def read_text(path: str) -> str | None:
-    """読めなければ None。ファイルが無い場合と権限が無い場合を区別しない所で使う。"""
+    """読めなければ None。ファイルが無い場合と権限が無い場合を区別しない箇所で使う。"""
     try:
         with open(path) as f:
             return f.read()

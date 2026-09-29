@@ -38,7 +38,7 @@ REPL の中で `:help` を実行すると、同じ一覧を確認できる。
 | `:loogle <q>`      | 定理を検索する。leani は外部の loogle サービスに問い合わせるので、ネットワークが必要。検索の対象は Mathlib |
 | `:l <file>` / `:r` | ファイルを読み込む / 読み込み直す。実行済みの宣言は捨てる。init ファイルの宣言は残る                       |
 | `:reset`           | 実行した宣言をすべて取り消し、起動直後の状態に戻す (`:l` したあとは、読み込んだ直後の状態に戻す)           |
-| `:undo [n]`        | 直前の n 個の宣言を取り消す (n のデフォルトは 1)                                                           |
+| `:undo [n]`        | 直前の n 件の宣言を取り消す (n のデフォルトは 1)                                                           |
 | `:env [name]`      | 今の環境を表示する / 設定した環境に切り替えて再起動する                                                    |
 | `:prove [n]`       | 直前の入力にある n 番目の `sorry` について、証明モードを始める (n のデフォルトは 1)                        |
 | `:goals`           | 残っている `sorry` とゴールを表示する                                                                      |
@@ -77,11 +77,19 @@ sorry 1 [proofState 0]
   ⊢ n + 0 = n
 -- :prove で証明モードを始められる (sorry 1 個)
 λ> :prove
+証明モード: 1 行が 1 タクティク。:goals ゴール  :script スクリプト  :undo 取り消す  :done 終了
+goal
+  n : Nat
+  ⊢ n + 0 = n
 ⊢> induction n with
-  | | zero => rfl
-  | | succ k ih => simp
-  |
+ |   | zero => rfl
+ |   | succ k ih => simp
+ |
 証明完了。
+-- スクリプト:
+  induction n with
+    | zero => rfl
+    | succ k ih => simp
 -- sorry をスクリプトで置き換えて実行する:
   theorem tt (n : Nat) : n + 0 = n := by
     induction n with

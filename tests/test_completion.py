@@ -18,7 +18,7 @@ def chunk_queries(spy):
 def describe_名前空間ごとのキャッシュ():
 
     @story("D1")
-    def it_同じ名前空間なら一度しか問い合わせない(repl, mocker):
+    def it_同じ名前空間なら_1_回しか問い合わせない(repl, mocker):
         asked = mocker.spy(repl.engine, "query")
         assert "Nat.succ" in repl.repl._names("Nat.suc")
         assert chunk_queries(asked) == 1

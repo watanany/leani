@@ -129,7 +129,7 @@ HELP = """\
   :l <file>      ファイルを読み込む (実行した宣言は捨てる)
   :r             ファイルを読み込み直す (読み込んでいなければ :reset)
   :reset         宣言をすべて取り消す (:l したあとは読み込んだ直後に戻る)
-  :undo [n]      直前の n 個の宣言を取り消す
+  :undo [n]      直前の n 件の宣言を取り消す
   :env [name]    今の環境を表示する / 設定した環境に切り替えて再起動する
   :prove [n]     n 番目の sorry の証明モードを始める
   :goals         残っている sorry とゴールを表示する
@@ -573,7 +573,7 @@ class Repl:
     def parse(self, src: str) -> Probe | None:
         """
         src が command / term / tacticSeq として読めるかを Lean のパーサに問い合わせる。
-        1 回のやり取りで 3 つとも取得する。実行はしない。ユーザー定義の notation も
+        1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の notation も
         認識される。
         """
         out = self.guard(lambda: self.eng.query(PARSE_PROBE % lean_str(src)))
@@ -635,9 +635,10 @@ class Repl:
                 print("^C")
                 continue
             except UnicodeDecodeError as e:
-                # main は tty でない stdin を errors="replace" に設定し直すので、
-                # この例外が起きるのは設定し直せなかったときだけ。ここでループを抜けると
-                # leani が終了し、それまでに実行した宣言も失われる。その行だけを捨てる。
+                # main が errors="replace" に設定し直すのは tty でない stdin だけ。
+                # stdin が端末で stdout が端末でないとき (`leani | tee log` など) は
+                # input() が strict のまま読むので、この例外が起きる。ここでループを
+                # 終了すると、それまでに実行した宣言も失われる。その行だけを捨てる。
                 print(red(f"UTF-8 として読めない行を飛ばした ({e.reason})"))
                 continue
 
@@ -772,7 +773,7 @@ class Repl:
             if src.strip():
                 self.submit(src, kind)
             return "done"
-        elif META_LINE.match(line):  # ブロックから抜ける
+        elif META_LINE.match(line):  # ブロックの入力をやめる
             src, kind = "\n".join(self.buf), self.ready
             self.buf, self.ready = [], None
             if kind is not None:
@@ -780,7 +781,7 @@ class Repl:
             else:
                 self.remember(src)
                 self.restore_undone()
-                print(dim("-- 入力が途中だったので破棄した"))
+                print(dim("-- 入力が途中だったので捨てた"))
                 self.last = None
             return "quit" if self.feed(line) == "quit" else "done"
         elif self.ready is not None and not continues(line):
@@ -811,7 +812,7 @@ class Repl:
             return
         else:
             # 書き直しをやめたときに戻せるよう保存しておく
-            # (Ctrl-C / Ctrl-D / ブロックから抜けたとき)。
+            # (Ctrl-C / Ctrl-D / ブロックの入力をやめたとき)。
             self.undone = self.eng.pop_decl()
 
     def restore_undone(self) -> None:
@@ -941,7 +942,7 @@ class Repl:
         gen = self.eng.gen
         resp = self.guard(lambda: self.eng.send_tactic(src, before))
         if self.proof is not proof or self.eng.gen != gen:
-            # guard がエンジンを再起動した。手元の proofState は前のプロセスの
+            # guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
             # ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
             # 0 から振り直すので、別の証明の状態と番号が一致して「証明完了」と
             # 表示されることもある (宣言は sorry のまま残る)。
@@ -1256,7 +1257,7 @@ class Repl:
 
     def ask_loogle(self, query: str) -> Loogle:
         """
-        loogle に問い合わせている間、メッセージを 1 行表示する。
+        loogle に問い合わせているあいだ、メッセージを 1 行表示する。
 
         重いパターンだと loogle の処理に 20 秒近くかかる。何も表示しないと leani が
         止まったように見える。成功しても失敗しても、次の出力を表示する前にこの行を消す。
