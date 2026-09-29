@@ -93,8 +93,8 @@ goal
 -- sorry をスクリプトで置き換えて実行する:
   theorem tt (n : Nat) : n + 0 = n := by
     induction n with
-    | zero => rfl
-    | succ k ih => simp
+      | zero => rfl
+      | succ k ih => simp
 λ> #print axioms tt
 'tt' depends on axioms: [propext]
 ```
