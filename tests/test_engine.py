@@ -14,6 +14,9 @@ from conftest import story
 
 import leani
 
+# エンジンが PANIC したときのメッセージ。2 行目以降はバックトレース。
+PANIC = "PANIC at Foo.bar Foo:1:2: oops\nbacktrace:\n  ..."
+
 
 def describe_式の評価():
 
@@ -30,6 +33,16 @@ def describe_式の評価():
         # Nat -> Nat に Repr が無いので #eval できない。
         out = repl.feed("Nat.succ")
         assert "型だけ" in out, out
+
+    @story("A1", "B1")
+    def it_do_ブロックは_IO_として読み直す(repl):
+        # IO.getEnv は BaseIO なので、Lean は do 全体を BaseIO と決めてしまい、
+        # IO.println を書けなくなる。
+        out = repl.feed(
+            'do let x ← IO.getEnv "LEANI_NO_SUCH_VAR"; IO.println s!"none={x.isNone}"'
+        )
+        assert "none=true" in out, out
+        assert "error" not in out.lower(), out
 
 
 def describe_複数行の宣言():
@@ -55,6 +68,19 @@ def describe_複数行の宣言():
     @story("C1", "F1")
     def it_エラーになった宣言は環境を進めない(repl):
         repl.feed('def broken : Nat := "oops"')
+        assert repl.declarations == []
+
+    @story("C6")
+    def it_波括弧のあいだは空行があっても_1_つの宣言として実行する(repl):
+        repl.feed(":{", "def gap : Nat :=", "", "  5")
+        assert repl.declarations == [], ":} の前に実行した"
+        repl.feed(":}")
+        assert "5" in repl.feed("gap")
+        assert len(repl.declarations) == 1
+
+    @story("C6")
+    def it_波括弧のあいだが空なら何も実行しない(repl):
+        assert repl.feed(":{", ":}") == ""
         assert repl.declarations == []
 
 
@@ -98,6 +124,23 @@ def describe_証明モード():
         assert "42" in repl.feed("keepme"), "手前の宣言が巻き戻された"
         assert len(repl.declarations) == 1
 
+    @story("E1")
+    def it_undo_でタクティクを_1_つ取り消す(repl):
+        repl.feed("theorem t3 : 1 = 1 ∧ 2 = 2 := by sorry")
+        repl.feed(":prove")
+        repl.feed("constructor")
+        repl.feed(":undo")
+        assert "∧" in repl.feed(":goals"), "constructor の前のゴールに戻っていない"
+        assert "constructor" not in repl.feed(":script")
+        assert "取り消せるタクティクが無い" in repl.feed(":undo")
+
+    @story("E1")
+    def it_証明モードの外の_goals_で残っている_sorry_を表示する(repl):
+        repl.feed("theorem t4 : 3 = 3 := by sorry")
+        out = repl.feed(":goals")
+        assert "sorry 1" in out, out
+        assert "3 = 3" in out, out
+
 
 def describe_ファイルの読み書き():
 
@@ -131,6 +174,21 @@ def describe_ファイルの読み書き():
             side_effect=PermissionError(13, "Permission denied"),
         )
         assert "読めない" in repl.feed(f":l {path}")
+
+    @story("B4")
+    def it_編集したファイルを_r_で読み込み直す(repl, tmp_path):
+        path = tmp_path / "edited.lean"
+        path.write_text("def edited := 1\n")
+        repl.feed(f":l {path}")
+        path.write_text("def edited := 2\n")
+        repl.feed(":r")
+        assert "2" in repl.feed("edited"), repl.feed("edited")
+
+    @story("B4", "F2")
+    def it_ファイルを読み込んでいなければ_r_は起動直後に戻す(repl):
+        repl.feed("def gone := 1")
+        repl.feed(":r")
+        assert repl.declarations == []
 
 
 def describe_エンジンが異常終了してもセッションが続く():
@@ -186,6 +244,36 @@ def describe_エンジンが異常終了してもセッションが続く():
         assert "5" in repl.feed("before")
         assert "2" in repl.feed("1 + 1")
 
+    @story("F1")
+    def it_エンジンが_PANIC_したら宣言を環境に追加せず警告する(repl, mocker):
+        # PANIC したあとのエンジンは状態が壊れている可能性があるので、結果を
+        # 普通の結果として扱わない。
+        real = repl.engine.send_cmd
+        panic = {"env": 99, "messages": [{"severity": "info", "data": PANIC}]}
+
+        def panic_on_def(src, fresh=False):
+            return panic if src.startswith("def panicked") else real(src, fresh=fresh)
+
+        mocker.patch.object(repl.engine, "send_cmd", side_effect=panic_on_def)
+        out = repl.feed("def panicked := 1")
+        assert "PANIC した" in out, out
+        assert "PANIC at Foo.bar" in out, out
+        assert repl.declarations == []
+
+    @story("F1")
+    def it_式の評価で_PANIC_したら結果を表示せず警告する(repl, mocker):
+        real = repl.engine.send_cmd
+        panic = {"messages": [{"severity": "info", "data": "42\n" + PANIC}]}
+
+        def panic_on_eval(src, fresh=False):
+            wrapped = src.startswith("#eval") and "panicky" in src
+            return panic if wrapped else real(src, fresh=fresh)
+
+        mocker.patch.object(repl.engine, "send_cmd", side_effect=panic_on_eval)
+        out = repl.feed("panicky + 1")
+        assert "PANIC した" in out, out
+        assert "42" not in out, out
+
 
 def describe_環境の切り替え():
 
@@ -223,6 +311,39 @@ def describe_環境の切り替え():
         assert "起動できなかった" in out, out
         assert repl.repl.cfg.name == "core", "元の環境に戻っていない"
         assert "2" in repl.feed("1 + 1"), "使えなくなっている"
+
+    @story("G5")
+    def it_引数の無い_env_は今の環境と切り替え先を表示する(repl):
+        out = repl.feed(":env")
+        assert "core" in out, out
+        assert "切り替え先: core wide" in out, out
+
+    @story("G5")
+    def it_今の環境の名前を指定したら再起動しない(repl):
+        repl.feed("def stay := 1")
+        eng = repl.engine
+        assert "すでに core" in repl.feed(":env core")
+        assert repl.engine is eng, "再起動した"
+
+
+def describe_コマンドの一覧():
+
+    @story("H1")
+    def it_help_でコマンドの一覧を表示する(repl):
+        out = repl.feed(":help")
+        assert ":prove" in out, out
+        assert ":env" in out, out
+
+    @story("H1")
+    def it_証明モードの_help_では証明用のコマンドを表示する(repl):
+        repl.feed("theorem t5 : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        assert "1 行が 1 タクティク" in repl.feed(":help")
+
+    @story("H1", "F4")
+    def it_無いコマンドを入力したら知らせてセッションを続ける(repl):
+        assert "不明なコマンド: :nosuch" in repl.feed(":nosuch")
+        assert "2" in repl.feed("1 + 1")
 
 
 def describe_エンジンを再起動できないとき():
