@@ -1,5 +1,7 @@
 # leani
 
+![leani で式を評価して補完の候補を表示したところ](docs/screenshot.png)
+
 leani は Lean 4 の REPL である。
 ファイルを作って `lake env lean` を実行しなくても、式の値や宣言の結果をその場で確かめられる。
 エンジンには leanprover-community/repl を使う。
