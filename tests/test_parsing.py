@@ -28,6 +28,12 @@ BALANCED = st.recursive(
 # sorry の前後に置く行。コメントや文字列の中に "sorry" を書いた行を混ぜてある。
 DECOYS = ["", "def f : True := by", "-- sorry はここにもある", '"sorry"', "  rfl"]
 
+# エンジンが PANIC したときのメッセージ。2 行目以降はバックトレース。
+PANIC = {
+    "severity": "info",
+    "data": "PANIC at Foo.bar Foo:1:2: oops\nbacktrace:\n  ...",
+}
+
 # ヘッダ部分のデータ。import、コメント、本体と、import に見えるが import ではない行。
 HEADERS = [
     "import Std",
@@ -272,6 +278,26 @@ def describe_レスポンスの切り出し():
     def it_JSON_の中の空行では区切らない():
         buf = '{"messages": [{"data": "a\\n\\nb"}]}\n\n'
         assert leani.pure.first_response(buf)["messages"][0]["data"] == "a\n\nb"
+
+
+def describe_エンジンの_PANIC():
+    """エンジンが PANIC したかを、レスポンスのメッセージから判定する。"""
+
+    @story("F1")
+    def it_PANIC_の行を返す():
+        resp = {"messages": [{"severity": "info", "data": "1"}, PANIC]}
+        assert leani.pure.panic_line(resp) == "PANIC at Foo.bar Foo:1:2: oops"
+
+    @story("F1")
+    def it_PANIC_の前に出力があっても_PANIC_の行を返す():
+        resp = {"messages": [{**PANIC, "data": "42\n" + PANIC["data"]}]}
+        assert leani.pure.panic_line(resp) == "PANIC at Foo.bar Foo:1:2: oops"
+
+    @story("F1")
+    def it_PANIC_していなければ_None_を返す():
+        resp = {"messages": [{"severity": "info", "data": "2"}]}
+        assert leani.pure.panic_line(resp) is None
+        assert leani.pure.panic_line({}) is None
 
 
 def describe_起動前の準備():

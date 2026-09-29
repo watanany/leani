@@ -433,9 +433,14 @@ def plain(s: str) -> str:
 
 
 def panic_line(resp: Response) -> str | None:
-    """エンジンが PANIC を出力していたら、その 1 行目。無ければ None。"""
-    datas = (m.get("data") or "" for m in messages(resp))
-    return next(((d.splitlines() or [""])[0] for d in datas if "PANIC at" in d), None)
+    """
+    エンジンが PANIC を出力していたら、PANIC の行。無ければ None。
+
+    同じメッセージの中で、PANIC の前に #eval の出力が、後にバックトレースが続く
+    ことがあるので、メッセージの 1 行目ではなく PANIC の行を探す。
+    """
+    lines = (ln for m in messages(resp) for ln in (m.get("data") or "").splitlines())
+    return next((ln for ln in lines if "PANIC at" in ln), None)
 
 
 def balanced(src: str) -> bool:

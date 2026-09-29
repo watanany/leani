@@ -14,6 +14,9 @@ from conftest import story
 
 import leani
 
+# エンジンが PANIC したときのメッセージ。2 行目以降はバックトレース。
+PANIC = "PANIC at Foo.bar Foo:1:2: oops\nbacktrace:\n  ..."
+
 
 def describe_式の評価():
 
@@ -185,6 +188,36 @@ def describe_エンジンが異常終了してもセッションが続く():
         assert not state["second"], "replay の途中で中断していない"
         assert "5" in repl.feed("before")
         assert "2" in repl.feed("1 + 1")
+
+    @story("F1")
+    def it_エンジンが_PANIC_したら宣言を環境に追加せず警告する(repl, mocker):
+        # PANIC したあとのエンジンは状態が壊れている可能性があるので、結果を
+        # 普通の結果として扱わない。
+        real = repl.engine.send_cmd
+        panic = {"env": 99, "messages": [{"severity": "info", "data": PANIC}]}
+
+        def panic_on_def(src, fresh=False):
+            return panic if src.startswith("def panicked") else real(src, fresh=fresh)
+
+        mocker.patch.object(repl.engine, "send_cmd", side_effect=panic_on_def)
+        out = repl.feed("def panicked := 1")
+        assert "PANIC した" in out, out
+        assert "PANIC at Foo.bar" in out, out
+        assert repl.declarations == []
+
+    @story("F1")
+    def it_式の評価で_PANIC_したら結果を表示せず警告する(repl, mocker):
+        real = repl.engine.send_cmd
+        panic = {"messages": [{"severity": "info", "data": "42\n" + PANIC}]}
+
+        def panic_on_eval(src, fresh=False):
+            wrapped = src.startswith("#eval") and "panicky" in src
+            return panic if wrapped else real(src, fresh=fresh)
+
+        mocker.patch.object(repl.engine, "send_cmd", side_effect=panic_on_eval)
+        out = repl.feed("panicky + 1")
+        assert "PANIC した" in out, out
+        assert "42" not in out, out
 
 
 def describe_環境の切り替え():
