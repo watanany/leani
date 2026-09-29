@@ -691,7 +691,7 @@ def describe_タクティクの途中でエンジンが変わる():
         assert "sorry" not in repl.declarations[-1], repl.declarations
 
 
-def describe_replay_で戻せなかったもの():
+def describe_replay_で再実行できなかったもの():
     """何も表示せずに消えると、ユーザーが気付く場所が無い。"""
 
     @story("F1", "B4")
@@ -762,7 +762,7 @@ def describe_replay_が途中で止まったとき():
         mocker.patch.object(leani.engine.Engine, "send_cmd", once)
         out = repl.feed(":restart")  # Driver が毎行 INVARIANTS を見る
 
-        assert "まだ実行していない宣言: 2 件" in out, out
+        assert "再実行しなかった宣言: 2 件" in out, out
         assert repl.declarations == ["def r1 := 1"], repl.declarations
         # env に無いものを :save が書くと、書き出したファイルがエラーになる。
         assert repl.repl.eng.sources() == ["def r1 := 1"], repl.repl.eng.sources()
@@ -987,7 +987,7 @@ def describe_環境に無い宣言の扱い():
     """
 
     @story("F1", "F2")
-    def it_戻せなかった宣言のテキストを保留する(repl, tmp_path):
+    def it_再実行に失敗した宣言を保留する(repl, tmp_path):
         path = tmp_path / "lib2.lean"
         path.write_text("def libB := 10\n")
         repl.feed(f":l {path}")
@@ -996,7 +996,7 @@ def describe_環境に無い宣言の扱い():
         path.write_text("def other := 1\n")  # libB を消す
         out = repl.feed(":restart")
 
-        assert "戻せなかった宣言" in out, out
+        assert "再実行に失敗した宣言" in out, out
         assert repl.repl.eng.unplayed == ["def usesB := libB + 1"]
 
     @story("B3", "F2")
@@ -1068,7 +1068,7 @@ def describe_切り替えが成功したとき():
 def describe_保留と環境の切り替え():
     """
     replay でエラーになった宣言は保留 (`Engine.unplayed`) に残る。環境を作り
-    直す操作で何も表示せずに消すと、「テキストは残してある」と表示した直後に
+    直す操作で何も表示せずに消すと、「保留にした」と表示した直後に
     消えることになる。
     """
 
@@ -1144,7 +1144,7 @@ def describe_sorry_の置き換えの途中でエンジンが異常終了する(
         # guard がエンジンを再起動して再送し、置き換えた宣言は成功している。世代だけを
         # 見て「sorry のまま」と報告すると、sorry のままのテキストを再実行して
         # 重複エラーになった宣言が保留にずっと残る (:restart のたびに
-        # 「戻せなかった宣言」と表示される)。
+        # 「再実行に失敗した宣言」と表示される)。
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out
         assert repl.repl.eng.unplayed == [], repl.repl.eng.unplayed
@@ -1223,8 +1223,9 @@ def describe_元になる環境を失ったとき():
         out = buf.getvalue()
 
         # 実行すると repl は env 無しのリクエストから Init だけの環境を勝手に作る。
-        # 「戻した」と報告しながら、設定の import が無い環境に宣言を追加することになる。
-        assert "戻せなかった" in out, out
+        # 「再実行した」と報告しながら、設定の import が無い環境に宣言を追加する
+        # ことになる。
+        assert "再実行できなかった" in out, out
         assert repl.repl.eng.unplayed == ["def two := 2", "def held := 1"]
         assert repl.repl.eng.log == []
         repl.check("replay_into のあと")
