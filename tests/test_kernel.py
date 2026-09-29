@@ -39,12 +39,13 @@ def kernel(tmp_path_factory):
             }
         )
     )
-    os.environ["JUPYTER_PATH"] = str(root)
-    env = dict(os.environ, PYTHONPATH=SRC)
-
-    km, kc = start_new_kernel(
-        kernel_name="leani-test", cwd=str(tmp_path_factory.mktemp("cwd")), env=env
-    )
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setenv("JUPYTER_PATH", str(root))
+        km, kc = start_new_kernel(
+            kernel_name="leani-test",
+            cwd=str(tmp_path_factory.mktemp("cwd")),
+            env=dict(os.environ, PYTHONPATH=SRC),
+        )
     yield km, kc
     kc.stop_channels()
     km.shutdown_kernel(now=True)
@@ -114,6 +115,23 @@ def fib : Nat → Nat
         assert status == "error"
         assert "error" in err.lower() or "failed" in err.lower(), err
 
+    @story("J1")
+    def it_silent_のセルは何も表示しない(kernel):
+        _, kc = kernel
+        msg_id = kc.execute("#eval 3 + 4", silent=True)
+        streams = []
+        while True:
+            m = kc.get_iopub_msg(timeout=60)
+            if m["parent_header"].get("msg_id") != msg_id:
+                continue
+            if m["msg_type"] == "stream":
+                streams.append(m["content"]["text"])
+            elif (
+                m["msg_type"] == "status" and m["content"]["execution_state"] == "idle"
+            ):
+                break
+        assert streams == []
+
     @story("J1", "E3")
     def it_証明を完了すると_sorry_を置き換える(kernel):
         run(kernel, "theorem cell_t : 1 + 1 = 2 := by sorry")
@@ -153,11 +171,17 @@ def describe_エンジンの異常終了と中断():
         assert "42" in out, out
 
     @story("J3", "A4")
-    def it_中断しても宣言が残る(kernel):
+    def it_中断しても宣言が残る(kernel, tmp_path):
         km, kc = kernel
         run(kernel, "def before := 5")
-        msg_id = kc.execute("#eval IO.sleep 60000")
-        time.sleep(3)
+        # 評価が始まってから中断する。評価の前 (完結判定の途中など) に中断すると、
+        # 確かめたいエンジンの中断にならない。
+        mark = tmp_path / "started"
+        msg_id = kc.execute(f'#eval do IO.FS.writeFile "{mark}" ""; IO.sleep 60000')
+        t0 = time.time()
+        while not mark.exists():
+            assert time.time() - t0 < 30, "評価が始まらない"
+            time.sleep(0.1)
         km.interrupt_kernel()
         while True:
             m = kc.get_iopub_msg(timeout=60)
@@ -167,6 +191,7 @@ def describe_エンジンの異常終了と中断():
                 and m["content"]["execution_state"] == "idle"
             ):
                 break
+        assert time.time() - t0 < 30, "中断しても止まらず、評価が最後まで実行された"
         assert kc.get_shell_msg(timeout=60)["content"]["status"] == "error"
 
         _, out, _ = run(kernel, "#eval before")

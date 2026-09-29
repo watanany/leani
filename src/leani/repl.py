@@ -342,7 +342,7 @@ class Repl:
                 complete_style=CompleteStyle.MULTI_COLUMN,
             )
 
-        Repl._session.completer = NameCompleter(self._names)
+        Repl._session.completer = NameCompleter(self.complete_names)
 
     def remember(self, src: str) -> None:
         """履歴に 1 件として追加する。複数行の宣言も全体で 1 件になる。"""
@@ -362,7 +362,7 @@ class Repl:
         """
         return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
 
-    def _names(self, prefix: str) -> list[str]:
+    def complete_names(self, prefix: str) -> list[str]:
         """
         今の環境で短い名前で書ける定数のうち、prefix で始まるものを返す。
 

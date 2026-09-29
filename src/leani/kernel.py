@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 import sys
+from importlib.metadata import version
 from typing import Any
 
 from ipykernel.iostream import OutStream
@@ -35,18 +36,22 @@ class CellOutput:
 
     def __init__(self) -> None:
         self.failed = False
+        # Jupyter が silent で実行を求めたセル。表示は出さず、エラーだけ記録する。
+        self.silent = False
 
     def write(self, text: str = "", end: str = "\n") -> None:
-        print(text, end=end, flush=True)
+        if not self.silent:
+            print(text, end=end, flush=True)
 
     def fail(self, text: str) -> None:
         self.failed = True
-        print(text, file=sys.stderr, flush=True)
+        if not self.silent:
+            print(text, file=sys.stderr, flush=True)
 
 
 class LeaniKernel(Kernel):
     implementation = "leani"
-    implementation_version = "0.1.0"
+    implementation_version = version("leani")
     language = "lean4"
     language_info = {  # noqa: RUF012 (Kernel の属性を上書きする)
         "name": "lean4",
@@ -122,6 +127,7 @@ class LeaniKernel(Kernel):
         allow_stdin: bool = False,
     ) -> dict[str, Any]:
         self.out.failed = False
+        self.out.silent = silent
         try:
             self.run(code)
         except KeyboardInterrupt:
@@ -169,7 +175,7 @@ class LeaniKernel(Kernel):
         else:
             start = max(before.rfind(d) for d in COMPLETE_DELIMS) + 1
             try:
-                matches = self.repl._names(before[start:]) if self.repl else []
+                matches = self.repl.complete_names(before[start:]) if self.repl else []
             except Exception:
                 matches = []
 

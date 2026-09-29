@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 35 件、テスト 204 件。括弧の中はテストの場所
+ストーリー 35 件、テスト 205 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -386,6 +386,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 式の値を表示する (kernel / セルの実行)
 - 前のセルの宣言を使える (kernel / セルの実行)
 - エラーのセルは status が error になる (kernel / セルの実行)
+- silent のセルは何も表示しない (kernel / セルの実行)
 - 証明を完了すると sorry を置き換える (kernel / セルの実行)
 - 今の Python で leani kernel を起動するカーネルを登録する (kernel / カーネルの登録)
 

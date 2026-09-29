@@ -20,35 +20,35 @@ def describe_名前空間ごとのキャッシュ():
     @story("D1")
     def it_同じ名前空間なら_1_回しか問い合わせない(repl, mocker):
         asked = mocker.spy(repl.engine, "query")
-        assert "Nat.succ" in repl.repl._names("Nat.suc")
+        assert "Nat.succ" in repl.repl.complete_names("Nat.suc")
         assert chunk_queries(asked) == 1
-        repl.repl._names("Nat.succ_l")
-        repl.repl._names("Nat.ad")
+        repl.repl.complete_names("Nat.succ_l")
+        repl.repl.complete_names("Nat.ad")
         assert chunk_queries(asked) == 1, "同じ単位の候補を取得し直している"
 
     @story("D1")
     def it_別の名前空間なら取得し直す(repl, mocker):
         asked = mocker.spy(repl.engine, "query")
-        repl.repl._names("Nat.suc")
-        repl.repl._names("List.ma")
+        repl.repl.complete_names("Nat.suc")
+        repl.repl.complete_names("List.ma")
         assert chunk_queries(asked) == 2
 
     @story("D1")
     def it_宣言を実行してもキャッシュを捨てない(repl, mocker):
-        repl.repl._names("Nat.suc")
+        repl.repl.complete_names("Nat.suc")
         repl.feed("def myOwnHelper := 1")
         # 構文の判定にも query を使うので、宣言を実行したあとから数える。
         # 環境が変わると open の一覧を問い合わせ直すが、定数を全件たどらないので
         # 数えない。
         asked = mocker.spy(repl.engine, "query")
-        repl.repl._names("Nat.suc")
+        repl.repl.complete_names("Nat.suc")
         assert chunk_queries(asked) == 0, "宣言のたびに取得し直している"
 
     @story("D1", "D5")
     def it_open_した名前空間の名前も一度に取得する(repl, mocker):
         repl.feed("open Lean", "open Nat")
         asked = mocker.spy(repl.engine, "query")
-        repl.repl._names("Json.pa")
+        repl.repl.complete_names("Json.pa")
         assert chunk_queries(asked) == 1
 
 
@@ -57,13 +57,13 @@ def describe_候補():
     @story("D1")
     def it_自分で実行した宣言も候補に表示される(repl):
         repl.feed("def myOwnHelper := 1")
-        assert repl.repl._names("myOwnH") == ["myOwnHelper"]
+        assert repl.repl.complete_names("myOwnH") == ["myOwnHelper"]
 
     @story("D1")
     def it_1_文字では候補を表示しない(repl, mocker):
         # Mathlib だと `C` だけで 7.5 万件になる。leani は問い合わせもしない。
         asked = mocker.spy(repl.engine, "query")
-        assert repl.repl._names("N") == []
+        assert repl.repl.complete_names("N") == []
         assert asked.call_count == 0
 
 
@@ -72,28 +72,28 @@ def describe_open_した名前空間():
     @story("D5")
     def it_open_すると短い名前で補完される(repl):
         repl.feed("open Lean")
-        assert "Json.parse" in repl.repl._names("Json.pa")
+        assert "Json.parse" in repl.repl.complete_names("Json.pa")
 
     @story("D5")
     def it_open_しなければ短い名前では補完されない(repl):
-        assert repl.repl._names("Json.pa") == []
+        assert repl.repl.complete_names("Json.pa") == []
 
     @story("D5")
     def it_open_X_in_の効果は次の入力に残らない(repl):
         repl.feed("open Lean in #check 1")
-        assert repl.repl._names("Json.pa") == []
+        assert repl.repl.complete_names("Json.pa") == []
 
     @story("D5")
     def it_hiding_した名前は補完されない(repl):
         repl.feed("open Lean hiding Json")
-        names = repl.repl._names("Js")
+        names = repl.repl.complete_names("Js")
         assert "Json" not in names
         assert "JsonNumber" in names
 
     @story("D5")
     def it_名前を指定して_open_したものだけが補完される(repl):
         repl.feed("open Nat (succ_le_succ)")
-        names = repl.repl._names("succ_le")
+        names = repl.repl.complete_names("succ_le")
         assert "succ_le_succ" in names
         assert "succ_le_of_lt" not in names
 
@@ -101,10 +101,10 @@ def describe_open_した名前空間():
     def it_protected_な名前は最後の部分だけでは補完されない(repl):
         # Nat.add_comm は protected なので `open Nat` しても add_comm とは書けない。
         repl.feed("open Nat")
-        assert "add_comm" not in repl.repl._names("add_com")
-        assert "succ_le_succ" in repl.repl._names("succ_le_s")
+        assert "add_comm" not in repl.repl.complete_names("add_com")
+        assert "succ_le_succ" in repl.repl.complete_names("succ_le_s")
 
     @story("D5")
     def it_namespace_の中ではその名前空間の名前も短い名前で補完される(repl):
         repl.feed("namespace Lean.Json")
-        assert "parse" in repl.repl._names("pars")
+        assert "parse" in repl.repl.complete_names("pars")
