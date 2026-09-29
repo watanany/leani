@@ -876,3 +876,63 @@ def describe_性質一覧():
             check=False,
         )
         assert done.returncode == 0, done.stderr
+
+
+def describe_Lake_プロジェクトの判定():
+    """設定に環境が無いとき、カレントディレクトリから Lake プロジェクトを探す。"""
+
+    @story("G6")
+    def it_lakefile_を持つ一番近い親ディレクトリを返す(tmp_path):
+        (tmp_path / "lakefile.toml").write_text("")
+        sub = tmp_path / "A" / "B"
+        sub.mkdir(parents=True)
+        assert leani.config.lake_root(str(sub)) == str(tmp_path)
+
+    @story("G3", "G6")
+    def it_lakefile_が無ければ_None_を返す(tmp_path):
+        assert leani.config.lake_root(str(tmp_path)) is None
+
+    @story("G6")
+    def it_lakefile_toml_の_lean_lib_を返す(tmp_path):
+        (tmp_path / "lakefile.toml").write_text(
+            'name = "p"\n[[lean_lib]]\nname = "Foo"\n[[lean_lib]]\nname = "Bar"\n'
+        )
+        assert leani.config.lake_libs(str(tmp_path)) == ["Foo", "Bar"]
+
+    @story("G6")
+    def it_lakefile_lean_の_lean_lib_を返す(tmp_path):
+        (tmp_path / "lakefile.lean").write_text(
+            "import Lake\nopen Lake DSL\n\nlean_lib Foo where\nlean_lib «Bar.Baz»\n"
+        )
+        assert leani.config.lake_libs(str(tmp_path)) == ["Foo", "Bar.Baz"]
+
+    @story("G4", "G6")
+    def it_lakefile_toml_が壊れていたら空を返す(tmp_path):
+        (tmp_path / "lakefile.toml").write_text("[[lean_lib]\n")
+        assert leani.config.lake_libs(str(tmp_path)) == []
+
+    @story("G6")
+    def it_設定が無ければ_Lake_プロジェクトの環境で起動する(tmp_path, monkeypatch):
+        proj = tmp_path / "myproj"
+        (proj / "sub").mkdir(parents=True)
+        (proj / "lakefile.toml").write_text('[[lean_lib]]\nname = "MyProj"\n')
+        monkeypatch.chdir(proj / "sub")
+        got = leani.config.resolve(cfg={})
+        assert (got.name, got.project, got.imports) == (
+            "myproj",
+            str(proj),
+            ("MyProj",),
+        )
+
+    @story("G3", "G6")
+    def it_Lake_プロジェクトの外なら_Lean_本体だけで起動する(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        got = leani.config.resolve(cfg={})
+        assert (got.name, got.project) == ("plain", None)
+
+    @story("G6")
+    def it_import_を指定したら_lean_lib_の代わりにそれを使う(tmp_path, monkeypatch):
+        (tmp_path / "lakefile.toml").write_text('[[lean_lib]]\nname = "Mine"\n')
+        monkeypatch.chdir(tmp_path)
+        got = leani.config.resolve(imports=["Std"], cfg={})
+        assert got.imports == ("Std",)
