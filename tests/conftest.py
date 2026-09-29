@@ -6,7 +6,7 @@ leani コマンドと同じものを `python -m leani` として子プロセス�
 テストは 3 層 (5 ファイル) に分かれている。上の層ほど速い。テストの数はエンジンの
 層が一番多く、端末の層は一番遅いので数を絞ってある。
 
-  test_parsing.py      純関数と読み取りだけ。端末もエンジンも不要。ミリ秒。
+  test_parsing.py      純粋関数と読み取りだけ。端末もエンジンも不要。ミリ秒。
   test_engine.py       Repl を直接呼ぶ。1 テストに数秒。
   test_completion.py   同上。問い合わせ回数は mocker で数える。
   test_terminal.py     pty 越しに本物の行編集をテストする。

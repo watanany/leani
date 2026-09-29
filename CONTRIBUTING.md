@@ -18,7 +18,7 @@ uv tool install --editable . --force
 uv sync
 uv run pytest                         # すべてのテストを実行する
 uv run pytest -n auto                 # テストを並列で実行する
-uv run pytest tests/test_parsing.py   # 純関数のテストだけを実行する
+uv run pytest tests/test_parsing.py   # 純粋関数のテストだけを実行する
 uv run pytest -k 履歴                 # テストを名前で絞り込む
 uv run ruff format . && uv run ruff check .
 uv run mypy
@@ -36,9 +36,9 @@ uv run mypy
 ラベル (純粋、読み取り、副作用、定数) の意味とモジュールの一覧は、`src/leani/__init__.py` の docstring に書いてある。
 コードを追加するときは、次の決まりに従う。
 
-- 原則として、純粋関数型の考え方でコードを書く。基本的な書き方は Haskell を意識する。値を書き換えるより新しい値を返し、小さな関数を組み合わせる
+- 原則として、純粋関数型の考え方でコードを書く。基本的な書き方は Haskell を意識する。値を書き換えるより新しい値を返し、小さな関数を組み合わせる。純粋、読み取り、定数のモジュールでは、関数の複雑さと、return や分岐の数を `ruff` が検査する
 - 分岐は、書ける箇所では match-case で書く。不自然になるなら if-elif-else で書く
-- 純粋な関数では、`if` の `else` を省略しない。どの分岐でも値を返すことが、コードの形でわかるようにする
+- 純粋関数では、`if` の `else` を省略しない。どの分岐でも値を返すことが、コードの形でわかるようにする
 - 副作用のある関数では、`else` を省略してよい。Go のように、条件に合わなければ先に return する
 - 判定と整形は、純粋なモジュール (`pure.py` など) に書く。副作用のモジュールには、プロセス、端末、ファイルの操作だけを書く。こうすると、判定と整形のテストを入力と出力だけで書ける
 - 純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない。この向きは `ruff` が検査する。副作用のモジュールを追加したら、`pyproject.toml` の `banned-api` と `per-file-ignores` にも追加する
