@@ -11,7 +11,7 @@ def describe_行編集():
     @story("C3")
     def it_プロンプトの色を桁として数えない(terminal):
         # 数えていると折り返す位置がずれ、履歴から呼び出した行を Backspace で
-        # 消せなくなる (実際に起きたバグ)。80 桁のうちプロンプトが 3 桁を使う。
+        # 消せなくなる。80 桁のうちプロンプトが 3 桁を使う。
         term = terminal(cols=80)
         row = term.screen.cursor.y
         term.type("a" * 74)
@@ -91,8 +91,8 @@ def describe_履歴():
 
     @story("F3")
     def it_ディレクトリを含まない履歴のパスでも前回の履歴を消さない(terminal):
-        # LEANI_HISTORY=history のような相対パスだと dirname が "" になり、
-        # makedirs("") が例外を投げて、履歴の読み込みごとスキップされていた。
+        # LEANI_HISTORY=history のような相対パスだと dirname が "" になる。
+        # そのまま makedirs("") を呼ぶと例外になり、履歴の読み込みごとスキップされる。
         # 読み込めていない履歴に 1 行目を書き込むので、前回までの履歴がすべて消える。
         term = terminal(
             history_name="bare-history",

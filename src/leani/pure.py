@@ -222,8 +222,8 @@ def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     sorry 1 つをタクティクのスクリプトに置き換える。位置が取得できなければ None。
 
     repl は sorry ごとに pos / endPos を返す。テキストを検索して sorry を探すと、
-    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切り出す。テキストを
-    検索していたころは、sorry が 2 つ以上あると置き換えを全部諦めていた。
+    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切り出す。
+    位置で切り出せば、sorry が 2 つ以上あっても 1 つだけを置き換えられる。
     """
     a, b = offset(src, sy.get("pos")), offset(src, sy.get("endPos"))
     if a is None or b is None or src[a:b] != "sorry":

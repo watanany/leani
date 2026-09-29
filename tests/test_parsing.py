@@ -726,7 +726,6 @@ def describe_略記の展開():
     @story("C5")
     def it_めったに使わない略記も変換できる():
         # 表には VS Code の Lean 拡張の略記をほぼすべて (1829 件) 含めている。
-        # よく使う略記だけに絞っていたころは変換できなかった。
         assert leani.abbrev.expand_abbrev("\\frown") == ("⌢", 6)
         assert leani.abbrev.expand_abbrev("\\Gangia") == ("Ϫ", 7)
 

@@ -232,8 +232,8 @@ def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
 
     lake env は起動に 1 秒近くかかるので、新しいキャッシュがあれば再利用する。
     LEAN_PATH は core の .olean を指すので、toolchain ごとに別のキーでキャッシュする。
-    同じキーを使っていたころは、rc のバージョンを変更すると前のバージョンの .olean を
-    指したままになり、repl は起動するのに import がすべて失敗していた。
+    同じキーを使うと、rc のバージョンを変更したときに前のバージョンの .olean を
+    指したままになり、repl は起動するのに import がすべて失敗する。
     """
     if not project:
         return {}

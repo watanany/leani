@@ -262,8 +262,8 @@ class Repl:
         except BaseException:
             # Engine を作った時点で repl のプロセスは起動している。ここで例外を
             # 投げると呼び出し元が self.eng を差し替えるので、そのプロセスを終了
-            # させる方法が無くなる (以前は :env の切り替えに失敗するたびにプロセスが
-            # 1 つ残っていた)。
+            # させる方法が無くなる (:env の切り替えに失敗するたびにプロセスが
+            # 1 つ残る)。
             self.eng.kill()
             raise
         print(dim(f"leani: {self.eng.tc} / {cfg} / {time.time() - t0:.1f}s"))
@@ -476,10 +476,9 @@ class Repl:
         """
         再起動に失敗したときの後始末。環境が無いので、直前の入力に戻ることもできない。
 
-        以前は成功パスでだけ証明モードを終了していたので、再起動に失敗すると無効に
-        なった proofState を保持したままになっていた。その結果、leani はどの行にも
-        赤い "Unknown proof state." だけを返す証明モードのままになっていた (抜け方の
-        案内も表示されなかった)。
+        再起動に失敗したときも証明モードを終了する。終了しないと、無効になった
+        proofState を保持したままになり、leani はどの行にも赤い
+        "Unknown proof state." だけを返す証明モードのままになる。
         """
         self.last = None
         if self.proof is not None:
@@ -1330,8 +1329,7 @@ class Repl:
                 die(f"{back.name} にも戻れなくなった: {back_e}")
 
         # 切り替えが成功しても元の環境に戻っても、対話で入力した宣言は新しい
-        # エンジンには無い。以前は except の中だけで再実行していたので、切り替えが
-        # 成功したときに限って、入力した宣言が何も表示されずに消えていた。
+        # エンジンには無い。どちらの場合も、ここで 1 回だけ再実行する。
         self.replay_into(log)
         self.show_time = keep
 
