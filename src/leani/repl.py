@@ -64,7 +64,7 @@ from leani.queries import (
     SCOPE_QUERY,
 )
 from leani.search import loogle
-from leani.show import die, panic_check, render
+from leani.show import Console, die, panic_check, render
 from leani.types import (
     CMD,
     MORE,
@@ -76,6 +76,7 @@ from leani.types import (
     Interrupted,
     Kind,
     Loogle,
+    Output,
     Probe,
     Scope,
     SearchError,
@@ -226,7 +227,11 @@ class Repl:
     _session: PromptSession[str] | None = None
     _history: BlockHistory | None = None
 
-    def __init__(self, cfg: EnvConfig, preload: str | None = None) -> None:
+    def __init__(
+        self, cfg: EnvConfig, preload: str | None = None, out: Output | None = None
+    ) -> None:
+        # 表示はすべて out に出す。端末では Console、Jupyter では kernel の実装を渡す。
+        self.out: Output = out or Console()
         self.saved: set[str] = set()  # :save で書き出したパス。上書きの判断に使う
         self._start(cfg, preload)
 
@@ -267,7 +272,7 @@ class Repl:
             # 1 つ残る)。
             self.eng.kill()
             raise
-        print(dim(f"leani: {self.eng.tc} / {cfg} / {time.time() - t0:.1f}s"))
+        self.out.write(dim(f"leani: {self.eng.tc} / {cfg} / {time.time() - t0:.1f}s"))
 
         if os.path.isfile(INIT):
             self.apply_init()
@@ -285,7 +290,7 @@ class Repl:
             with open(INIT) as f:
                 text = f.read()
         except OSError as e:
-            print(red(f"{INIT} が読めない ({e.strerror})"))
+            self.out.fail(red(f"{INIT} が読めない ({e.strerror})"))
             return
 
         src = strip_imports(text)
@@ -296,14 +301,14 @@ class Repl:
         if resp is None:
             return
         elif has_error(resp):
-            print(red(f"{INIT} にエラーがある:"))
-            render(resp, src)
+            self.out.fail(red(f"{INIT} にエラーがある:"))
+            render(self.out, resp, src)
             return
         else:
             # 再起動したときに init を再実行できるよう、Engine に保存する。
             self.eng.env = self.eng.base = resp["env"]
             self.eng.init_src = src
-            print(dim(f"-- {INIT} を読み込んだ"))
+            self.out.write(dim(f"-- {INIT} を読み込んだ"))
 
     # -- 行編集 -----------------------------------------------------------
 
@@ -457,18 +462,20 @@ class Repl:
         try:
             out = self.eng.restart()
         except Interrupted:
-            print(yellow("^C 再起動を中断した。:restart でやり直せる"))
+            self.out.write(yellow("^C 再起動を中断した。:restart でやり直せる"))
             self.fold_proof()
             return None
         except (EngineDied, OSError) as e:
-            print(red(f"エンジンを再起動できなかった: {str(e) or '理由は分からない'}"))
-            print(dim("  原因を直してから :restart"))
+            self.out.fail(
+                red(f"エンジンを再起動できなかった: {str(e) or '理由は分からない'}")
+            )
+            self.out.write(dim("  原因を直してから :restart"))
             self.fold_proof()
             return None
 
         self.proof, self.last = None, None
         self.clear_pending()
-        print(dim(f"宣言 {len(out.done)} 件を再実行した (env {self.eng.env})"))
+        self.out.write(dim(f"宣言 {len(out.done)} 件を再実行した (env {self.eng.env})"))
         self.report_replay(out)
         self.reattach(out)
         return out
@@ -492,14 +499,14 @@ class Repl:
     def report_replay(self, out: Replay) -> None:
         """replay で戻せなかったものを報告する。表示しないとユーザーが気付けない。"""
         for note in out.notes:
-            print(yellow(note))
+            self.out.write(yellow(note))
         for src in out.failed:
-            print(yellow(f"戻せなかった宣言: {head_line(src)}"))
+            self.out.write(yellow(f"戻せなかった宣言: {head_line(src)}"))
         if out.failed or out.notes:
-            print(dim("  これらは環境に無い (テキストは残してある)"))
+            self.out.write(dim("  これらは環境に無い (テキストは残してある)"))
         if out.skipped:
-            print(yellow(f"まだ実行していない宣言: {len(out.skipped)} 件"))
-            print(dim("  これらも環境に無い。:restart でやり直せる"))
+            self.out.write(yellow(f"まだ実行していない宣言: {len(out.skipped)} 件"))
+            self.out.write(dim("  これらも環境に無い。:restart でやり直せる"))
 
     def reattach(self, out: Replay) -> None:
         """
@@ -516,7 +523,9 @@ class Repl:
         self.pending = out.sorries
         self.proof_src = out.done[-1]
         self.sorry_env = self.eng.env
-        print(dim(f"-- :prove で証明モードを再開できる (sorry {len(out.sorries)} 個)"))
+        self.out.write(
+            dim(f"-- :prove で証明モードを再開できる (sorry {len(out.sorries)} 個)")
+        )
 
     def replay_into(self, log: Sequence[str]) -> None:
         """入力した宣言を今のエンジンで再実行する。:env の切り替え後に使う。"""
@@ -527,17 +536,17 @@ class Repl:
             # ここはユーザーに案内を表示する層。Engine のチェックで出る例外を
             # そのまま「内部エラー」として表示すると、テキストが残っていることも、
             # 次に何をすればよいかもユーザーに伝わらない。
-            print(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
-            print(dim("  テキストは残してある。:restart で再起動できる"))
+            self.out.write(yellow(f"環境が無いので宣言 {len(log)} 件を戻せなかった"))
+            self.out.write(dim("  テキストは残してある。:restart で再起動できる"))
             self.eng.unplayed = list(log) + self.eng.unplayed
             return
 
         out = self.guard(lambda: self.eng.replay(log))
         if out is None:
-            print(yellow(f"入力した宣言 {len(log)} 件を戻せなかった"))
+            self.out.write(yellow(f"入力した宣言 {len(log)} 件を戻せなかった"))
             return
 
-        print(dim(f"宣言 {len(out.done)} 件を戻した (env {self.eng.env})"))
+        self.out.write(dim(f"宣言 {len(out.done)} 件を戻した (env {self.eng.env})"))
         self.report_replay(out)
         self.reattach(out)
 
@@ -552,9 +561,9 @@ class Repl:
         try:
             return fn()
         except Interrupted:
-            print(yellow("^C 中断した。エンジンを再起動する…"))
+            self.out.write(yellow("^C 中断した。エンジンを再起動する…"))
         except EngineDied:
-            print(red("エンジンが異常終了した。再起動する…"))
+            self.out.write(red("エンジンが異常終了した。再起動する…"))
             retry = True
 
         if self.revive() is None:
@@ -624,22 +633,22 @@ class Repl:
             except EOFError:
                 if self.buf or self.explicit:
                     self.discard()
-                    print()
+                    self.out.write()
                     continue
                 else:
-                    print()
+                    self.out.write()
                     return 0
             except KeyboardInterrupt:
                 self.discard()
                 self.last = None
-                print("^C")
+                self.out.write("^C")
                 continue
             except UnicodeDecodeError as e:
                 # main が errors="replace" に設定し直すのは tty でない stdin だけ。
                 # stdin が端末で stdout が端末でないとき (`leani | tee log` など) は
                 # input() が strict のまま読むので、この例外が起きる。ここでループを
                 # 終了すると、それまでに実行した宣言も失われる。その行だけを捨てる。
-                print(red(f"UTF-8 として読めない行を飛ばした ({e.reason})"))
+                self.out.fail(red(f"UTF-8 として読めない行を飛ばした ({e.reason})"))
                 continue
 
             try:
@@ -650,11 +659,11 @@ class Repl:
                 # その外 (子プロセス、整形、補完) で押された Ctrl-C はここで捕まえる。
                 self.discard()
                 self.last = None
-                print("^C")
+                self.out.write("^C")
             except Exception as e:
                 # 想定外の例外でも、その 1 行のエラーとして扱う。セッションを終了すると
                 # それまでの宣言をすべて失うので、それが一番大きな損失になる。
-                print(red(f"内部エラー: {type(e).__name__}: {e}"))
+                self.out.fail(red(f"内部エラー: {type(e).__name__}: {e}"))
                 self.discard()
 
     def feed_line(self, line: str) -> Step | None:
@@ -719,7 +728,7 @@ class Repl:
             # 捨て、案内だけを表示する。
             self.remember("\n".join(self.buf))
             self.buf, self.ready = [], None
-            print(dim("  入力した行は実行しなかった"))
+            self.out.write(dim("  入力した行は実行しなかった"))
             return None
         elif state == MORE:
             self.ready = None
@@ -781,7 +790,7 @@ class Repl:
             else:
                 self.remember(src)
                 self.restore_undone()
-                print(dim("-- 入力が途中だったので捨てた"))
+                self.out.write(dim("-- 入力が途中だったので捨てた"))
                 self.last = None
             return "quit" if self.feed(line) == "quit" else "done"
         elif self.ready is not None and not continues(line):
@@ -838,7 +847,7 @@ class Repl:
             # boot に失敗したエンジン。送れば send_cmd のチェックで止まるが、
             # ユーザーに必要なのは例外の名前ではなく次に何をすればよいかなので、
             # ここで案内を表示する。
-            print(red("エンジンが使えない。:restart で再起動できる"))
+            self.out.fail(red("エンジンが使えない。:restart で再起動できる"))
             return
 
         self.undone = None  # 書き直しが確定した。もう戻さない
@@ -859,7 +868,7 @@ class Repl:
         """式として #eval に包んで送る。環境は進めない。"""
         wrapped = "#eval\n" + textwrap.indent(src, "  ")
         resp = self.guard(lambda: self.eng.send_cmd(wrapped))
-        if resp is None or panic_check(resp):
+        if resp is None or panic_check(self.out, resp):
             return False
 
         errs = errors(resp)
@@ -871,7 +880,7 @@ class Repl:
             retry = "#eval show IO _ from\n" + textwrap.indent(src, "  ")
             again = self.guard(lambda: self.eng.send_cmd(retry))
             if again is not None and not has_error(again):
-                render(again, src, line_off=1, col_off=2)
+                render(self.out, again, src, line_off=1, col_off=2)
                 self.last = Last(src, advanced=False)
                 return True
 
@@ -881,12 +890,12 @@ class Repl:
                 lambda: self.eng.query("#check\n" + textwrap.indent(src, "  "))
             )
             if out:
-                print(out.rstrip())
-                print(dim("-- 評価できないので型だけを表示した"))
+                self.out.write(out.rstrip())
+                self.out.write(dim("-- 評価できないので型だけを表示した"))
                 self.last = Last(src, advanced=False)
                 return True
 
-        render(resp, src, line_off=1, col_off=2)
+        render(self.out, resp, src, line_off=1, col_off=2)
         self.last = Last(src, advanced=False)
         return True
 
@@ -894,14 +903,14 @@ class Repl:
         """command としてそのまま送る。エラーが無ければ環境を 1 つ進める。"""
         env_before = self.eng.env
         resp = self.guard(lambda: self.eng.send_cmd(src))
-        if resp is None or panic_check(resp):
+        if resp is None or panic_check(self.out, resp):
             return False
 
         advanced = not has_error(resp) and "env" in resp
         if advanced:
             self.eng.advance(resp)
             self.eng.log.append(src)
-        render(resp, src)
+        render(self.out, resp, src)
 
         found = sorries(resp)
         self.clear_pending()
@@ -915,7 +924,9 @@ class Repl:
             # 消えるため)。
             self.proof_src = src
             self.sorry_env = self.eng.env
-            print(dim(f"-- :prove で証明モードを始められる (sorry {len(found)} 個)"))
+            self.out.write(
+                dim(f"-- :prove で証明モードを始められる (sorry {len(found)} 個)")
+            )
 
         self.last = Last(src, advanced=advanced, env_before=env_before)
         return True
@@ -928,7 +939,7 @@ class Repl:
 
     def timing(self, t0: float) -> None:
         if self.show_time:
-            print(dim(f"({time.time() - t0:.2f}s)"))
+            self.out.write(dim(f"({time.time() - t0:.2f}s)"))
 
     # -- 証明モード -------------------------------------------------------
 
@@ -954,18 +965,18 @@ class Repl:
         self.last = Last(src, advanced=False, proof=True)
 
         if resp.get("message"):  # エンジンが直接返すエラー
-            print(red(resp["message"].rstrip()))
+            self.out.fail(red(resp["message"].rstrip()))
             return
         elif has_error(resp):
-            render(resp, src)
+            render(self.out, resp, src)
             return
 
         for m in messages(resp):
             if m.get("data"):
-                print(m["data"].rstrip())
+                self.out.write(m["data"].rstrip())
 
         if "proofState" not in resp:
-            render(resp, src)
+            render(self.out, resp, src)
             return
 
         proof.stack.append(before)
@@ -976,7 +987,7 @@ class Repl:
             # 提案を最後まで解析できていない (メッセージの形式が変わった場合など)。
             # 壊れたスクリプトを完成した証明として表示するより、入力したタクティクを
             # そのまま残す。
-            print(
+            self.out.write(
                 dim(
                     "-- 提案を読み取れなかったので、"
                     "入力したタクティクをそのままスクリプトに記録した"
@@ -985,7 +996,7 @@ class Repl:
             found = None
         if found and found != src:
             shown = found.replace("\n", " ")
-            print(dim(f"-- スクリプトには {shown} を記録した"))
+            self.out.write(dim(f"-- スクリプトには {shown} を記録した"))
         proof.script.append(found or src)
         self.last = Last(src, advanced=True, proof=True)
 
@@ -995,25 +1006,29 @@ class Repl:
             return
 
         script = "\n".join(proof.script)
-        print(green("証明完了。"))
-        print(dim("-- スクリプト:"))
-        print(textwrap.indent(script, "  "))
+        self.out.write(green("証明完了。"))
+        self.out.write(dim("-- スクリプト:"))
+        self.out.write(textwrap.indent(script, "  "))
         self.proof, self.last = None, None
         self.close_sorry(script)
 
     def drop_proof(self) -> None:
         """エンジンが再起動されたので証明モードを終了する。何が起きたかはユーザーに表示する。"""
         self.proof, self.last = None, None
-        print(yellow("証明していたエンジンが終了したので、証明モードを終了した"))
-        print(dim("  入力したタクティクは証明に反映されていない (宣言は sorry のまま)"))
+        self.out.write(
+            yellow("証明していたエンジンが終了したので、証明モードを終了した")
+        )
+        self.out.write(
+            dim("  入力したタクティクは証明に反映されていない (宣言は sorry のまま)")
+        )
         if self.pending and self.eng.env is not None:
             # revive が replay で sorry を取得し直していれば、そのまま証明モードを
             # 再開できる。
-            print(dim(f"  :prove で再開できる (sorry {len(self.pending)} 個)"))
+            self.out.write(dim(f"  :prove で再開できる (sorry {len(self.pending)} 個)"))
         else:
             # 再起動に失敗したときの proofState は前のプロセスのもの。
             self.clear_pending()
-            print(dim("  :restart で再起動してから入力し直す"))
+            self.out.write(dim("  :restart で再起動してから入力し直す"))
 
     def close_sorry(self, script: str) -> None:
         """`by sorry` をスクリプトで置き換えて、宣言を再実行する。"""
@@ -1025,7 +1040,7 @@ class Repl:
         if new_src is None:
             # sorry の位置が分からなかった。証明自体は成功しているので、スクリプトは
             # すでに表示してある。何も表示せずに戻ると「証明完了」という表示だけが残る。
-            print(
+            self.out.write(
                 dim("-- sorry の位置を読み取れなかったので、宣言は sorry のままにする")
             )
             return
@@ -1040,8 +1055,8 @@ class Repl:
         keep = (self.pending, self.proof_at, self.proof_src, self.sorry_env)
         self.proof_at, self.proof_src, self.sorry_env = None, None, None
 
-        print(dim("-- sorry をスクリプトで置き換えて実行する:"))
-        print(textwrap.indent(new_src.strip(), "  "))
+        self.out.write(dim("-- sorry をスクリプトで置き換えて実行する:"))
+        self.out.write(textwrap.indent(new_src.strip(), "  "))
 
         gen = self.eng.gen
         self.submit(new_src, CMD)
@@ -1057,17 +1072,19 @@ class Repl:
             # なっているので設定せず、sorry を含むテキストを再実行する。保留中の状態は
             # 戻さない (replay_into が設定し直した値を無効な proofState で上書きすると、
             # 次の :prove が今の環境に無い状態を指す)。
-            print(dim("-- エンジンを再起動したので、sorry のままにしておく"))
+            self.out.write(dim("-- エンジンを再起動したので、sorry のままにしておく"))
             if undone.src is not None:
                 self.replay_into([undone.src])
         else:
             # 再実行が失敗した。項の位置にある sorry にはタクティクを差し込めない。
             self.eng.push_decl(undone)
             self.pending, self.proof_at, self.proof_src, self.sorry_env = keep
-            print(dim("-- エラーになったので、sorry のままにしておく"))
+            self.out.write(dim("-- エラーになったので、sorry のままにしておく"))
             left = len(self.pending)
             if left > 1:
-                print(dim(f"  残りは :prove <n> で続けられる (sorry {left} 個)"))
+                self.out.write(
+                    dim(f"  残りは :prove <n> で続けられる (sorry {left} 個)")
+                )
 
     def show_goals(self, goals: Sequence[str] | None = None) -> None:
         if goals is None:
@@ -1077,30 +1094,30 @@ class Repl:
 
         for n, g in enumerate(goals):
             head = f"goal {n + 1}/{len(goals)}" if len(goals) > 1 else "goal"
-            print(green(head))
-            print(textwrap.indent(g, "  "))
+            self.out.write(green(head))
+            self.out.write(textwrap.indent(g, "  "))
 
     def show_pending(self) -> None:
         """証明モードの外での :goals。残っている sorry を出す。"""
         if not self.pending:
-            print(dim("証明モードではない (sorry も残っていない)"))
+            self.out.write(dim("証明モードではない (sorry も残っていない)"))
             return
 
         for n, sy in enumerate(self.pending):
-            print(green(f"sorry {n + 1} [proofState {sy.get('proofState')}]"))
-            print(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
+            self.out.write(green(f"sorry {n + 1} [proofState {sy.get('proofState')}]"))
+            self.out.write(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
 
     def prove(self, arg: str) -> None:
         """直前の入力に出た sorry を 1 つ選んで証明モードを始める。"""
         found = self.pending
         if not found:
-            print(red("直前の入力に sorry が無い"))
+            self.out.fail(red("直前の入力に sorry が無い"))
             return
 
         # isdigit は '²' に True を返すが、int() は '²' を変換できない。
         n = int(arg) - 1 if arg.isdecimal() else 0
         if not 0 <= n < len(found):
-            print(red(f"sorry は {len(found)} 個。1..{len(found)} で指定する"))
+            self.out.fail(red(f"sorry は {len(found)} 個。1..{len(found)} で指定する"))
             return
 
         sy = found[n]
@@ -1108,7 +1125,7 @@ class Repl:
         self.proof = Proof(state=sy["proofState"], goals=[goal])
         self.proof_gen = self.eng.gen
         self.proof_at = sy  # 置き換えるのはこの sorry。位置で特定する
-        print(dim(PROOF_HELP))
+        self.out.write(dim(PROOF_HELP))
         self.show_goals([goal])
 
     # -- メタコマンド -----------------------------------------------------
@@ -1122,7 +1139,7 @@ class Repl:
                 # 子プロセスは同じプロセスグループにいるので、Ctrl-C の SIGINT は
                 # leani にも届く。止めたいのは子プロセスだけ。ここでループを抜けると
                 # 宣言をすべて失う。
-                print("^C")
+                self.out.write("^C")
             return None
 
         parts = line.split(None, 1)
@@ -1138,11 +1155,11 @@ class Repl:
             case "q" | "quit":
                 return "quit"
             case "?" | "h" | "help":
-                print(HELP, end="")
+                self.out.write(HELP, end="")
             case "goals" | "g":
                 self.show_pending()
             case "script" | "done":
-                print(dim("証明モードではない"))
+                self.out.write(dim("証明モードではない"))
             case "t" | "type":
                 self.cmd_type(arg)
             case "i" | "info":
@@ -1170,11 +1187,13 @@ class Repl:
                 self.cmd_save(arg)
             case "time":
                 self.show_time = not self.show_time
-                print(dim(f"実行時間の表示: {'on' if self.show_time else 'off'}"))
+                self.out.write(
+                    dim(f"実行時間の表示: {'on' if self.show_time else 'off'}")
+                )
             case "restart":
                 self.cmd_restart()
             case _:
-                print(red(f"不明なコマンド: :{cmd}  (:help)"))
+                self.out.fail(red(f"不明なコマンド: :{cmd}  (:help)"))
 
         return None
 
@@ -1184,14 +1203,14 @@ class Repl:
             case "goals" | "g":
                 self.show_goals()
             case "script":
-                print(textwrap.indent("\n".join(proof.script) or "(空)", "  "))
+                self.out.write(textwrap.indent("\n".join(proof.script) or "(空)", "  "))
             case "undo":
                 self.proof_undo(proof)
             case "done" | "q" | "quit":
                 self.proof, self.buf, self.ready = None, [], None
-                print(dim("証明モードを終了した"))
+                self.out.write(dim("証明モードを終了した"))
             case "?" | "h" | "help":
-                print(PROOF_HELP)
+                self.out.write(PROOF_HELP)
             case _:
                 return False
 
@@ -1199,50 +1218,56 @@ class Repl:
 
     def proof_undo(self, proof: Proof) -> None:
         if not proof.stack:
-            print(dim("取り消せるタクティクが無い"))
+            self.out.write(dim("取り消せるタクティクが無い"))
             return
 
         proof.state = proof.stack.pop()
         if proof.script:
             proof.script.pop()
 
-        print(dim(f"proofState {proof.state}"))
+        self.out.write(dim(f"proofState {proof.state}"))
 
     def cmd_type(self, arg: str) -> None:
         if not arg:
-            print(red(":t には式が必要"))
+            self.out.fail(red(":t には式が必要"))
             return
 
         out = self.guard(
             lambda: self.eng.query("#check\n" + textwrap.indent(arg, "  "))
         )
-        print(out.rstrip() if out else red("型を取得できなかった"))
+        if out:
+            self.out.write(out.rstrip())
+        else:
+            self.out.fail(red("型を取得できなかった"))
 
     def cmd_info(self, arg: str) -> None:
         if not arg:
-            print(red(":i には名前が必要"))
+            self.out.fail(red(":i には名前が必要"))
             return
 
         out = self.guard(lambda: self.eng.query(f"#check @{arg}"))
-        print(out.rstrip() if out else red(f"不明: {arg}"))
+        if out:
+            self.out.write(out.rstrip())
+        else:
+            self.out.fail(red(f"不明: {arg}"))
 
         doc = self.guard(lambda: self.eng.query(DOC_QUERY % arg))
         if doc and doc.strip():
-            print(dim(doc.strip()))
+            self.out.write(dim(doc.strip()))
 
     def cmd_print(self, arg: str) -> None:
         if not arg:
-            print(red(":p には名前が必要"))
+            self.out.fail(red(":p には名前が必要"))
             return
 
         resp = self.guard(lambda: self.eng.send_cmd(f"#print {arg}"))
         if resp is not None:
-            render(resp, arg)
+            render(self.out, resp, arg)
 
     def cmd_loogle(self, arg: str) -> None:
         """loogle に問い合わせる。エンジンは操作しないので、環境は変わらない。"""
         if not arg:
-            print(
+            self.out.write(
                 red(":loogle には名前か型のパターンが必要  (例: |- ?a + ?b = ?b + ?a)")
             )
             return
@@ -1250,10 +1275,10 @@ class Repl:
         try:
             got = self.ask_loogle(arg)
         except SearchError as e:
-            print(red(f"loogle の検索に失敗した: {e}"))
+            self.out.fail(red(f"loogle の検索に失敗した: {e}"))
             return
 
-        print(loogle_text(got, width=shutil.get_terminal_size().columns))
+        self.out.write(loogle_text(got, width=shutil.get_terminal_size().columns))
 
     def ask_loogle(self, query: str) -> Loogle:
         """
@@ -1265,11 +1290,11 @@ class Repl:
         if not TTY:
             return loogle(query)
 
-        print(dim("loogle に問い合わせている…"), end="", flush=True)
+        self.out.write(dim("loogle に問い合わせている…"), end="")
         try:
             return loogle(query)
         finally:
-            print("\r\033[K", end="", flush=True)
+            self.out.write("\r\033[K", end="")
 
     def cmd_undo(self, arg: str) -> None:
         for _ in range(int(arg) if arg.isdecimal() else 1):
@@ -1279,7 +1304,7 @@ class Repl:
                 self.eng.log.pop()
 
         self.clear_pending()
-        print(dim(f"env {self.eng.env}"))
+        self.out.write(dim(f"env {self.eng.env}"))
 
     def cmd_restart(self) -> None:
         self.revive()
@@ -1290,13 +1315,13 @@ class Repl:
             self.show_env()
             return
         elif arg == self.cfg.name:
-            print(dim(f"すでに {arg}"))
+            self.out.write(dim(f"すでに {arg}"))
             return
 
         try:
             target = resolve(name=arg)
         except ConfigError as e:
-            print(red(str(e)))
+            self.out.fail(red(str(e)))
             return
 
         try:
@@ -1307,7 +1332,7 @@ class Repl:
             why = str(e)
 
         if why:
-            print(red(why))  # 今のエンジンは終了させない
+            self.out.fail(red(why))  # 今のエンジンは終了させない
             return
 
         keep, prev, back = self.show_time, self.eng.loaded, self.cfg
@@ -1323,8 +1348,10 @@ class Repl:
             self._start(target, preload=prev)
         except START_FAILED as e:
             # import が成功するかは boot するまで分からない。元の環境に戻す。
-            print(red(f"{arg} で起動できなかった: {str(e) or '理由は分からない'}"))
-            print(dim(f"  {back.name} に戻る"))
+            self.out.fail(
+                red(f"{arg} で起動できなかった: {str(e) or '理由は分からない'}")
+            )
+            self.out.write(dim(f"  {back.name} に戻る"))
             try:
                 self._start(back, preload=prev)
             except START_FAILED as back_e:
@@ -1336,8 +1363,10 @@ class Repl:
         self.show_time = keep
 
     def show_env(self) -> None:
-        print(dim(f"{self.cfg}: {self.cfg.project or 'Lake プロジェクト無し'}"))
-        print(
+        self.out.write(
+            dim(f"{self.cfg}: {self.cfg.project or 'Lake プロジェクト無し'}")
+        )
+        self.out.write(
             dim(
                 f"env {self.eng.env} "
                 f"(base {self.eng.base}, 宣言 {len(self.eng.log)} 件)"
@@ -1346,11 +1375,11 @@ class Repl:
         try:
             names = sorted(load_config().get("env") or {})
         except ConfigError as e:
-            print(red(str(e)))
+            self.out.fail(red(str(e)))
             return
 
         if names:
-            print(dim(f"切り替え先: {' '.join(names)}  (:env <name>)"))
+            self.out.write(dim(f"切り替え先: {' '.join(names)}  (:env <name>)"))
 
     def cmd_save(self, arg: str) -> None:
         """
@@ -1361,21 +1390,21 @@ class Repl:
         ソースで保存しておけば編集もできるし、lean でそのまま実行できる。
         """
         if not arg:
-            print(red(":save にはファイル名が必要"))
+            self.out.fail(red(":save にはファイル名が必要"))
             return
 
         srcs = self.eng.sources()
         orphans = list(self.eng.unplayed)
         if not srcs and not orphans:
-            print(red("保存する宣言が無い"))
+            self.out.fail(red("保存する宣言が無い"))
             return
 
         path = os.path.abspath(os.path.expanduser(arg))
         if os.path.exists(path) and path not in self.saved:
             # パスの入力を間違えて、プロジェクトのソースを上書きしない。同じパスへの
             # 2 回目以降の :save は上書きする。
-            print(red(f"すでにある: {path}"))
-            print(dim("  ファイルを消すか、別の名前を指定する"))
+            self.out.fail(red(f"すでにある: {path}"))
+            self.out.write(dim("  ファイルを消すか、別の名前を指定する"))
             return
 
         parts = list(srcs)
@@ -1394,28 +1423,28 @@ class Repl:
                 # 追加する)。:l したファイルの import も追加する (save_header)。
                 f.write(f"{self.eng.save_header()}\n{body}\n")
         except OSError as e:
-            print(red(f"書き出せなかった: {e}"))
+            self.out.fail(red(f"書き出せなかった: {e}"))
             return
 
         self.saved.add(path)
-        print(dim(f"宣言 {len(srcs)} 件を書き出した: {path}"))
-        print(dim(f"-- :l {path}"))
+        self.out.write(dim(f"宣言 {len(srcs)} 件を書き出した: {path}"))
+        self.out.write(dim(f"-- :l {path}"))
 
     def load(self, path: str, announce: bool = True) -> None:
         if not path:
-            print(red("ファイル名が必要"))
+            self.out.fail(red("ファイル名が必要"))
             return
 
         path = os.path.expanduser(path)
         if not os.path.isfile(path):
-            print(red(f"ファイルが無い: {path}"))
+            self.out.fail(red(f"ファイルが無い: {path}"))
             return
 
         try:
             with open(path) as f:
                 src = f.read()
         except OSError as e:
-            print(red(f"読めない: {path} ({e.strerror})"))
+            self.out.fail(red(f"読めない: {path} ({e.strerror})"))
             return
 
         left = len(self.eng.unplayed)  # 読み込みが成功すると保留も作り直される
@@ -1423,20 +1452,20 @@ class Repl:
         if out is None:
             return
 
-        render(out.resp, out.src)
+        render(self.out, out.resp, out.src)
         if out.note:
-            print(yellow(out.note))
+            self.out.write(yellow(out.note))
         if out.bad:
-            print(red(f"読み込めなかった: {path}"))
+            self.out.fail(red(f"読み込めなかった: {path}"))
         else:
             # 環境がすべて置き換わるので、前の環境の proofState は使えない。
             self.proof, self.last, self.undone = None, None, None
             self.clear_pending()
             if announce:
-                print(dim(f"読み込んだ: {path} (env {self.eng.env})"))
+                self.out.write(dim(f"読み込んだ: {path} (env {self.eng.env})"))
             if left:
                 # :reset と同じく、何も表示せずに捨てるとユーザーが気付けない。
-                print(dim(f"  環境に無かった宣言 {left} 件も捨てた"))
+                self.out.write(dim(f"  環境に無かった宣言 {left} 件も捨てた"))
 
         self._comp_cache.clear()
 
@@ -1444,7 +1473,7 @@ class Repl:
         if self.eng.base is None:
             # 起点の環境が無い (boot に失敗した)。env を設定し直しても、どの入力にも
             # "Unknown environment." しか返さない状態になり、保留中の宣言だけが消える。
-            print(red("元になる環境が無い。:restart で再起動できる"))
+            self.out.fail(red("元になる環境が無い。:restart で再起動できる"))
             return
 
         self.eng.env, self.eng.stack, self.eng.log = self.eng.base, [], []
@@ -1453,6 +1482,6 @@ class Repl:
         left, self.eng.unplayed = len(self.eng.unplayed), []
         self.proof, self.last = None, None
         self.clear_pending()
-        print(dim(f"env {self.eng.env} に戻した"))
+        self.out.write(dim(f"env {self.eng.env} に戻した"))
         if left:
-            print(dim(f"  環境に無かった宣言 {left} 件も捨てた"))
+            self.out.write(dim(f"  環境に無かった宣言 {left} 件も捨てた"))

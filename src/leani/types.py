@@ -4,7 +4,7 @@ repl とやりとりする JSON の形、送り方のラベル、それに例外
 
 from __future__ import annotations
 
-from typing import Any, Final, Literal, TypedDict, TypeVar
+from typing import Any, Final, Literal, Protocol, TypedDict, TypeVar
 
 # leani が組み立てる JSON と、TOML の設定。形が場所ごとに違うので dict のまま扱う。
 Json = dict[str, Any]
@@ -116,6 +116,16 @@ MORE: Final[State] = "more"
 ERR: Final[State] = "err"
 
 T = TypeVar("T")
+
+
+class Output(Protocol):
+    """Repl が表示を出す先。端末と Jupyter で実装を差し替える。"""
+
+    def write(self, text: str = "", end: str = "\n") -> None:
+        """普通の表示を出す。"""
+
+    def fail(self, text: str) -> None:
+        """エラーを出す。Jupyter ではセルの結果をエラーにする。"""
 
 
 # 例外は raise するモジュールと except するモジュールが違うので、どちらでもなく

@@ -1,6 +1,6 @@
 """表示を出す (副作用)。
 
-組み立てた表示を端末に出力する。組み立ての処理は pure にある。"""
+組み立てた表示を Output に出す。組み立ての処理は pure にある。"""
 
 from __future__ import annotations
 
@@ -20,7 +20,17 @@ from leani.pure import (
     sorries,
     span,
 )
-from leani.types import Response
+from leani.types import Output, Response
+
+
+class Console:
+    """端末用の Output。`leani | tee log` で log に残すため、エラーも stdout に出す。"""
+
+    def write(self, text: str = "", end: str = "\n") -> None:
+        print(text, end=end, flush=True)
+
+    def fail(self, text: str) -> None:
+        print(text, flush=True)
 
 
 def die(msg: str) -> NoReturn:
@@ -28,18 +38,20 @@ def die(msg: str) -> NoReturn:
     sys.exit(1)
 
 
-def panic_check(resp: Response) -> bool:
+def panic_check(out: Output, resp: Response) -> bool:
     """エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。"""
     line = panic_line(resp)
     if line is None:
         return False
     else:
-        print(red("エンジンが PANIC した。:restart で再起動したほうが安全"))
-        print(dim(line))
+        out.fail(red("エンジンが PANIC した。:restart で再起動したほうが安全"))
+        out.write(dim(line))
         return True
 
 
-def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> None:
+def render(
+    out: Output, resp: Response, src: str, line_off: int = 0, col_off: int = 0
+) -> None:
     """メッセージを GHCi 風に出す。位置があれば該当行とキャレットを添える。"""
     lines = src.splitlines()
 
@@ -48,21 +60,31 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
         paint = PAINT.get(sev, plain)
         data = (m.get("data") or "").rstrip()
         at = span(m, lines, line_off, col_off) if sev in PAINT else None
+        # error のメッセージは fail に出す。位置の行とキャレットも含めて 1 回で出す。
+        emit = out.fail if sev == "error" else out.write
         if at is None:
-            print(paint(data))
+            emit(paint(data))
         else:
             ln, col, width = at
             head = f"{ln}:{col + 1}"
-            print(dim(head) + "  " + lines[ln - 1])
-            print(" " * (len(head) + 2 + col) + paint("^" * width))
-            print(paint(textwrap.indent(data, "  ")))
+            emit(
+                "\n".join(
+                    [
+                        dim(head) + "  " + lines[ln - 1],
+                        " " * (len(head) + 2 + col) + paint("^" * width),
+                        paint(textwrap.indent(data, "  ")),
+                    ]
+                )
+            )
 
     note = resp.get("message")
     if isinstance(note, str) and note.strip():
         # repl がリクエスト全体を拒否した (env や proofState が無い)。messages は
         # 空なので、ここで表示しないと画面に何も表示されない。
-        print(red(note.strip()))
-        print(dim("  leani が持っている環境がエンジンに無い。:restart で再起動できる"))
+        out.fail(red(note.strip()))
+        out.write(
+            dim("  leani が持っている環境がエンジンに無い。:restart で再起動できる")
+        )
 
     if has_error(resp):
         # エラーになった宣言は環境に追加されていない。その sorry のゴールを表示しても
@@ -70,5 +92,5 @@ def render(resp: Response, src: str, line_off: int = 0, col_off: int = 0) -> Non
         return
 
     for i, sy in enumerate(sorries(resp)):
-        print(green(f"sorry {i + 1} [proofState {sy.get('proofState')}]"))
-        print(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
+        out.write(green(f"sorry {i + 1} [proofState {sy.get('proofState')}]"))
+        out.write(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
