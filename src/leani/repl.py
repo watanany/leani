@@ -12,7 +12,7 @@ import sys
 import textwrap
 import time
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast
 
 from prompt_toolkit import PromptSession
@@ -158,6 +158,18 @@ PROOF_HELP = (
 
 
 @dataclass(frozen=True)
+class Held:
+    """:prove を待っている sorry と、その sorry を含む宣言。"""
+
+    sorries: tuple[Sorry, ...]
+    src: str  # sorry を含む宣言のソース
+    # その宣言が作った env id。:undo などで環境が変わっていたら、sorry を置き換える
+    # ときに宣言を取り消さない (二重に pop して手前の宣言が消えるため)。
+    env: int | None
+    at: Sorry | None = None  # :prove で選んだ sorry (位置つき)
+
+
+@dataclass(frozen=True)
 class Last:
     """直前に送った入力。インデント行を受け取ったときに直前の入力に戻れるよう保存しておく。"""
 
@@ -215,8 +227,9 @@ class Repl:
     入力を 1 行受け取り (feed)、完結したかをパーサに問い合わせ (probe)、エンジンに
     送り (submit)、結果を表示する (render)。判定と整形は import している純粋な
     関数に分けてあるので、このクラスは状態遷移と入出力だけを扱う。持っている状態は
-    入力バッファ (buf / ready / explicit)、証明モード (proof / pending)、補完の
-    キャッシュ。
+    エンジン (eng)、入力バッファ (buf / ready / explicit / last / undone)、証明モード
+    (proof / held)、補完のキャッシュ (_comp_cache / _own / _scope)、それに設定と
+    表示の切り替え (cfg / show_time / saved)。
     """
 
     # 行編集のセッションは 1 つを再利用する。:env で _start を呼び直しても履歴は
@@ -246,10 +259,7 @@ class Repl:
 
         # 証明モード
         self.proof: Proof | None = None
-        self.pending: list[Sorry] = []
-        self.proof_at: Sorry | None = None  # :prove で選んだ sorry (位置つき)
-        self.proof_src: str | None = None  # sorry を含む宣言のソース
-        self.sorry_env: int | None = None  # その宣言が作った env id (照合用)
+        self.held: Held | None = None
 
         # 補完と履歴
         self._comp_cache: dict[tuple[int | None, str], list[str]] = {}
@@ -500,9 +510,7 @@ class Repl:
         if not out.sorries or not out.done:
             return
 
-        self.pending = out.sorries
-        self.proof_src = out.done[-1]
-        self.sorry_env = self.eng.env
+        self.held = Held(tuple(out.sorries), out.done[-1], self.eng.env)
         self.out.write(
             dim(f"-- :prove で証明モードを再開できる (sorry {len(out.sorries)} 個)")
         )
@@ -926,12 +934,7 @@ class Repl:
             # エラーになった宣言の sorry は保留しない。sorry を証明で置き換えても
             # 同じエラーで失敗するだけで、置き換えに失敗した直後に「sorry 1 個」
             # と表示してから「sorry 2 個」と表示し直すことになる。
-            self.pending = found
-            # env id を保存しておく。:undo などで環境が変わっていたら、sorry を
-            # 置き換えるときに宣言を取り消さない (二重に pop して手前の宣言が
-            # 消えるため)。
-            self.proof_src = src
-            self.sorry_env = self.eng.env
+            self.held = Held(tuple(found), src, self.eng.env)
             self.out.write(
                 dim(f"-- :prove で証明モードを始められる (sorry {len(found)} 個)")
             )
@@ -941,9 +944,7 @@ class Repl:
 
     def clear_pending(self) -> None:
         """sorry に関する保留中の状態を捨てる。環境が変わると proofState は無効。"""
-        self.pending = []
-        self.proof_at = None
-        self.proof_src, self.sorry_env = None, None
+        self.held = None
 
     def timing(self, t0: float) -> None:
         if self.show_time:
@@ -1026,10 +1027,11 @@ class Repl:
         self.out.write(
             dim("  入力したタクティクは証明に反映されていない (宣言は sorry のまま)")
         )
-        if self.pending and self.eng.env is not None:
+        if self.held is not None and self.eng.env is not None:
             # revive が replay で sorry を取得し直していれば、そのまま証明モードを
             # 再開できる。
-            self.out.write(dim(f"  :prove で再開できる (sorry {len(self.pending)} 個)"))
+            left = len(self.held.sorries)
+            self.out.write(dim(f"  :prove で再開できる (sorry {left} 個)"))
         else:
             # 再起動に失敗したときの proofState は前のプロセスのもの。
             self.clear_pending()
@@ -1037,9 +1039,10 @@ class Repl:
 
     def close_sorry(self, script: str) -> None:
         """`by sorry` をスクリプトで置き換えて、宣言を再実行する。"""
-        src, at = self.proof_src, self.proof_at
-        if not src or at is None:
+        held = self.held
+        if held is None or held.at is None:
             return
+        src, at = held.src, held.at
 
         new_src = splice_sorry(src, at, script)
         if new_src is None:
@@ -1052,13 +1055,12 @@ class Repl:
 
         # sorry を含む宣言と名前が同じになるので、先にそれを取り消してから再実行する。
         undone = None
-        if self.sorry_env is not None and self.eng.env == self.sorry_env:
+        if held.env is not None and self.eng.env == held.env:
             undone = self.eng.pop_decl()
 
         # 再実行に失敗したときに戻せるよう保存しておく。sorry が 2 個以上あるときに
         # 保留中の状態を捨てると、残りの sorry を :prove で続けられなくなる。
-        keep = (self.pending, self.proof_at, self.proof_src, self.sorry_env)
-        self.proof_at, self.proof_src, self.sorry_env = None, None, None
+        self.held = None
 
         self.out.write(dim("-- sorry をスクリプトで置き換えて実行する:"))
         self.out.write(textwrap.indent(new_src.strip(), "  "))
@@ -1083,9 +1085,9 @@ class Repl:
         else:
             # 再実行が失敗した。項の位置にある sorry にはタクティクを差し込めない。
             self.eng.push_decl(undone)
-            self.pending, self.proof_at, self.proof_src, self.sorry_env = keep
+            self.held = held
             self.out.write(dim("-- エラーになったので、sorry のままにしておく"))
-            left = len(self.pending)
+            left = len(held.sorries)
             if left > 1:
                 self.out.write(
                     dim(f"  残りは :prove <n> で続けられる (sorry {left} 個)")
@@ -1102,20 +1104,21 @@ class Repl:
 
     def show_pending(self) -> None:
         """証明モードの外での :goals。残っている sorry を出す。"""
-        if not self.pending:
+        if self.held is None:
             self.out.write(dim("証明モードではない (sorry も残っていない)"))
             return
 
-        for n, sy in enumerate(self.pending):
+        for n, sy in enumerate(self.held.sorries):
             self.out.write(green(f"sorry {n + 1} [proofState {sy.get('proofState')}]"))
             self.out.write(textwrap.indent((sy.get("goal") or "").rstrip(), "  "))
 
     def prove(self, arg: str) -> None:
         """直前の入力に出た sorry を 1 つ選んで証明モードを始める。"""
-        found = self.pending
-        if not found:
+        held = self.held
+        if held is None:
             self.out.fail(red("直前の入力に sorry が無い"))
             return
+        found = held.sorries
 
         # isdigit は '²' に True を返すが、int() は '²' を変換できない。
         n = int(arg) - 1 if arg.isdecimal() else 0
@@ -1126,7 +1129,7 @@ class Repl:
         sy = found[n]
         goal = sy.get("goal", "")
         self.proof = Proof(state=sy["proofState"], goals=(goal,), gen=self.eng.gen)
-        self.proof_at = sy  # 置き換えるのはこの sorry。位置で特定する
+        self.held = replace(held, at=sy)  # 置き換えるのはこの sorry。位置で特定する
         self.out.write(dim(PROOF_HELP))
         self.show_goals([goal])
 

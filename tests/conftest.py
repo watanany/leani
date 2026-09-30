@@ -123,7 +123,7 @@ INVARIANTS = [
     ),
     (
         "持ち越した proofState は今の環境のもの",
-        lambda r: r.sorry_env is None or r.sorry_env == r.eng.env,
+        lambda r: r.held is None or r.held.env == r.eng.env,
     ),
     (
         "証明のスクリプトと巻き戻し用スタックの長さが一致する",

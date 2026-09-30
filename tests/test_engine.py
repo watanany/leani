@@ -1112,7 +1112,7 @@ def describe_エラーになった宣言の_sorry():
 
         assert "proofState" not in out, out
         assert ":prove" not in out, out
-        assert repl.repl.pending == []
+        assert repl.repl.held is None
         assert "sorry が無い" in repl.feed(":prove")
 
     @story("E1", "E3")
@@ -1715,7 +1715,7 @@ def describe_元になる環境を失ったとき():
     @story("F1", "E1")
     def it_sorry_の持ち越しも捨てる(repl, mocker):
         repl.feed("theorem ghostSorry : True := by sorry")
-        assert repl.repl.pending
+        assert repl.repl.held is not None
 
         real = leani.engine.Engine.query
         dead = []
@@ -1734,7 +1734,7 @@ def describe_元になる環境を失ったとき():
 
         # 残すと :goals が環境に無い宣言のゴールを表示し、:prove がその無効な
         # proofState で証明モードを始める。
-        assert repl.repl.pending == []
+        assert repl.repl.held is None
         assert "sorry" in repl.feed(":prove")  # 「sorry が無い」と表示するだけ
         assert repl.repl.proof is None
 
