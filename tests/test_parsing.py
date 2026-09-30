@@ -450,6 +450,121 @@ def describe_設定の値の型():
         assert (got.name, got.imports, got.prompt) == ("m", ("A", "B"), "> ")
 
 
+def describe_起動する環境の決め方():
+    """docs/config.md の「起動する環境の決まり方」と、エンジンの優先順位。"""
+
+    CFG = {
+        "default": "d",
+        "engine": "/top/engine",
+        "env": {
+            "d": {"imports": ["D"]},
+            "m": {"project": "/m", "imports": ["M"], "engine": "/m/engine"},
+        },
+    }
+
+    @story("G5")
+    def it_名前を指定したら_default_より優先する():
+        assert leani.config.resolve(name="m", cfg=CFG).name == "m"
+
+    @story("G5")
+    def it_名前と_import_を指定したら環境の_imports_を置き換える():
+        got = leani.config.resolve(name="m", imports=["X"], project="/p", cfg=CFG)
+        assert (got.name, got.imports, got.project) == ("m", ("X",), "/p")
+
+    @story("G5", "G6")
+    def it_import_だけを指定したら_default_を使わない(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        got = leani.config.resolve(imports=["X"], cfg=CFG)
+        assert (got.name, got.imports) == ("plain", ("X",))
+
+    @story("G3", "G5")
+    def it_環境の_engine_は最上位の_engine_より優先する():
+        assert leani.config.resolve(name="m", cfg=CFG).engine == "/m/engine"
+        assert leani.config.resolve(cfg=CFG).engine == "/top/engine"
+
+    @story("G3")
+    def it_設定に_engine_が無ければ_LEANI_ENGINE_を使う(monkeypatch):
+        monkeypatch.setattr(leani.config, "ENGINE", "/env/engine")
+        cfg = {"default": "d", "env": {"d": {}}}
+        assert leani.config.resolve(cfg=cfg).engine == "/env/engine"
+
+    @story("G3", "G5")
+    def it_名前を付けずに起動したら環境の_engine_は使わない(tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)
+        assert leani.config.resolve(imports=["X"], cfg=CFG).engine == "/top/engine"
+
+
+def _built_engine(tmp_path, tc):
+    eng = _toolchain_dir(tmp_path, "eng", tc)
+    os.makedirs(f"{eng}/.lake/build/bin")
+    open(f"{eng}/.lake/build/bin/repl", "w").close()
+    return eng
+
+
+def describe_起動を中止する理由():
+
+    @pytest.fixture(autouse=True)
+    def tools_on_path(mocker):
+        mocker.patch.object(leani.config.shutil, "which", return_value="/usr/bin/x")
+
+    @story("G3", "G4")
+    def it_エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する(
+        tmp_path,
+    ):
+        eng = _built_engine(tmp_path, "leanprover/lean4:v4.33.0")
+        proj = _toolchain_dir(tmp_path, "proj", "leanprover/lean4:v4.34.0")
+        why = leani.config.problem(
+            leani.config.EnvConfig.make("t", project=proj, engine=eng)
+        )
+        assert "バージョンがプロジェクトと違う" in (why or ""), why
+        assert "lake build repl" in (why or ""), why
+
+    @story("G4")
+    def it_Lake_プロジェクトが無ければ起動を中止する(tmp_path):
+        eng = _built_engine(tmp_path, "leanprover/lean4:v4.33.0")
+        cfg = leani.config.EnvConfig.make("t", project=str(tmp_path / "no"), engine=eng)
+        assert "Lake プロジェクトが無い" in (leani.config.problem(cfg) or "")
+
+    @story("G3", "G4")
+    def it_指定されたエンジンが無いか未ビルドなら起動を中止する(tmp_path):
+        missing = leani.config.EnvConfig.make("t", engine=str(tmp_path / "no"))
+        assert "エンジンが無い" in (leani.config.problem(missing) or "")
+        eng = _toolchain_dir(tmp_path, "eng", "leanprover/lean4:v4.33.0")
+        unbuilt = leani.config.EnvConfig.make("t", engine=eng)
+        assert "未ビルド" in (leani.config.problem(unbuilt) or "")
+
+    @story("G4")
+    @pytest.mark.parametrize("tool", ["elan", "lake", "git"])
+    def it_elan_lake_git_が_PATH_に無ければ起動を中止する(mocker, tool):
+        mocker.patch.object(
+            leani.config.shutil, "which", side_effect=lambda t: None if t == tool else t
+        )
+        # git はエンジンを leani が用意するときだけ必要になる。
+        cfg = leani.config.EnvConfig("t")
+        assert f"{tool} が PATH に無い" in (leani.config.problem(cfg) or "")
+
+    @story("G4")
+    def it_設定がそろっていれば中止しない(tmp_path):
+        eng = _built_engine(tmp_path, "leanprover/lean4:v4.33.0")
+        proj = _toolchain_dir(tmp_path, "proj", "leanprover/lean4:v4.33.0")
+        cfg = leani.config.EnvConfig.make("t", project=proj, engine=eng)
+        assert leani.config.problem(cfg) is None
+
+
+def describe_設定ファイルの読み込み():
+
+    @story("G4")
+    def it_設定ファイルが壊れていたら_ConfigError_にする(tmp_path):
+        path = tmp_path / "config.toml"
+        path.write_text("default = \n")
+        with pytest.raises(leani.types.ConfigError, match="設定ファイルを読めない"):
+            leani.config.load_config(str(path))
+
+    @story("G4", "G6")
+    def it_設定ファイルが無ければ空の設定として読む(tmp_path):
+        assert leani.config.load_config(str(tmp_path / "none.toml")) == {}
+
+
 def _toolchain_dir(tmp_path, name, tc):
     d = tmp_path / name
     d.mkdir()
