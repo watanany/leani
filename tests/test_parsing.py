@@ -184,13 +184,26 @@ def describe_補完の候補をまとめて取得する単位():
 
     @story("D1")
     def it_名前空間の区切りで分ける():
-        assert leani.repl.Repl._chunk("Nat.suc") == "Nat."
-        assert leani.repl.Repl._chunk("MeasureTheory.integral_") == "MeasureTheory."
+        assert leani.pure.name_chunk("Nat.suc") == "Nat."
+        assert leani.pure.name_chunk("MeasureTheory.integral_") == "MeasureTheory."
 
     @story("D1")
     def it_名前空間が無ければ先頭_2_文字():
         # Mathlib では 1 文字だと `C` で 7.5 万件になるので、単位を広げすぎない。
-        assert leani.repl.Repl._chunk("Contin") == "Co"
+        assert leani.pure.name_chunk("Contin") == "Co"
+
+
+def describe_エンジンの出力の_JSON():
+    """問い合わせの結果はエンジンの出力の最後の行にある。"""
+
+    @story("D1", "C1")
+    def it_出力の最後の行を_JSON_として読む():
+        assert leani.pure.last_json('宣言が出力した行\n{"a": [1]}\n') == {"a": [1]}
+
+    @story("D1", "C1")
+    @pytest.mark.parametrize("out", [None, "", "  \n", '{"a": 1}\n途中で切れた {'])
+    def it_出力が空か最後の行が_JSON_でなければ_None_を返す(out):
+        assert leani.pure.last_json(out) is None
 
 
 def describe_入力が完結したかの判定():

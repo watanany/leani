@@ -76,6 +76,17 @@ def lean_strs(xs: Sequence[str]) -> str:
     return "#[" + ", ".join(lean_str(x) for x in xs) + "]"
 
 
+def name_chunk(prefix: str) -> str:
+    """
+    定数名をまとめて取得する単位。名前空間があれば最後の `.` まで、無ければ
+    先頭 2 文字。
+
+    Mathlib では 1 文字にすると `C` だけで 7.5 万件 (3.4MB) になるので、単位を
+    大きくしすぎない。`Nat.` なら 5684 件、`MeasureTheory.` でも 1 万件に収まる。
+    """
+    return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
+
+
 def shorten(
     chunk: Sequence[str], prefix: str, ns: str, hidden: Sequence[str]
 ) -> list[str]:
@@ -281,6 +292,23 @@ def as_response(text: str) -> Response | None:
         return None
     else:
         return cast(Response, got) if isinstance(got, dict) else None
+
+
+def last_json(out: str | None) -> object | None:
+    """
+    エンジンの出力の最後の行を JSON としてパースする。出力が空か、最後の行が
+    JSON でなければ None。問い合わせは結果を最後の行に出力する。
+    """
+    lines = (out or "").strip().splitlines()
+    if not lines:
+        return None
+    else:
+        try:
+            got: object = json.loads(lines[-1])
+        except json.JSONDecodeError:
+            return None
+        else:
+            return got
 
 
 def parse_env_lines(text: str) -> dict[str, str]:

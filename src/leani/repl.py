@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import contextlib
-import json
 import os
 import shutil
 import subprocess
@@ -42,10 +41,12 @@ from leani.pure import (
     green,
     has_error,
     head_line,
+    last_json,
     lean_str,
     lean_strs,
     loogle_text,
     messages,
+    name_chunk,
     not_evaluable_reason,
     red,
     shorten,
@@ -359,17 +360,6 @@ class Repl:
 
     # -- 補完 -------------------------------------------------------------
 
-    @staticmethod
-    def _chunk(prefix: str) -> str:
-        """
-        定数名をまとめて取得する単位。名前空間があれば最後の `.` まで、無ければ
-        先頭 2 文字。
-
-        Mathlib では 1 文字にすると `C` だけで 7.5 万件 (3.4MB) になるので、単位を
-        大きくしすぎない。`Nat.` なら 5684 件、`MeasureTheory.` でも 1 万件に収まる。
-        """
-        return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
-
     def complete_names(self, prefix: str) -> list[str]:
         """
         今の環境で短い名前で書ける定数のうち、prefix で始まるものを返す。
@@ -384,11 +374,11 @@ class Repl:
         scope = self._scope_now()
         opens = [("", list[str]())] + [(ns, hid) for ns, hid in scope.get("open", [])]
         full = {ns: f"{ns}.{prefix}" if ns else prefix for ns, _ in opens}
-        chunks = self._chunks({self._chunk(f) for f in full.values()})
+        chunks = self._chunks({name_chunk(f) for f in full.values()})
 
         hits: set[str] = set()
         for ns, hidden in opens:
-            got = chunks.get(self._chunk(full[ns]))
+            got = chunks.get(name_chunk(full[ns]))
             if got is not None:
                 hits.update(shorten(got, prefix, ns, hidden))
         hits.update(a for a, _ in scope.get("alias", []) if a.startswith(prefix))
@@ -413,10 +403,7 @@ class Repl:
                     COMPLETE_QUERY % (lean_strs(missing), COMPLETE_CAP)
                 )
             )
-            try:
-                got = json.loads(out.strip().splitlines()[-1]) if out else None
-            except (json.JSONDecodeError, IndexError):
-                got = None
+            got = last_json(out)
             if isinstance(got, list) and len(got) == len(missing):
                 for k, names in zip(missing, got, strict=True):
                     self._comp_cache[(base, k)] = names
@@ -439,10 +426,7 @@ class Repl:
         key = (self.eng.gen, self.eng.env)
         if self._scope[0] != key:
             out = self.guard(lambda: self.eng.query(SCOPE_QUERY))
-            try:
-                got = json.loads(out.strip().splitlines()[-1]) if out else {}
-            except (json.JSONDecodeError, IndexError):
-                got = {}
+            got = last_json(out)
             self._scope = (key, cast(Scope, got) if isinstance(got, dict) else {})
 
         return self._scope[1]
@@ -608,15 +592,7 @@ class Repl:
         1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の notation も
         認識される。
         """
-        out = self.guard(lambda: self.eng.query(PARSE_PROBE % lean_str(src)))
-        if not out:
-            return None
-
-        try:
-            got = json.loads(out.strip().splitlines()[-1])
-        except (json.JSONDecodeError, IndexError):
-            return None
-
+        got = last_json(self.guard(lambda: self.eng.query(PARSE_PROBE % lean_str(src))))
         return cast(Probe, got) if isinstance(got, dict) else None
 
     def probe(self, src: str) -> tuple[State, Kind]:
