@@ -1,10 +1,14 @@
 """
-Jupyter のカーネル。jupyter_client で本物のカーネルを起動し、セルを送って確かめる。
+Jupyter のカーネル。
 
+多くのテストは jupyter_client で本物のカーネルを起動し、セルを送って確かめる。
 カーネルは別のプロセスなので、Repl の状態は見えない。セルの出力と status だけで
 確かめる。
+起動や再起動の失敗は、別のプロセスでは起こせないので、LeaniKernel を直接作り、
+Repl を差し替えて確かめる。
 """
 
+import asyncio
 import json
 import os
 import signal
@@ -13,8 +17,10 @@ import sys
 import time
 
 import pytest
-from conftest import SRC, story
+from conftest import SRC, leani, story
 from jupyter_client.manager import start_new_kernel
+
+import leani.kernel
 
 
 @pytest.fixture(scope="module")
@@ -130,6 +136,8 @@ def fib : Nat → Nat
                 m["msg_type"] == "status" and m["content"]["execution_state"] == "idle"
             ):
                 break
+        # reply を読まずに残すと、次の run が 1 つ前のセルの status を読む。
+        assert kc.get_shell_msg(timeout=60)["content"]["status"] == "ok"
         assert streams == []
 
     @story("J1", "E3")
@@ -140,6 +148,24 @@ def fib : Nat → Nat
         assert status == "ok", err
         _, out, _ = run(kernel, "#print axioms cell_t")
         assert "sorryAx" not in out, out
+
+    @story("J1")
+    def it_閉じていない複数行ブロックのセルはエラーになり次のセルは実行できる(
+        kernel,
+    ):
+        status, out, err = run(kernel, ":{\ndef unclosed := 1")
+        assert status == "error", out
+        assert ":} が無い" in err, err
+        status, out, _ = run(kernel, "#eval 2 + 3")
+        assert status == "ok"
+        assert "5" in out, out
+
+    @story("J1")
+    def it_q_はノートブックでは何もしない(kernel):
+        _, out, _ = run(kernel, ":q")
+        assert "ノートブックでは何もしない" in out, out
+        _, out, _ = run(kernel, "#eval 3 + 3")
+        assert "6" in out, out
 
 
 def describe_補完():
@@ -196,6 +222,80 @@ def describe_エンジンの異常終了と中断():
 
         _, out, _ = run(kernel, "#eval before")
         assert "5" in out, out
+
+
+def execute(k, code="1"):
+    """LeaniKernel にセルを 1 つ実行させて、status を返す。"""
+    return asyncio.run(k.do_execute(code, False))["status"]
+
+
+def describe_起動と再起動の失敗():
+
+    @pytest.fixture
+    def direct(mocker):
+        """LeaniKernel を直接作る。Repl と設定は差し替える。"""
+        cfg = leani.config.EnvConfig.make("t")
+        mocker.patch.object(leani.kernel, "resolve", return_value=cfg)
+        mocker.patch.object(leani.kernel, "problem", return_value=None)
+        fake = mocker.MagicMock(explicit=False, buf=[])
+        fake.feed.return_value = None
+        make = mocker.patch.object(leani.kernel, "Repl", return_value=fake)
+        return leani.kernel.LeaniKernel(), make, fake
+
+    @story("J1", "G4")
+    def it_設定のエラーはセルに表示して次のセルでもう一度起動する(
+        direct, mocker, capsys
+    ):
+        k, make, _ = direct
+        mocker.patch.object(
+            leani.kernel, "resolve", side_effect=leani.types.ConfigError("壊れた設定")
+        )
+        assert execute(k) == "error"
+        assert "壊れた設定" in capsys.readouterr().err
+        assert k.repl is None
+
+        mocker.patch.object(
+            leani.kernel, "resolve", return_value=leani.config.EnvConfig.make("t")
+        )
+        assert execute(k) == "ok"
+        assert make.called
+
+    @story("J3")
+    def it_エンジンを起動できなければセルが_error_になり次のセルで起動し直す(
+        direct, capsys
+    ):
+        k, make, fake = direct
+        make.side_effect = [leani.types.EngineDied("起動しない"), fake]
+        assert execute(k) == "error"
+        assert "起動しない" in capsys.readouterr().err
+        assert execute(k) == "ok"
+        assert make.call_count == 2
+
+    @story("J3")
+    @pytest.mark.parametrize(
+        "exc", [leani.types.EngineError("再起動しない"), SystemExit(1)]
+    )
+    def it_再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
+        k, make, fake = direct
+        execute(k)
+        fake.feed.side_effect = exc
+        assert execute(k) == "error"
+        assert "次のセルでエンジンを起動する" in capsys.readouterr().err
+        assert k.repl is None
+
+        fake.feed.side_effect = None
+        assert execute(k) == "ok"
+        assert make.call_count == 2
+
+    @story("J3")
+    def it_想定外の例外は内部エラーとして表示しセッションを残す(direct, capsys):
+        k, _, fake = direct
+        execute(k)
+        fake.feed.side_effect = ValueError("想定外")
+        assert execute(k) == "error"
+        assert "内部エラー: ValueError: 想定外" in capsys.readouterr().err
+        assert k.repl is fake
+        assert fake.discard.called
 
 
 def describe_カーネルの登録():
