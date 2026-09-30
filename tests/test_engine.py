@@ -220,6 +220,25 @@ def describe_証明モード():
         mocker.stopall()
         assert "1 = 1" in repl.feed(":goals")
 
+    @story("E1", "F1")
+    def it_タクティクで_PANIC_したら警告して_proofState_を進めない(repl, mocker):
+        repl.feed("theorem panicT : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        state = repl.repl.proof.state
+        real = repl.engine.send_tactic
+
+        def with_panic(src, st):
+            resp = real(src, st)
+            extra = {"severity": "info", "data": PANIC}
+            return {**resp, "messages": [*resp.get("messages", []), extra]}
+
+        mocker.patch.object(repl.engine, "send_tactic", side_effect=with_panic)
+        out = repl.feed("rfl")
+        assert "PANIC した" in out, out
+        assert "証明完了" not in out, out
+        assert repl.repl.proof.state == state
+        assert repl.repl.proof.script == ()
+
     @story("E2")
     def it_提案を読み取れなければ入力したタクティクを記録する(repl, mocker):
         repl.feed("theorem cut : 1 = 1 ∧ 2 = 2 := by sorry")
@@ -377,6 +396,37 @@ def describe_エンジンが異常終了してもセッションが続く():
         out = repl.feed("panicky + 1")
         assert "PANIC した" in out, out
         assert "42" not in out, out
+
+    @story("F1")
+    @pytest.mark.parametrize(
+        ("line", "hit"),
+        [
+            ("panicky + 1", lambda cmd: cmd.startswith("#eval\n")),
+            (
+                'do let x ← IO.getEnv "LEANI_NO_SUCH_VAR"; IO.println s!"{x}"',
+                lambda cmd: cmd.startswith("#eval show IO"),
+            ),
+            ("def panicked := 1", lambda cmd: cmd.startswith("def panicked")),
+        ],
+        ids=["式", "do の読み直し", "宣言"],
+    )
+    def it_入力したものがどの経路で送られても_PANIC_を警告する(repl, mocker, line, hit):
+        # 呼び出し側で検査を書き忘れた経路を見つけるため、エンジンとのやりとりの
+        # 1 か所で応答に PANIC を足す。
+        real = repl.engine._exchange
+
+        def with_panic(obj):
+            resp = real(obj)
+            if not hit(obj.get("cmd", "")):
+                return resp
+            else:
+                extra = {"severity": "info", "data": PANIC}
+                return {**resp, "messages": [*resp.get("messages", []), extra]}
+
+        mocker.patch.object(repl.engine, "_exchange", side_effect=with_panic)
+        out = repl.feed(line)
+        assert "PANIC した" in out, out
+        assert repl.declarations == []
 
     @story("F1")
     def it_再実行してもまた異常終了したら知らせてセッションを続ける(repl, mocker):

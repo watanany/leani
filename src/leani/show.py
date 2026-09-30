@@ -39,7 +39,13 @@ def die(msg: str) -> NoReturn:
 
 
 def panic_check(out: Output, resp: Response) -> bool:
-    """エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。"""
+    """
+    エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。
+
+    利用者が入力したもの (式、do の読み直し、宣言、タクティク) の応答だけを調べる。
+    :l、init、replay の応答は調べない。利用者が意図して panic! を書いたファイルも
+    あるので、そのファイルの読み込みを失敗にしないため。
+    """
     line = panic_line(resp)
     if line is None:
         return False

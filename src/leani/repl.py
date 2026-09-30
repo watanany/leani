@@ -884,7 +884,9 @@ class Repl:
         if errs and src.lstrip().startswith("do") and "BaseIO" in blob:
             retry = "#eval show IO _ from\n" + textwrap.indent(src, "  ")
             again = self.guard(lambda: self.eng.send_cmd(retry))
-            if again is not None and not has_error(again):
+            if again is not None and panic_check(self.out, again):
+                return False
+            elif again is not None and not has_error(again):
                 render(self.out, again, src, line_off=1, col_off=2)
                 self.last = Last(src, advanced=False)
                 return True
@@ -964,7 +966,7 @@ class Repl:
             # 表示されることもある (宣言は sorry のまま残る)。
             self.drop_proof()
             return
-        elif resp is None:
+        elif resp is None or panic_check(self.out, resp):
             return
 
         self.last = Last(src, advanced=False, proof=True)
