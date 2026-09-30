@@ -19,7 +19,7 @@ from leani.abbrev import abbrev_candidates
 from leani.config import problem, resolve
 from leani.pure import dim, name_start, red
 from leani.repl import Repl
-from leani.types import START_FAILED, ConfigError
+from leani.types import START_FAILED, ConfigError, EnvLost
 
 # `\to` のように、カーソルの手前が `\` で始まる略記のとき。
 ABBREV_HEAD = re.compile(r"\\([^\s\\]*)$")
@@ -134,8 +134,9 @@ class LeaniKernel(Kernel):
             self.out.fail(red(f"エンジンを再起動できなかった: {e}"))
             self.out.fail(dim("次のセルでエンジンを起動する。それまでの宣言は消える"))
             self.repl = None
-        except SystemExit:
-            # :env で元の環境にも戻れなかった (die がメッセージを表示している)。
+        except EnvLost as e:
+            # :env で元の環境にも戻れなかった。
+            self.out.fail(red(str(e)))
             self.out.fail(dim("次のセルでエンジンを起動する。それまでの宣言は消える"))
             self.repl = None
         except Exception as e:

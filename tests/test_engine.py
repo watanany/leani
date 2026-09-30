@@ -1244,14 +1244,14 @@ def describe_切り替えに失敗したとき():
         assert "42" in repl.feed("typedHere")
 
     @story("G4", "G5")
-    def it_元の環境にも戻れなければ理由を表示して終了する(repl, mocker, capsys):
-        # 環境が無いまま続けても、どの入力もエラーになるだけなので終了する。
+    def it_env_で元の環境にも戻れなければ終了を知らせる例外になる(repl, mocker):
+        # 環境が無いまま続けても、どの入力もエラーになるだけ。端末 (cli) はこの
+        # 例外で終了し、カーネルは次のセルでエンジンを起動し直す。
         mocker.patch.object(
             leani.engine.Engine, "boot", side_effect=leani.types.EngineDied("boom")
         )
-        with pytest.raises(SystemExit):
+        with pytest.raises(leani.types.EnvLost, match="にも戻れなくなった"):
             repl.feed(":env wide")
-        assert "にも戻れなくなった" in capsys.readouterr().err
 
     @story("F1", "G5")
     def it_切り替えたあとの再実行が中断されても宣言を保留に残す(repl, mocker):

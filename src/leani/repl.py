@@ -68,7 +68,7 @@ from leani.queries import (
     SCOPE_QUERY,
 )
 from leani.search import loogle
-from leani.show import Console, die, panic_check, render
+from leani.show import Console, panic_check, render
 from leani.types import (
     CMD,
     MORE,
@@ -77,6 +77,7 @@ from leani.types import (
     ConfigError,
     EngineDied,
     EngineError,
+    EnvLost,
     Interrupted,
     Kind,
     Loogle,
@@ -267,6 +268,8 @@ class Repl:
         self._scope: tuple[tuple[int, int | None] | None, Scope] = (None, {})
 
         self.eng = Engine(cfg)
+        if self.eng.warning is not None:
+            self.out.write(yellow(self.eng.warning))
         try:
             self._setup_prompt()
             t0 = time.time()
@@ -1354,7 +1357,9 @@ class Repl:
             try:
                 self._start(back, preload=prev)
             except START_FAILED as back_e:
-                die(f"{back.name} にも戻れなくなった: {back_e}")
+                # 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
+                # 終了し、カーネルは次のセルでエンジンを起動し直す。
+                raise EnvLost(f"{back.name} にも戻れなくなった: {back_e}") from back_e
 
         # 切り替えが成功しても元の環境に戻っても、対話で入力した宣言は新しい
         # エンジンには無い。どちらの場合も、ここで 1 回だけ再実行する。

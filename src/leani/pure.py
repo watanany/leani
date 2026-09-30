@@ -347,6 +347,26 @@ def toolchain_version(tc: str) -> str:
     return tc.rpartition(":")[2] or tc
 
 
+def toolchain_warning(
+    own: bool, engine_tc: str, tc: str, engine_dir: str
+) -> str | None:
+    """
+    自分でビルドしたエンジンの toolchain が、使うバージョンと違うときの警告の文。
+
+    leani が用意したエンジン (own が False) は使うバージョンでビルドしてあるので、
+    バージョンは必ず一致する。自分でビルドしたエンジンだけ、バージョンが違って
+    いたら警告する (leani がビルドし直すことはしない)。engine_tc が空なら、
+    エンジンの lean-toolchain が読めなかったので比べない。
+    """
+    if own and engine_tc and engine_tc != tc:
+        return (
+            f"警告: toolchain が違う (使うバージョン={tc} / エンジン={engine_tc})。\n"
+            f"  cd {engine_dir} && lake build repl"
+        )
+    else:
+        return None
+
+
 def version_key(tag: str) -> tuple[int, int, int, int] | None:
     """
     バージョンを比較するためのキー。rc は同じバージョンの正式リリースより前になる。

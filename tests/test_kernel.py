@@ -280,7 +280,11 @@ def describe_起動と再起動の失敗():
 
     @story("J3")
     @pytest.mark.parametrize(
-        "exc", [leani.types.EngineError("再起動しない"), SystemExit(1)]
+        "exc",
+        [
+            leani.types.EngineError("再起動しない"),
+            leani.types.EnvLost("main にも戻れなくなった"),
+        ],
     )
     def it_再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
         k, make, fake = direct

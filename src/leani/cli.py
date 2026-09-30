@@ -19,7 +19,7 @@ from leani.places import CONFIG, ENGINE_CACHE, HIST, INIT
 from leani.pure import dim, engine_dir
 from leani.repl import HELP, Repl
 from leani.show import die
-from leani.types import START_FAILED, ConfigError
+from leani.types import START_FAILED, ConfigError, EnvLost
 
 USAGE = f"""\
 leani [オプション] [file.lean]
@@ -177,6 +177,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return Repl(cfg, args.preload).loop()
     except START_FAILED as e:
         die(str(e) or "エンジンが起動しなかった")
+    except EnvLost as e:
+        die(str(e))
     except KeyboardInterrupt:
         print()
         return 130

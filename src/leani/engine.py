@@ -12,7 +12,6 @@ import os
 import select
 import signal
 import subprocess
-import sys
 import textwrap
 from collections.abc import Sequence
 from typing import NamedTuple
@@ -31,7 +30,7 @@ from leani.pure import (
     signal_name,
     sorries,
     strip_imports,
-    yellow,
+    toolchain_warning,
 )
 from leani.types import EngineDied, Interrupted, Json, NoEnvironment, Response, Sorry
 
@@ -80,7 +79,13 @@ class Engine:
         self.cfg = cfg
         self.tc = toolchain(cfg)
         self.dir = ensure_engine(cfg.engine, self.tc)
-        self._warn_toolchain()
+        # 表示は Repl が self.out で出す。
+        self.warning = toolchain_warning(
+            cfg.engine is not None,
+            (read_text(f"{self.dir}/lean-toolchain") or "").strip(),
+            self.tc,
+            self.dir,
+        )
         self.proc_env = self._proc_env()
         self.proc: subprocess.Popen[str] | None = None
         self.env: int | None = None  # 今の env id
@@ -96,29 +101,6 @@ class Engine:
         self.spawn()
 
     # -- 環境変数 ---------------------------------------------------------
-
-    def _warn_toolchain(self) -> None:
-        """
-        ユーザーが指定したエンジン (config の engine か LEANI_ENGINE) のバージョンを
-        確認する。
-
-        leani が用意したエンジンは使うバージョンでビルドしてあるので、バージョンは
-        必ず一致する。自分でビルドしたエンジンだけ、バージョンが違っていたら
-        報告する (leani がビルドし直すことはしない)。
-        """
-        if self.cfg.engine is None:
-            return
-
-        engine_tc = (read_text(f"{self.dir}/lean-toolchain") or "").strip()
-        if engine_tc and engine_tc != self.tc:
-            print(
-                yellow(
-                    f"警告: toolchain が違う "
-                    f"(使うバージョン={self.tc} / エンジン={engine_tc})。\n"
-                    f"  cd {self.dir} && lake build repl"
-                ),
-                file=sys.stderr,
-            )
 
     def _proc_env(self) -> dict[str, str]:
         """repl に渡す環境変数。エンジンの .olean の場所を LEAN_PATH の先頭に足す。"""

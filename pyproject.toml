@@ -68,11 +68,10 @@ addopts = "-q"
 #   EM / TRY003      例外のメッセージは raise する所で組み立てて、そのまま読めるようにする
 #   D / ANN          docstring と型注釈は必要な所に手で付ける
 #   S101             テストの assert
-#   T201             これは print する CLI
 select = [
     "E", "F", "W", "I", "UP", "B", "SIM", "TID",
     "C4", "PIE", "PERF", "FLY", "FURB", "RUF", "PLE", "PLW", "PT", "ISC",
-    "RET", "ARG", "ERA", "C90", "PLR0911", "PLR0912", "PLR0915",
+    "RET", "ARG", "ERA", "C90", "PLR0911", "PLR0912", "PLR0915", "T201",
 ]
 # RUF001-003 は日本語と数学記号を「紛らわしい文字」としてすべてエラーにする。
 # ISC001 は formatter と衝突する (行を分けるのは formatter の仕事)。
@@ -97,14 +96,16 @@ ban-relative-imports = "all"
 # 副作用のモジュールどうしは import し合ってよい。名前をまとめる __init__ とテストも対象から外す。
 # 関数の複雑さの上限 (C901, PLR0911, PLR0912, PLR0915) は、純粋、読み取り、定数のモジュール
 # だけに適用する。副作用のモジュールでは、入力を順に分岐して処理する関数が長くなる。
-"src/leani/boot.py" = ["TID251", "C901", "PLR091"]
+# print (T201) を使ってよいのは、Output の実装 (show、kernel)、Repl を作る前と終了したあとの cli、
+# エンジンを用意する途中の boot、開発用の tools だけ。ほかの表示は Output で出す。
+"src/leani/boot.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/engine.py" = ["TID251", "C901", "PLR091"]
 "src/leani/search.py" = ["TID251", "C901", "PLR091"]
-"src/leani/show.py" = ["TID251", "C901", "PLR091"]
+"src/leani/show.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/repl.py" = ["TID251", "C901", "PLR091"]
-"src/leani/cli.py" = ["TID251", "C901", "PLR091"]
-"src/leani/kernel.py" = ["TID251", "C901", "PLR091"]
+"src/leani/cli.py" = ["TID251", "C901", "PLR091", "T201"]
+"src/leani/kernel.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/__init__.py" = ["TID251", "C901", "PLR091"]
 "src/leani/__main__.py" = ["TID251", "C901", "PLR091"]
 "tests/**" = ["TID251", "C901", "PLR091"]
-"tools/**" = ["C901", "PLR091"]
+"tools/**" = ["C901", "PLR091", "T201"]

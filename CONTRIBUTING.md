@@ -43,7 +43,7 @@ uv run mypy
 - 判定と整形は、純粋なモジュール (`pure.py` など) に書く。副作用のモジュールには、プロセス、端末、ファイルの操作だけを書く。こうすると、判定と整形のテストを入力と出力だけで書ける
 - 純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない。この向きは `ruff` が検査する。副作用のモジュールを追加したら、`pyproject.toml` の `banned-api` と `per-file-ignores` にも追加する
 - セッションの状態 (エンジンのプロセス、宣言のログ、入力バッファなど) を持つのは `Engine` と `Repl` だけにする
-- 表示は `print` で出さず、`Repl` に渡した `Output` (`self.out`) の `write` と `fail` で出す。端末では `Console` が、Jupyter では `CellOutput` が表示を出す
+- 表示は `print` で出さず、`Repl` に渡した `Output` (`self.out`) の `write` と `fail` で出す。端末では `Console` が、Jupyter では `CellOutput` が表示を出す。ただし、`Repl` を作る前と終了したあとの `cli.py` の表示と、`boot.py` がエンジンを用意する途中の表示は `print` で出す。`print` を使ってよいモジュールは、`pyproject.toml` の `per-file-ignores` の `T201` で決めてある
 - 機能を追加するときは、ストーリー、テスト、実装の順に書く。ストーリーは `tests/stories.py` に追加し、テストには `@story` でストーリーの ID を付ける。1 つのストーリーに複数のテストを付けてよい
 - lint は `ruff` の一般的な設定に従う。ただし、このリポジトリの決まりと合わないときは、このリポジトリの決まりを優先する
 

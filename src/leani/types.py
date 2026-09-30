@@ -179,6 +179,10 @@ class NoEnvironment(Exception):
     """
 
 
+class EnvLost(Exception):
+    """:env で切り替えに失敗し、元の環境にも戻れなかった。環境が 1 つも無い。"""
+
+
 class SearchError(Exception):
     """外部サービスへの問い合わせが失敗した。ネットワークの問題なので、報告するだけにする。"""
 

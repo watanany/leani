@@ -388,6 +388,20 @@ def describe_エンジンのバージョン():
         )
         assert leani.pure.toolchain_version("v4.33.0") == "v4.33.0"
 
+    @story("G4")
+    def it_自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す():
+        got = leani.pure.toolchain_warning(True, "v4.33.0", "v4.34.0", "/eng")
+        assert got is not None
+        assert "使うバージョン=v4.34.0 / エンジン=v4.33.0" in got
+        assert "cd /eng && lake build repl" in got
+
+    @story("G4")
+    def it_toolchain_が同じか_leani_が用意したエンジンなら警告しない():
+        assert leani.pure.toolchain_warning(True, "v4.34.0", "v4.34.0", "/e") is None
+        assert leani.pure.toolchain_warning(False, "v4.33.0", "v4.34.0", "/e") is None
+        # lean-toolchain が読めなかったときは比べない。
+        assert leani.pure.toolchain_warning(True, "", "v4.34.0", "/e") is None
+
     @story("G3")
     def it_rc_は同じバージョンの正式リリースより前():
         assert leani.pure.version_key("v4.33.0-rc1") < leani.pure.version_key("v4.33.0")
