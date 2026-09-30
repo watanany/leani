@@ -25,7 +25,8 @@ USAGE = f"""\
 leani [オプション] [file.lean]
 
   -e, --env <name>     設定した環境で起動する
-  -i, --import <Mod>   import するモジュールを追加する (繰り返せる)
+  -i, --import <Mod>   import するモジュールを指定する (繰り返せる)。指定すると、
+                       プロジェクトの lean_lib や -e の環境の imports の代わりに使う
   -p, --project <dir>  Lake プロジェクトを指定する
       --setup          エンジンを用意して終了する (通常は起動時に自動で用意する)
       --install-kernel Jupyter のカーネルとして登録する (leani[jupyter] が必要)
@@ -38,7 +39,8 @@ Lean 本体だけで起動する。init ファイルは {INIT}。
 
 エンジン (leanprover-community/repl) は初回だけ git clone と lake build で用意し、
 使う Lean のバージョンごとに {ENGINE_CACHE} の下に置く。
-自分でビルドしたエンジンを使う場合は、設定の engine か LEANI_ENGINE で指定する。
+自分でビルドしたエンジンを使う場合は、設定の env.<名前>.engine か engine、
+または LEANI_ENGINE で指定する (前に書いたものほど優先)。
 
 """
 
