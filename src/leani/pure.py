@@ -13,7 +13,14 @@ from collections.abc import Callable, Sequence
 from typing import cast
 
 from leani.places import COLOR, ENGINE_CACHE
-from leani.queries import BLOCK_OPEN, ERR_POS, INCOMPLETE
+from leani.queries import (
+    BLOCK_OPEN,
+    CANNOT_EVAL,
+    ERR_POS,
+    INCOMPLETE,
+    NO_REPR,
+    NONCOMPUTABLE,
+)
 from leani.types import (
     CMD,
     COMPLETE,
@@ -532,3 +539,15 @@ def hit_rows(hit: Hit, width: int) -> list[str]:
     """検索結果 1 件を 2 行 (名前と型 / どの module か) にする。"""
     sig = f"{hit.get('name', '?')} :{hit.get('type', '')}".rstrip()
     return [clip(" ".join(sig.split()), width), dim("  " + hit.get("module", "?"))]
+
+
+def not_evaluable_reason(blob: str) -> str | None:
+    """#eval のエラー文から、評価できない理由。評価できないエラーでなければ None。"""
+    if NONCOMPUTABLE.search(blob):
+        return "noncomputable なので評価できない"
+    elif NO_REPR.search(blob):
+        return "値を表示する Repr や ToString が無いので評価できない"
+    elif CANNOT_EVAL.search(blob):
+        return "評価できない"
+    else:
+        return None

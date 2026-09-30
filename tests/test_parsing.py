@@ -243,21 +243,39 @@ def describe_入力が完結したかの判定():
         assert not leani.pure.block_continues(["def f := 1"], "def f := 1")
 
 
+def describe_評価できない理由():
+    """#eval のエラー文から、評価できない理由を取り出す。"""
+
+    @story("A2")
+    def it_Repr_が無いという理由を取り出す():
+        blob = "Could not synthesize a `ToExpr`, `Repr`, or `ToString` instance"
+        assert "Repr" in leani.pure.not_evaluable_reason(blob)
+
+    @story("A2")
+    def it_noncomputable_という理由を取り出す():
+        blob = "failed to compile definition, consider marking it as 'noncomputable'"
+        assert "noncomputable" in leani.pure.not_evaluable_reason(blob)
+
+    @story("A2")
+    def it_評価できないエラーでなければ_None_を返す():
+        assert leani.pure.not_evaluable_reason("Unknown identifier `x`") is None
+
+
 def describe_エラー位置の範囲():
     """メッセージの位置を、送ったソースの座標からその行の中に収める。"""
 
-    @story("A2")
+    @story("A5")
     def it_eval_で包んだ分だけ位置を戻す():
         m = {"pos": {"line": 2, "column": 6}, "endPos": {"line": 2, "column": 9}}
         # #eval で 1 行 2 桁ずらして送っているので、元のソースでは 1 行 4 桁。
         assert leani.pure.span(m, ["foo bar"], line_off=1, col_off=2) == (1, 4, 3)
 
-    @story("A2")
+    @story("A5")
     def it_位置が行の外なら範囲を返さない():
         m = {"pos": {"line": 9, "column": 0}}
         assert leani.pure.span(m, ["foo"], 0, 0) is None
 
-    @story("A2")
+    @story("A5")
     def it_範囲の幅は行の長さに収める():
         m = {"pos": {"line": 1, "column": 1}, "endPos": {"line": 1, "column": 99}}
         assert leani.pure.span(m, ["abc"], 0, 0) == (1, 1, 2)
@@ -318,7 +336,7 @@ def describe_起動前の準備():
         env = leani.pure.parse_env_lines("LEAN_PATH=/a:/b\nLD_LIBRARY_PATH=\n")
         assert env == {"LEAN_PATH": "/a:/b", "LD_LIBRARY_PATH": ""}
 
-    @story("G3", "G4")
+    @story("G4", "G6")
     def it_toolchain_が変わったらキャッシュを作り直す(tmp_path):
         # LEAN_PATH は core の .olean も指す。前のバージョンのキャッシュを再利用すると、
         # repl は起動するのに import がすべて失敗して、原因が分からなくなる。

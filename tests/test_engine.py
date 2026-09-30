@@ -29,10 +29,18 @@ def describe_式の評価():
         assert "hi" in repl.feed('IO.println "hi"')
 
     @story("A2")
-    def it_評価できない項は型だけを表示する(repl):
+    def it_評価できない項は理由と型を表示する(repl):
         # Nat -> Nat に Repr が無いので #eval できない。
         out = repl.feed("Nat.succ")
-        assert "型だけ" in out, out
+        assert "Repr" in out, out
+        assert "Nat.succ (n : Nat) : Nat" in out, out
+
+    @story("A2")
+    def it_noncomputable_な定数は理由と型を表示する(repl):
+        repl.feed("noncomputable def nc : Nat := Classical.choice ⟨1⟩")
+        out = repl.feed("nc")
+        assert "noncomputable なので評価できない" in out, out
+        assert "nc : Nat" in out, out
 
     @story("A1", "B1")
     def it_do_ブロックは_IO_として読み直す(repl):
@@ -65,7 +73,7 @@ def describe_複数行の宣言():
         assert "3" in repl.feed("three")
         assert len(repl.declarations) == 1, "前の入力の続きとして扱わずに 2 件になった"
 
-    @story("C1", "F1")
+    @story("C1")
     def it_エラーになった宣言は環境を進めない(repl):
         repl.feed('def broken : Nat := "oops"')
         assert repl.declarations == []
@@ -580,7 +588,7 @@ def describe_起動時の確認():
         finally:
             eng.kill()
 
-    @story("G3", "G4")
+    @story("G4", "G5")
     def it_起動に失敗したエンジンのプロセスを残さない(repl, mocker):
         # Engine を作った時点で repl は起動している。boot が投げたあとに
         # self.eng を差し替えると、終了させる方法が無いままプロセスが残る。
@@ -1176,7 +1184,7 @@ def describe_読み込んだファイルの_import():
 
 def describe_切り替えが成功したとき():
 
-    @story("G5", "B2")
+    @story("G5")
     def it_入力した宣言も新しい環境に追加される(repl):
         repl.feed("def carried := 42")
         out = repl.feed(":env wide")

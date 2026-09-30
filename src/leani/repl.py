@@ -46,6 +46,7 @@ from leani.pure import (
     lean_strs,
     loogle_text,
     messages,
+    not_evaluable_reason,
     red,
     shorten,
     sorries,
@@ -59,7 +60,6 @@ from leani.queries import (
     DECL_NAME,
     DOC_QUERY,
     META_LINE,
-    NOT_EVALUABLE,
     PARSE_PROBE,
     SCOPE_QUERY,
 )
@@ -895,13 +895,14 @@ class Repl:
                 return True
 
         # 評価できない式でも、型だけは表示したほうが親切。
-        if errs and NOT_EVALUABLE.search(blob):
+        reason = not_evaluable_reason(blob) if errs else None
+        if reason is not None:
             out = self.guard(
                 lambda: self.eng.query("#check\n" + textwrap.indent(src, "  "))
             )
             if out:
                 self.out.write(out.rstrip())
-                self.out.write(dim("-- 評価できないので型だけを表示した"))
+                self.out.write(dim(f"-- {reason}。型だけを表示した"))
                 self.last = Last(src, advanced=False)
                 return True
 

@@ -90,8 +90,9 @@ DECL_NAME = re.compile(
 )
 
 # #eval できない式。型だけでも表示したほうが親切なので、#check に切り替える。
-NOT_EVALUABLE = re.compile(
-    r"noncomputable|failed to compile"
-    r"|could not synthesize.*(Repr|ToString|ToExpr|Eval)|cannot evaluate",
-    re.DOTALL | re.IGNORECASE,
+# 評価できない理由を表示するため、理由ごとに分ける。
+NONCOMPUTABLE = re.compile(r"noncomputable|failed to compile", re.IGNORECASE)
+NO_REPR = re.compile(
+    r"could not synthesize.*(Repr|ToString|ToExpr|Eval)", re.DOTALL | re.IGNORECASE
 )
+CANNOT_EVAL = re.compile(r"cannot evaluate", re.IGNORECASE)
