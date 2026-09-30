@@ -166,3 +166,10 @@ def describe_端末でない入力():
         # 置き換えて渡し、Lean の構文エラーとして報告させる。
         out = piped(b"def keepPipe : Nat := 41\n\xff\xfe\nkeepPipe + 1\n", tmp_path)
         assert "42" in out, out
+
+    @story("B4")
+    def it_ファイルを指定して起動すると宣言を使える(tmp_path):
+        path = tmp_path / "given.lean"
+        path.write_text("def given := 12\n")
+        out = piped(b"given + 1\n", tmp_path, args=[str(path)])
+        assert "13" in out, out

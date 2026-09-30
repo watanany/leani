@@ -9,7 +9,7 @@ import contextlib
 import io
 
 import pytest
-from conftest import interrupt_after_write, story
+from conftest import Driver, interrupt_after_write, story
 
 import leani
 
@@ -160,6 +160,16 @@ def describe_証明モード():
 
 
 def describe_ファイルの読み書き():
+
+    @story("B4")
+    def it_起動時に指定したファイルの関数を呼べる(tmp_path):
+        path = tmp_path / "preload.lean"
+        path.write_text("def preloaded := 11\n")
+        driver = Driver(preload=str(path))
+        try:
+            assert "11" in driver.feed("preloaded")
+        finally:
+            driver.close()
 
     @story("B3", "B4")
     def it_save_したファイルを読み込み直せる(repl, tmp_path):

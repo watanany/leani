@@ -1069,3 +1069,108 @@ def describe_Lake_プロジェクトの判定():
         monkeypatch.chdir(tmp_path)
         got = leani.config.resolve(imports=["Std"], cfg={})
         assert got.imports == ("Std",)
+
+
+def describe_起動オプション():
+
+    @story("G6")
+    def it_i_を繰り返すと_import_がすべて残る():
+        assert leani.cli.parse_args(["-i", "A", "--import", "B"]).imports == ["A", "B"]
+
+    @story("G5")
+    def it_e_で環境の名前を受け取る():
+        assert leani.cli.parse_args(["-e", "m"]).name == "m"
+        assert leani.cli.parse_args(["--env", "m"]).name == "m"
+
+    @story("G5", "G6")
+    @pytest.mark.parametrize("flag", ["-e", "-i", "-p"])
+    def it_値の無いオプションはエラーで終了する(capsys, flag):
+        with pytest.raises(SystemExit) as e:
+            leani.cli.parse_args([flag])
+        assert e.value.code == 1
+        assert f"{flag} には" in capsys.readouterr().err
+
+    @story("H1")
+    def it_不明なオプションはエラーで終了する(capsys):
+        with pytest.raises(SystemExit):
+            leani.cli.parse_args(["--nosuch"])
+        assert "不明なオプション: --nosuch" in capsys.readouterr().err
+
+    @story("B4")
+    def it_ファイル名と_ハイフンは読み込むファイルとして受け取る():
+        assert leani.cli.parse_args(["foo.lean"]).preload == "foo.lean"
+        assert leani.cli.parse_args(["-"]).preload == "-"
+
+
+def describe_起動():
+    """cli.main。エンジンを起動しないように、Repl とエンジンの用意は差し替える。"""
+
+    @pytest.fixture
+    def cli(mocker, tmp_path):
+        cfg = leani.config.EnvConfig.make("t", engine=str(tmp_path / "eng"))
+        mocker.patch.object(leani.cli, "resolve", return_value=cfg)
+        mocker.patch.object(leani.cli, "problem", return_value=None)
+        mocker.patch.object(leani.cli, "toolchain", return_value="leanprover/lean4:v1")
+        return {
+            "cfg": cfg,
+            "repl": mocker.patch.object(leani.cli, "Repl"),
+            "ensure": mocker.patch.object(leani.cli, "ensure_engine"),
+        }
+
+    @story("G3")
+    def it_setup_は用意済みならエンジンを用意しない(cli, tmp_path, capsys):
+        os.makedirs(tmp_path / "eng/.lake/build/bin")
+        (tmp_path / "eng/.lake/build/bin/repl").touch()
+        assert leani.cli.main(["leani", "--setup"]) == 0
+        assert not cli["ensure"].called
+        assert "用意済み" in capsys.readouterr().out
+
+    @story("G3")
+    def it_setup_は未用意ならエンジンを用意する(cli):
+        assert leani.cli.main(["leani", "--setup"]) == 0
+        cli["ensure"].assert_called_once_with(
+            cli["cfg"].engine, "leanprover/lean4:v1", asked=True
+        )
+        assert not cli["repl"].called
+
+    @story("G4")
+    def it_エンジンが起動しなければメッセージを表示して_exit_1_で終わる(cli, capsys):
+        cli["repl"].side_effect = leani.types.EngineDied()
+        with pytest.raises(SystemExit) as e:
+            leani.cli.main(["leani"])
+        assert e.value.code == 1
+        assert "エンジンが起動しなかった" in capsys.readouterr().err
+
+    @story("G4")
+    def it_設定のエラーでは起動せずに知らせる(cli, mocker, capsys):
+        mocker.patch.object(
+            leani.cli, "resolve", side_effect=leani.types.ConfigError("壊れた設定")
+        )
+        with pytest.raises(SystemExit):
+            leani.cli.main(["leani"])
+        assert "壊れた設定" in capsys.readouterr().err
+
+        mocker.patch.object(leani.cli, "resolve", return_value=cli["cfg"])
+        mocker.patch.object(leani.cli, "problem", return_value="起動できない理由")
+        with pytest.raises(SystemExit):
+            leani.cli.main(["leani"])
+        assert "起動できない理由" in capsys.readouterr().err
+        assert not cli["repl"].called
+
+    @story("B4")
+    def it_指定したファイルを_Repl_に渡す(cli):
+        leani.cli.main(["leani", "foo.lean"])
+        cli["repl"].assert_called_once_with(cli["cfg"], "foo.lean")
+
+    @story("G7")
+    def it_V_は環境とバージョンと設定ファイルの場所を表示して終わる(
+        cli, mocker, capsys
+    ):
+        tc = "leanprover/lean4:v1"
+        mocker.patch.object(leani.cli, "guess_toolchain", return_value=tc)
+        assert leani.cli.main(["leani", "-V"]) == 0
+        out = capsys.readouterr().out
+        assert "環境:     t (import Lean)" in out, out
+        assert f"Lean:     {tc}" in out, out
+        assert leani.places.CONFIG in out, out
+        assert not cli["repl"].called

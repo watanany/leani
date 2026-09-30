@@ -151,9 +151,9 @@ INVARIANTS = [
 class Driver:
     """Repl を直接呼ぶ。1 行渡すごとに不変条件を確認する。"""
 
-    def __init__(self, env=None):
+    def __init__(self, env=None, preload=None):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.repl = leani.repl.Repl(leani.config.resolve(env))
+            self.repl = leani.repl.Repl(leani.config.resolve(env), preload)
         self.check("起動直後")
 
     @property
@@ -383,7 +383,7 @@ def terminal(tmp_path):
         term.close()
 
 
-def piped(src, tmp_path, timeout=180):
+def piped(src, tmp_path, timeout=180, args=()):
     """
     パイプ越しに leani へ渡して、出力をすべて返す。
 
@@ -396,7 +396,7 @@ def piped(src, tmp_path, timeout=180):
         PYTHONPATH=SRC,
     )
     done = subprocess.run(
-        [sys.executable, *REPL],
+        [sys.executable, *REPL, *args],
         input=src,
         env=env,
         cwd=_STATE,
