@@ -174,6 +174,14 @@ class Driver:
                 self.check(f"{one!r} のあと")
         return ANSI.sub("", out.getvalue())
 
+    def feed_with(self, fn):
+        """行の代わりに fn (Repl のメソッドなど) を呼んで、出力を返す。"""
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            fn()
+        self.check(f"{fn.__name__} のあと")
+        return ANSI.sub("", out.getvalue())
+
     def block(self, *lines):
         """複数行を入力して空行で確定させる。"""
         return self.feed(*lines, "")

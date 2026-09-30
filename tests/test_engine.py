@@ -51,6 +51,22 @@ def describe_式の評価():
         assert "none=true" in out, out
         assert "error" not in out.lower(), out
 
+    @story("B1")
+    def it_do_ブロックでファイルを読める(repl, tmp_path):
+        path = tmp_path / "note.txt"
+        path.write_text("from file\n")
+        out = repl.feed(f'do let s ← IO.FS.readFile "{path}"; IO.print s')
+        assert "from file" in out, out
+
+    @story("B1")
+    def it_do_ブロックでプロセスを起動して出力を受け取れる(repl):
+        out = repl.feed(
+            'do let r ← IO.Process.output {cmd := "echo", args := #["hi"]}; '
+            "IO.print r.stdout"
+        )
+        assert "hi" in out, out
+        assert "error" not in out.lower(), out
+
 
 def describe_複数行の宣言():
 
@@ -559,6 +575,54 @@ def describe_init_の扱い():
 
         repl.feed(":reset")
         assert "99" in repl.feed("fromInit"), ":reset で init が消えた"
+
+    @story("G2")
+    def it_init_に書いた_open_が入力した行にも効く(repl, tmp_path, mocker):
+        init = tmp_path / "init.lean"
+        init.write_text("open Nat\n")
+        mocker.patch.object(leani.repl, "INIT", str(init))
+        with contextlib.redirect_stdout(io.StringIO()):
+            repl.repl.apply_init()
+
+        assert "2" in repl.feed("succ 1")
+
+    @story("F2", "G2")
+    def it_reset_しても_init_の_open_が残る(repl, tmp_path, mocker):
+        init = tmp_path / "init.lean"
+        init.write_text("open Nat\n")
+        mocker.patch.object(leani.repl, "INIT", str(init))
+        with contextlib.redirect_stdout(io.StringIO()):
+            repl.repl.apply_init()
+
+        repl.feed(":reset")
+        assert "2" in repl.feed("succ 1")
+
+    @story("G2", "G4")
+    def it_エラーのある_init_は知らせて環境を変えない(repl, tmp_path, mocker):
+        init = tmp_path / "init.lean"
+        init.write_text('def bad : Nat := "x"\n')
+        mocker.patch.object(leani.repl, "INIT", str(init))
+        base = repl.engine.base
+        out = repl.feed_with(repl.repl.apply_init)
+        assert "にエラーがある" in out, out
+        assert repl.engine.base == base
+        assert repl.engine.init_src is None
+
+    @story("G2", "G4")
+    def it_読めない_init_は理由を表示する(repl, tmp_path, mocker):
+        mocker.patch.object(leani.repl, "INIT", str(tmp_path))  # ディレクトリ
+        out = repl.feed_with(repl.repl.apply_init)
+        assert "が読めない" in out, out
+
+    @story("G2")
+    def it_import_だけの_init_は何もしない(repl, tmp_path, mocker):
+        init = tmp_path / "init.lean"
+        init.write_text("import Lean\n")
+        mocker.patch.object(leani.repl, "INIT", str(init))
+        env = repl.engine.env
+        out = repl.feed_with(repl.repl.apply_init)
+        assert out == "", out
+        assert repl.engine.env == env
 
 
 def describe_書き出しにすべての宣言を含める():

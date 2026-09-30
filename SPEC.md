@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 40 件、テスト 295 件。括弧の中はテストの場所
+ストーリー 40 件、テスト 302 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -55,6 +55,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - IO の式はそのまま実行される (engine / 式の評価)
 - do ブロックは IO として読み直す (engine / 式の評価)
+- do ブロックでファイルを読める (engine / 式の評価)
+- do ブロックでプロセスを起動して出力を受け取れる (engine / 式の評価)
 
 ### B2 途中まで書いた処理を関数に切り出し、REPL 上で少しずつ組み立てたい
 
@@ -331,6 +333,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - undo のあとの prove が手前の宣言を消さない (engine / 証明モード)
 - ファイルを読み込んでいなければ r は起動直後に戻す (engine / ファイルの読み書き)
 - reset しても init の宣言が残る (engine / init の扱い)
+- reset しても init の open が残る (engine / init の扱い)
 - undo の引数が数でなくても異常終了しない (engine / 引数の受け取り)
 - 実行できなかった宣言を環境の並びに混ぜない (engine / replay が途中で止まったとき)
 - 次の restart で再実行する (engine / replay が途中で止まったとき)
@@ -375,6 +378,11 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - init の再実行中に異常終了しても init を捨てない (engine / 再起動のあとで読み込み直せないとき)
 - 再起動しても init の宣言が残る (engine / init の扱い)
 - reset しても init の宣言が残る (engine / init の扱い)
+- init に書いた open が入力した行にも効く (engine / init の扱い)
+- reset しても init の open が残る (engine / init の扱い)
+- エラーのある init は知らせて環境を変えない (engine / init の扱い)
+- 読めない init は理由を表示する (engine / init の扱い)
+- import だけの init は何もしない (engine / init の扱い)
 - init と読み込んだファイルの宣言も書き出す (engine / 書き出しにすべての宣言を含める)
 - 読み込んだあとも init を追加し直す (engine / init と読み込みが混ざるとき)
 - init ファイルの import 行は取り除く (parsing / 起動前の準備)
@@ -419,6 +427,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 ### G4 import や設定を書き間違えたとき、壊れた環境のまま起動せずに知らせてほしい
 
 - 切り替え先が起動できなければ元の環境に戻る (engine / 環境の切り替え)
+- エラーのある init は知らせて環境を変えない (engine / init の扱い)
+- 読めない init は理由を表示する (engine / init の扱い)
 - 解決できない import では起動を中止する (engine / 起動時の確認)
 - エンジンが異常終了したら終了シグナルや終了コードを報告に含める (engine / 起動時の確認)
 - 起動に失敗したエンジンのプロセスを残さない (engine / 起動時の確認)
