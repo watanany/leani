@@ -698,6 +698,144 @@ def describe_エンジンを用意するときの安全対策():
         assert not os.path.exists(seen[0])
 
 
+TC = "leanprover/lean4:v4.33.0"
+
+
+def _done(stdout="", returncode=0, stderr=""):
+    return subprocess.CompletedProcess([], returncode, stdout, stderr)
+
+
+def describe_エンジンを自動で用意できないとき():
+    """初回の起動で通る処理。失敗しても、手動で用意する手順を表示する。"""
+
+    @pytest.fixture
+    def setup(tmp_path, mocker):
+        # 利用者のエンジンの置き場所を読み書きしない。
+        mocker.patch.object(
+            leani.boot, "engine_dir", return_value=str(tmp_path / "engine")
+        )
+        mocker.patch.object(leani.boot, "NO_SETUP", False)
+        return {
+            "tags": mocker.patch.object(
+                leani.boot, "fetch_tags", return_value=["v4.33.0"]
+            ),
+            "build": mocker.patch.object(leani.boot, "build_engine"),
+        }
+
+    @story("G3")
+    @pytest.mark.parametrize(
+        "fail",
+        [
+            subprocess.TimeoutExpired("git", 1),
+            OSError("git が無い"),
+            _done(returncode=1, stderr="fatal"),
+        ],
+    )
+    def it_タグを取得できなければ手動の手順を表示する(setup, mocker, fail):
+        mocker.stop(setup["tags"])  # 本物の fetch_tags を使う
+        if isinstance(fail, BaseException):
+            mocker.patch.object(leani.boot.subprocess, "run", side_effect=fail)
+        else:
+            mocker.patch.object(leani.boot.subprocess, "run", return_value=fail)
+        with pytest.raises(leani.types.EngineError) as e:
+            leani.boot.ensure_engine(None, TC)
+        assert "手動で用意する場合" in str(e.value)
+        assert "git clone --branch" in str(e.value)
+
+    @story("G3")
+    def it_タグの一覧から_refs_tags_の名前だけを取り出す(mocker):
+        out = "a1\trefs/tags/v4.33.0\nb2\trefs/tags/v4.34.0-rc1\n"
+        mocker.patch.object(leani.boot.subprocess, "run", return_value=_done(out))
+        assert leani.boot.fetch_tags() == ["v4.33.0", "v4.34.0-rc1"]
+
+    @story("G3")
+    def it_バージョンとして解釈できなければ_master_で試す(setup):
+        leani.boot.ensure_engine(None, "leanprover/lean4:nightly")
+        assert setup["build"].call_args.args[2] == "master"
+
+    @story("G3", "G4")
+    def it_対応するタグが無ければ起動を中止する(setup):
+        setup["tags"].return_value = ["v4.40.0"]
+        with pytest.raises(leani.types.EngineError) as e:
+            leani.boot.ensure_engine(None, TC)
+        assert "repl に v4.33.0 用のタグが無い" in str(e.value)
+        assert "以下で一番新しいタグ" in str(e.value)
+        assert not setup["build"].called
+
+    @story("G3")
+    def it_LEANI_NO_SETUP_のときはエンジンを用意しない(setup, mocker):
+        mocker.patch.object(leani.boot, "NO_SETUP", True)
+        with pytest.raises(leani.types.EngineError, match="LEANI_NO_SETUP"):
+            leani.boot.ensure_engine(None, TC)
+        assert not setup["tags"].called
+        assert not setup["build"].called
+
+        # --setup で明示的に頼まれたときは用意する。
+        leani.boot.ensure_engine(None, TC, asked=True)
+        assert setup["build"].called
+
+    @story("G3")
+    def it_ビルドに失敗したら手動の手順にタグを含める(setup):
+        setup["tags"].return_value = ["v4.32.0"]
+        setup["build"].side_effect = leani.types.EngineError("失敗した")
+        with pytest.raises(leani.types.EngineError) as e:
+            leani.boot.ensure_engine(None, TC)
+        assert "--branch v4.32.0" in str(e.value)
+
+
+def describe_lake_env_の取得():
+    """lake env の結果はキャッシュして、起動のたびに実行しない。"""
+
+    @pytest.fixture
+    def project(tmp_path, mocker):
+        # 利用者の ~/.local/state を読み書きしない。
+        mocker.patch.object(leani.boot, "STATE", str(tmp_path / "state"))
+        (tmp_path / "proj").mkdir()
+        return str(tmp_path / "proj")
+
+    @story("G1")
+    def it_プロジェクトが無ければ_lake_env_を実行しない(mocker):
+        run = mocker.patch.object(leani.boot.subprocess, "run")
+        assert leani.boot.lake_env(None) == {}
+        assert not run.called
+
+    @story("G1", "G6")
+    def it_キャッシュが新しければ_lake_env_を実行しない(project, mocker):
+        run = mocker.patch.object(
+            leani.boot.subprocess, "run", return_value=_done("LEAN_PATH=/a\n")
+        )
+        assert leani.boot.lake_env(project, TC) == {"LEAN_PATH": "/a"}
+        assert leani.boot.lake_env(project, TC) == {"LEAN_PATH": "/a"}
+        assert run.call_count == 1
+
+    @story("G4", "G6")
+    @pytest.mark.parametrize(
+        ("fail", "why"),
+        [
+            (subprocess.TimeoutExpired("lake", 1), "秒で終わらなかった"),
+            (OSError("lake が無い"), "実行できなかった"),
+            (_done(returncode=1, stderr="boom"), "失敗した"),
+        ],
+    )
+    def it_lake_env_を実行できなければ理由を知らせる(project, mocker, fail, why):
+        if isinstance(fail, BaseException):
+            mocker.patch.object(leani.boot.subprocess, "run", side_effect=fail)
+        else:
+            mocker.patch.object(leani.boot.subprocess, "run", return_value=fail)
+        with pytest.raises(leani.types.EngineError, match=why) as e:
+            leani.boot.lake_env(project, TC)
+        assert str(e.value).startswith("lake env ")
+
+    @story("G6")
+    def it_lake_env_の結果を保存できなければ知らせる(project, tmp_path, mocker):
+        mocker.patch.object(leani.boot.subprocess, "run", return_value=_done("X=1\n"))
+        mocker.patch.object(leani.boot.os, "replace", side_effect=OSError("full"))
+        with pytest.raises(leani.types.EngineError, match="保存できなかった"):
+            leani.boot.lake_env(project, TC)
+        left = list((tmp_path / "state").rglob("*.tmp"))
+        assert left == [], "一時ファイルが残っている"
+
+
 POS_OUT = {"pos": {"line": 99, "column": 0}, "endPos": {"line": 99, "column": 5}}
 
 

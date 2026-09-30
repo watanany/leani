@@ -366,7 +366,7 @@ def describe_エンジンが異常終了してもセッションが続く():
 
 def describe_環境の切り替え():
 
-    @story("G5")
+    @story("G1", "G5")
     def it_切り替えても設定と読み込んだファイルが残る(repl, tmp_path):
         path = tmp_path / "switched.lean"
         repl.feed("def switched := 11")
@@ -1357,7 +1357,7 @@ def describe_読み込んだファイルの_import():
 
 def describe_切り替えが成功したとき():
 
-    @story("G5")
+    @story("G1", "G5")
     def it_入力した宣言も新しい環境に追加される(repl):
         repl.feed("def carried := 42")
         out = repl.feed(":env wide")

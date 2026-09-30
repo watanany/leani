@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 40 件、テスト 285 件。括弧の中はテストの場所
+ストーリー 40 件、テスト 295 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -364,7 +364,11 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### G1 Mathlib 無しで速く起動したい。必要になったらセッションの途中から追加したい
 
+- 切り替えても設定と読み込んだファイルが残る (engine / 環境の切り替え)
+- 入力した宣言も新しい環境に追加される (engine / 切り替えが成功したとき)
 - lake env のキャッシュを読む (parsing / 起動前の準備)
+- プロジェクトが無ければ lake env を実行しない (parsing / lake env の取得)
+- キャッシュが新しければ lake env を実行しない (parsing / lake env の取得)
 
 ### G2 毎回書く補助関数や open を起動時に自動で読み込みたい
 
@@ -401,6 +405,12 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 明示されたエンジンにバージョンが無ければ起動を中止する (parsing / エンジンを用意するときの安全対策)
 - 作業中の置き場所はプロセスごとに分かれる (parsing / エンジンを用意するときの安全対策)
 - 待っているあいだに別の leani が置いたエンジンは消さない (parsing / エンジンを用意するときの安全対策)
+- タグを取得できなければ手動の手順を表示する (parsing / エンジンを自動で用意できないとき)
+- タグの一覧から refs tags の名前だけを取り出す (parsing / エンジンを自動で用意できないとき)
+- バージョンとして解釈できなければ master で試す (parsing / エンジンを自動で用意できないとき)
+- 対応するタグが無ければ起動を中止する (parsing / エンジンを自動で用意できないとき)
+- LEANI NO SETUP のときはエンジンを用意しない (parsing / エンジンを自動で用意できないとき)
+- ビルドに失敗したら手動の手順にタグを含める (parsing / エンジンを自動で用意できないとき)
 - lakefile が無ければ None を返す (parsing / Lake プロジェクトの判定)
 - Lake プロジェクトの外なら Lean 本体だけで起動する (parsing / Lake プロジェクトの判定)
 - setup は用意済みならエンジンを用意しない (parsing / 起動)
@@ -431,6 +441,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 設定ファイルが壊れていたら ConfigError にする (parsing / 設定ファイルの読み込み)
 - 設定ファイルが無ければ空の設定として読む (parsing / 設定ファイルの読み込み)
 - 明示されたエンジンにバージョンが無ければ起動を中止する (parsing / エンジンを用意するときの安全対策)
+- 対応するタグが無ければ起動を中止する (parsing / エンジンを自動で用意できないとき)
+- lake env を実行できなければ理由を知らせる (parsing / lake env の取得)
 - lakefile toml が壊れていたら空を返す (parsing / Lake プロジェクトの判定)
 - エンジンが起動しなければメッセージを表示して exit 1 で終わる (parsing / 起動)
 - 設定のエラーでは起動せずに知らせる (parsing / 起動)
@@ -464,6 +476,9 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - toolchain が変わったらキャッシュを作り直す (parsing / 起動前の準備)
 - import だけを指定したら default を使わない (parsing / 起動する環境の決め方)
 - 設定ファイルが無ければ空の設定として読む (parsing / 設定ファイルの読み込み)
+- キャッシュが新しければ lake env を実行しない (parsing / lake env の取得)
+- lake env を実行できなければ理由を知らせる (parsing / lake env の取得)
+- lake env の結果を保存できなければ知らせる (parsing / lake env の取得)
 - lakefile を持つ一番近い親ディレクトリを返す (parsing / Lake プロジェクトの判定)
 - lakefile が無ければ None を返す (parsing / Lake プロジェクトの判定)
 - lakefile toml の lean lib を返す (parsing / Lake プロジェクトの判定)
