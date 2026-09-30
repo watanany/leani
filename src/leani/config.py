@@ -72,12 +72,13 @@ def abspath(path: str | None) -> str | None:
 
 def as_str(value: Any, where: str) -> str | None:
     """設定の文字列 1 つ。型が違えばエラーにする (traceback は出さない)。"""
-    if value is None or isinstance(value, str):
-        return value
-    else:
-        raise ConfigError(
-            f"{where} は文字列で書く (今は {type(value).__name__}): {CONFIG}"
-        )
+    match value:
+        case None | str():
+            return value
+        case _:
+            raise ConfigError(
+                f"{where} は文字列で書く (今は {type(value).__name__}): {CONFIG}"
+            )
 
 
 def as_imports(value: Any, where: str) -> Sequence[str]:
@@ -87,35 +88,39 @@ def as_imports(value: Any, where: str) -> Sequence[str]:
     文字列 1 つをエラーにせずに受け取ると 1 文字ずつの import になる。どれも解決
     できないので、repl はヘッダ全体を捨てる (import Lean も消える)。なのでエラーにする。
     """
-    if value is None:
-        return ()
-    elif isinstance(value, str):
-        raise ConfigError(f'{where} は配列で書く: ["{value}"] ({CONFIG})')
-    elif isinstance(value, list) and all(isinstance(m, str) for m in value):
-        return value
-    else:
-        raise ConfigError(f"{where} は文字列の配列で書く: {CONFIG}")
+    match value:
+        case None:
+            return ()
+        case str():
+            raise ConfigError(f'{where} は配列で書く: ["{value}"] ({CONFIG})')
+        case list() if all(isinstance(m, str) for m in value):
+            return value
+        case _:
+            raise ConfigError(f"{where} は文字列の配列で書く: {CONFIG}")
 
 
 def as_table(value: Any, where: str) -> Json:
     """設定の表 1 つ。型が違えばエラーにする。"""
-    if value is None:
-        return {}
-    elif isinstance(value, dict):
-        return value
-    else:
-        raise ConfigError(f"{where} は表で書く (今は {type(value).__name__}): {CONFIG}")
+    match value:
+        case None:
+            return {}
+        case dict():
+            return value
+        case _:
+            raise ConfigError(
+                f"{where} は表で書く (今は {type(value).__name__}): {CONFIG}"
+            )
 
 
 def load_config(path: str = CONFIG) -> Json:
     if not os.path.isfile(path):
         return {}
-
-    try:
-        with open(path, "rb") as f:
-            return tomllib.load(f)
-    except (OSError, tomllib.TOMLDecodeError) as e:
-        raise ConfigError(f"設定ファイルを読めない: {path}\n  {e}") from e
+    else:
+        try:
+            with open(path, "rb") as f:
+                return tomllib.load(f)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            raise ConfigError(f"設定ファイルを読めない: {path}\n  {e}") from e
 
 
 def lake_root(start: str) -> str | None:
@@ -134,21 +139,29 @@ def lake_libs(project: str) -> list[str]:
     """lakefile が公開しているライブラリ名。設定が無いときの import 候補。"""
     toml = f"{project}/lakefile.toml"
     if os.path.isfile(toml):
-        try:
-            with open(toml, "rb") as f:
-                data = tomllib.load(f)
-        except (OSError, tomllib.TOMLDecodeError):
-            return []
+        return toml_libs(toml)
+    else:
+        return lean_libs(f"{project}/lakefile.lean")
 
+
+def toml_libs(path: str) -> list[str]:
+    """lakefile.toml の lean_lib の名前。読めなければ空。"""
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return []
+    else:
         return [lib["name"] for lib in data.get("lean_lib", []) if "name" in lib]
 
-    try:
-        with open(f"{project}/lakefile.lean") as f:
-            text = f.read()
-    except OSError:
-        return []
 
-    return re.findall(r"^\s*lean_lib\s+«?([A-Za-z0-9_.\']+)»?", text, re.MULTILINE)
+def lean_libs(path: str) -> list[str]:
+    """lakefile.lean の lean_lib の名前。読めなければ空。"""
+    text = read_text(path)
+    if text is None:
+        return []
+    else:
+        return re.findall(r"^\s*lean_lib\s+«?([A-Za-z0-9_.\']+)»?", text, re.MULTILINE)
 
 
 def problem(cfg: EnvConfig) -> str | None:
@@ -266,11 +279,14 @@ def resolve(
     table = as_table(conf.get("env"), "env")
     engine = as_str(conf.get("engine"), "engine")
     mods = tuple(imports or ())
-    if name is None and not mods and not project:
-        name = as_str(conf.get("default"), "default")
-
-    if name is not None:
-        return from_config(table, name, project, mods, engine)
+    # 名前も -i も -p も無いときだけ default を使う。
+    chosen = (
+        as_str(conf.get("default"), "default")
+        if name is None and not mods and not project
+        else name
+    )
+    if chosen is not None:
+        return from_config(table, chosen, project, mods, engine)
     else:
         return guess_env(project, mods, engine)
 

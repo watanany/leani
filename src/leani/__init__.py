@@ -40,7 +40,9 @@ leani: Lean 4 の対話 REPL。
     kernel   副作用    Jupyter のカーネル (leani[jupyter] のときだけ使える)
 
 純粋、読み取り、定数のモジュールが副作用のモジュールを import しないことは、
-`ruff` が検査している (pyproject.toml の flake8-tidy-imports)。判定と整形はすべて
+`ruff` が検査している (pyproject.toml の flake8-tidy-imports)。ただし `import leani`
+はこのモジュールを通してすべてのモジュールを読み込むのに、`ruff` では検出できない。
+純粋、読み取り、定数のモジュールには書かない。判定と整形はすべて
 純粋なモジュールにあるので、テストは入力と出力だけで書ける。状態を持つのは、
 repl プロセスを 1 つ持つ `Engine` と、入力バッファと証明モードを持つ `Repl` の
 2 つだけ。
