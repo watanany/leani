@@ -1253,6 +1253,18 @@ def describe_切り替えに失敗したとき():
         with pytest.raises(leani.types.EnvLost, match="にも戻れなくなった"):
             repl.feed(":env wide")
 
+    @story("G4", "G5")
+    def it_端末では元の環境にも戻れなければ内部エラーにせずループを抜ける(repl, mocker):
+        # ループが想定外の例外として扱うと、環境が無いままセッションが続く。
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied("boom")
+        )
+        mocker.patch.object(
+            repl.repl, "read_line", side_effect=[":env wide", "", EOFError()]
+        )
+        with pytest.raises(leani.types.EnvLost):
+            repl.repl.loop()
+
     @story("F1", "G5")
     def it_切り替えたあとの再実行が中断されても宣言を保留に残す(repl, mocker):
         repl.feed("def carried := 1")

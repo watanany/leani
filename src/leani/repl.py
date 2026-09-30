@@ -657,6 +657,10 @@ class Repl:
                 self.discard()
                 self.last = None
                 self.out.write("^C")
+            except EnvLost:
+                # 環境が 1 つも無いので、続けてもどの入力もエラーになる。
+                # cli が終了する。
+                raise
             except Exception as e:
                 # 想定外の例外でも、その 1 行のエラーとして扱う。セッションを終了すると
                 # それまでの宣言をすべて失うので、それが一番大きな損失になる。
