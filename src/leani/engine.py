@@ -277,10 +277,12 @@ class Engine:
         resp = self.send_cmd(src)
         return None if has_error(resp) else info_text(resp)
 
-    def advance(self, resp: Response) -> None:
+    def accept(self, resp: Response, src: str) -> None:
+        """宣言が作った環境に進み、宣言を log に追加する。stack と log は 1 対 1。"""
         if self.env is not None:
             self.stack.append(self.env)
         self.env = resp["env"]
+        self.log.append(src)
 
     def pop_decl(self) -> Undone:
         """直前の宣言を環境ごと取り消す。あとで元に戻せるよう、取り消した内容を返す。"""
@@ -518,8 +520,7 @@ class Engine:
                 failed.append(src)
                 continue
 
-            self.advance(resp)
-            self.log.append(src)
+            self.accept(resp, src)
             done.append(src)
             # 最後に成功した宣言の sorry だけを保存する。証明中だった宣言は
             # log の末尾にあるので、これで :prove を再開できる。

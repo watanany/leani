@@ -924,8 +924,7 @@ class Repl:
 
         advanced = not has_error(resp) and "env" in resp
         if advanced:
-            self.eng.advance(resp)
-            self.eng.log.append(src)
+            self.eng.accept(resp, src)
         render(self.out, resp, src)
 
         found = sorries(resp)
@@ -1301,10 +1300,7 @@ class Repl:
 
     def cmd_undo(self, arg: str) -> None:
         for _ in range(int(arg) if arg.isdecimal() else 1):
-            if self.eng.stack:
-                self.eng.env = self.eng.stack.pop()
-            if self.eng.log:
-                self.eng.log.pop()
+            self.eng.pop_decl()
 
         self.clear_pending()
         self.out.write(dim(f"env {self.eng.env}"))
