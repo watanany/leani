@@ -330,6 +330,39 @@ def describe_エンジンが異常終了してもセッションが続く():
         assert "PANIC した" in out, out
         assert "42" not in out, out
 
+    @story("F1")
+    def it_再実行してもまた異常終了したら知らせてセッションを続ける(repl, mocker):
+        # 同じ入力でエンジンが毎回異常終了する場合。再実行でも終了したあとに
+        # 再起動しないと、終了したプロセスが残り、次の入力もすべて失敗する。
+        repl.feed("def before := 5")
+        eng = repl.engine
+        real = eng.send_cmd
+
+        def kill_on_poison(src, fresh=False):
+            if src.startswith("def poison"):
+                eng.proc.kill()
+                eng.proc.wait()
+            return real(src, fresh=fresh)
+
+        mocker.patch.object(eng, "send_cmd", side_effect=kill_on_poison)
+        out = repl.feed("def poison := 1")
+        assert "再実行してもエンジンが異常終了した" in out, out
+        assert repl.declarations == ["def before := 5"]
+        assert "5" in repl.feed("before")
+
+    @story("A4", "F1")
+    def it_再起動を中断しても_restart_でやり直せる(repl, mocker):
+        repl.feed("def before := 5")
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.Interrupted()
+        )
+        out = repl.feed(":restart")
+        assert "再起動を中断した" in out, out
+
+        mocker.stopall()
+        assert "1 件を再実行" in repl.feed(":restart")
+        assert "5" in repl.feed("before")
+
 
 def describe_環境の切り替え():
 
@@ -457,6 +490,48 @@ def describe_書き出しの安全対策():
         out = repl.feed(f":save {tmp_path}/no/such/dir/x.lean")
         assert "書き出せなかった" in out, out
         assert "2" in repl.feed("1 + 1")
+
+
+def describe_再起動のあとで読み込み直せないとき():
+
+    @story("F1", "B4")
+    def it_読み込んだファイルが消えていたら理由を表示して宣言から外す(repl, tmp_path):
+        # 外さないと、環境に無い宣言を :save が書き出す。
+        path = tmp_path / "gone.lean"
+        path.write_text("def fromFile := 7\n")
+        repl.feed(f":l {path}")
+        path.unlink()
+
+        out = repl.feed(":restart")
+        assert "読み込み直せなかった" in out, out
+        assert repl.engine.loaded is None
+        assert "fromFile" not in "\n".join(repl.engine.sources())
+
+    @story("F1", "G2")
+    def it_init_の再実行中に異常終了しても_init_を捨てない(repl, tmp_path, mocker):
+        # init ファイルの内容に問題があるわけではないので、次の :restart で戻せる。
+        init = tmp_path / "init.lean"
+        init.write_text("def fromInit := 99\n")
+        mocker.patch.object(leani.repl, "INIT", str(init))
+        with contextlib.redirect_stdout(io.StringIO()):
+            repl.repl.apply_init()
+
+        eng = repl.engine
+        real = eng.send_cmd
+
+        def die_on_init(src, fresh=False):
+            if src == eng.init_src:
+                raise leani.types.EngineDied()
+            return real(src, fresh=fresh)
+
+        mocker.patch.object(eng, "send_cmd", side_effect=die_on_init)
+        out = repl.feed(":restart")
+        assert "init ファイルの再実行中に" in out, out
+        assert eng.init_src
+
+        mocker.stopall()
+        repl.feed(":restart")
+        assert "99" in repl.feed("fromInit")
 
 
 def describe_init_の扱い():
@@ -1009,6 +1084,43 @@ def describe_切り替えに失敗したとき():
         # 元の環境に戻るときは新しい Engine を作る。:l したファイルの内容は preload で
         # 戻るが、対話で入力した宣言は再実行しないと消える。
         assert "42" in repl.feed("#eval typedHere"), "入力した宣言が消えた"
+
+    @story("G4", "G5")
+    def it_エンジンを用意できない環境に切り替えても今のエンジンを残す(repl, mocker):
+        repl.feed("def typedHere := 42")
+        eng = repl.engine
+        mocker.patch.object(
+            leani.repl, "prepare", side_effect=leani.types.EngineError("用意できない")
+        )
+        out = repl.feed(":env wide")
+        assert "用意できない" in out, out
+        assert repl.engine is eng
+        assert "42" in repl.feed("typedHere")
+
+    @story("G4", "G5")
+    def it_元の環境にも戻れなければ理由を表示して終了する(repl, mocker, capsys):
+        # 環境が無いまま続けても、どの入力もエラーになるだけなので終了する。
+        mocker.patch.object(
+            leani.engine.Engine, "boot", side_effect=leani.types.EngineDied("boom")
+        )
+        with pytest.raises(SystemExit):
+            repl.feed(":env wide")
+        assert "にも戻れなくなった" in capsys.readouterr().err
+
+    @story("F1", "G5")
+    def it_切り替えたあとの再実行が中断されても宣言を保留に残す(repl, mocker):
+        repl.feed("def carried := 1")
+        real = leani.engine.Engine.send_cmd
+
+        def stop_carried(self, src, fresh=False):
+            if src == "def carried := 1":
+                raise leani.types.Interrupted()
+            return real(self, src, fresh=fresh)
+
+        mocker.patch.object(leani.engine.Engine, "send_cmd", stop_carried)
+        out = repl.feed(":env wide")
+        assert "再実行しなかった宣言: 1 件" in out, out
+        assert repl.engine.unplayed == ["def carried := 1"]
 
 
 def describe_実行時間():

@@ -566,6 +566,10 @@ class Repl:
 
         異常終了した場合は、再起動したうえで fn を 1 回だけ再実行する。ユーザーが
         Ctrl-C で止めた場合は再実行しない (ユーザーは止めたいので)。
+
+        再実行でもエンジンが終了したら、もう一度だけ再起動して、再実行はしない。
+        同じ入力でエンジンが毎回異常終了する場合がある。再起動しないと、終了した
+        プロセスが残り、次の入力もすべて失敗する。
         """
         retry = False
         try:
@@ -582,8 +586,16 @@ class Repl:
         if retry:
             try:
                 return fn()
-            except (Interrupted, EngineDied):
-                pass
+            except Interrupted:
+                self.out.fail(yellow("^C 中断した。エンジンを再起動する…"))
+            except EngineDied:
+                self.out.fail(
+                    red(
+                        "再実行してもエンジンが異常終了した。"
+                        "この入力は実行せずに、もう一度再起動する…"
+                    )
+                )
+            self.revive()
 
         return on_dead
 
