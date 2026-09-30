@@ -4,6 +4,7 @@ repl とやりとりする JSON の形、送り方のラベル、それに例外
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Final, Literal, Protocol, TypedDict, TypeVar
 
 # leani が組み立てる JSON と、TOML の設定。形が場所ごとに違うので dict のまま扱う。
@@ -102,6 +103,22 @@ class Loogle(TypedDict, total=False):
     hits: list[Hit]
     error: str
     suggestions: list[str]  # 名前が違うときの候補
+
+
+@dataclass(frozen=True)
+class Proof:
+    """
+    証明モードの状態。1 行 = 1 タクティクで進む。タクティクを進めたり取り消したり
+    するときは、新しい Proof を作る (pure.tactic_step と pure.tactic_undo)。
+    """
+
+    state: int  # repl 側の proofState
+    goals: tuple[str, ...]
+    gen: int  # この proofState を作ったエンジンの世代
+    script: tuple[str, ...] = ()
+    # :undo 用。タクティクを実行する前の proofState とゴール。ゴールも戻さないと、
+    # :undo のあとの :goals が取り消したタクティクのあとのゴールを表示する。
+    stack: tuple[tuple[int, tuple[str, ...]], ...] = ()
 
 
 Kind = Literal["cmd", "term", "tac"]  # 送り方

@@ -12,7 +12,7 @@ import sys
 import textwrap
 import time
 from collections.abc import Callable, Iterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import cast
 
 from prompt_toolkit import PromptSession
@@ -54,6 +54,8 @@ from leani.pure import (
     sorries,
     splice_sorry,
     strip_imports,
+    tactic_step,
+    tactic_undo,
     try_this,
     yellow,
 )
@@ -80,6 +82,7 @@ from leani.types import (
     Loogle,
     Output,
     Probe,
+    Proof,
     Scope,
     SearchError,
     Sorry,
@@ -152,18 +155,6 @@ PROOF_HELP = (
     "証明モード: 1 回の入力が 1 タクティク。"
     ":goals ゴール  :script スクリプト  :undo 取り消す  :done 終了"
 )
-
-
-@dataclass
-class Proof:
-    """証明モードの状態。1 行 = 1 タクティクで進む。"""
-
-    state: int  # repl 側の proofState
-    goals: list[str]
-    script: list[str] = field(default_factory=list)
-    # :undo 用。タクティクを実行する前の proofState とゴール。ゴールも戻さないと、
-    # :undo のあとの :goals が取り消したタクティクのあとのゴールを表示する。
-    stack: list[tuple[int, list[str]]] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -255,7 +246,6 @@ class Repl:
 
         # 証明モード
         self.proof: Proof | None = None
-        self.proof_gen = -1  # その proof を作ったエンジンの世代
         self.pending: list[Sorry] = []
         self.proof_at: Sorry | None = None  # :prove で選んだ sorry (位置つき)
         self.proof_src: str | None = None  # sorry を含む宣言のソース
@@ -832,10 +822,7 @@ class Repl:
             # ここで宣言を pop してはいけない (直前の実際の宣言が消える)。
             if self.proof is None:
                 return
-            if self.proof.stack:
-                self.proof.state, self.proof.goals = self.proof.stack.pop()
-            if self.proof.script:
-                self.proof.script.pop()
+            self.proof = tactic_undo(self.proof) or self.proof
             return
         else:
             # 書き直しをやめたときに戻せるよう保存しておく
@@ -968,10 +955,9 @@ class Repl:
         if proof is None:
             return
 
-        before = proof.state
-        gen = self.eng.gen
-        resp = self.guard(lambda: self.eng.send_tactic(src, before))
-        if self.proof is not proof or self.eng.gen != gen:
+        state = proof.state
+        resp = self.guard(lambda: self.eng.send_tactic(src, state))
+        if self.proof is not proof or proof.gen != self.eng.gen:
             # guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
             # ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
             # 0 から振り直すので、別の証明の状態と番号が一致して「証明完了」と
@@ -998,9 +984,6 @@ class Repl:
             render(self.out, resp, src)
             return
 
-        proof.stack.append((before, list(proof.goals)))
-        proof.state = resp["proofState"]
-
         found = try_this(messages(resp))
         if found and not balanced(found):
             # 提案を最後まで解析できていない (メッセージの形式が変わった場合など)。
@@ -1016,10 +999,11 @@ class Repl:
         if found and found != src:
             shown = found.replace("\n", " ")
             self.out.write(dim(f"-- スクリプトには {shown} を記録した"))
-        proof.script.append(found or src)
+        goals = resp.get("goals") or []
+        proof = tactic_step(proof, resp["proofState"], goals, found or src)
+        self.proof = proof
         self.last = Last(src, advanced=True, proof=True)
 
-        goals = resp.get("goals") or []
         if goals:
             self.show_goals(goals)
             return
@@ -1107,9 +1091,7 @@ class Repl:
 
     def show_goals(self, goals: Sequence[str] | None = None) -> None:
         if goals is None:
-            goals = self.proof.goals if self.proof else []
-        if self.proof is not None:
-            self.proof.goals = list(goals)
+            goals = self.proof.goals if self.proof else ()
 
         for n, g in enumerate(goals):
             head = f"goal {n + 1}/{len(goals)}" if len(goals) > 1 else "goal"
@@ -1141,8 +1123,7 @@ class Repl:
 
         sy = found[n]
         goal = sy.get("goal", "")
-        self.proof = Proof(state=sy["proofState"], goals=[goal])
-        self.proof_gen = self.eng.gen
+        self.proof = Proof(state=sy["proofState"], goals=(goal,), gen=self.eng.gen)
         self.proof_at = sy  # 置き換えるのはこの sorry。位置で特定する
         self.out.write(dim(PROOF_HELP))
         self.show_goals([goal])
@@ -1236,15 +1217,13 @@ class Repl:
         return True
 
     def proof_undo(self, proof: Proof) -> None:
-        if not proof.stack:
+        back = tactic_undo(proof)
+        if back is None:
             self.out.write(dim("取り消せるタクティクが無い"))
             return
 
-        proof.state, proof.goals = proof.stack.pop()
-        if proof.script:
-            proof.script.pop()
-
-        self.out.write(dim(f"proofState {proof.state}"))
+        self.proof = back
+        self.out.write(dim(f"proofState {back.state}"))
 
     def cmd_type(self, arg: str) -> None:
         if not arg:

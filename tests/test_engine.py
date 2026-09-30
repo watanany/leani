@@ -178,6 +178,18 @@ def describe_証明モード():
         assert "constructor" not in repl.feed(":script")
         assert "取り消せるタクティクが無い" in repl.feed(":undo")
 
+    @story("E1", "C2")
+    def it_タクティクの直後にインデントした行を書くと前のタクティクの続きとして読み直す(
+        repl,
+    ):
+        repl.feed("theorem t7 : 1 = 1 ∧ 2 = 2 := by sorry")
+        repl.feed(":prove")
+        repl.feed("constructor")
+        # constructor の前のゴールに戻ってから、2 行を 1 つのタクティクとして送る。
+        out = repl.block("  <;> rfl")
+        assert "証明完了" in out, out
+        assert "sorryAx" not in repl.feed("#print axioms t7")
+
     @story("E1")
     @pytest.mark.parametrize("quit", [":q", ":quit"])
     def it_証明モードの_q_は証明モードだけを終了する(repl, quit):

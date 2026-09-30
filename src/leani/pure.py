@@ -10,6 +10,7 @@ import re
 import signal
 import textwrap
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import cast
 
 from leani.places import COLOR, ENGINE_CACHE
@@ -35,6 +36,7 @@ from leani.types import (
     Message,
     Pos,
     Probe,
+    Proof,
     Response,
     Sorry,
     State,
@@ -473,6 +475,32 @@ SUGGESTION_TAG = re.compile(r"^\[[^\]]*\]\s*")
 PAIRS = {"(": ")", "[": "]", "{": "}", "⟨": "⟩"}
 
 PAINT: dict[str, Callable[[str], str]] = {"error": red, "warning": yellow}
+
+
+def tactic_step(proof: Proof, state: int, goals: Sequence[str], tactic: str) -> Proof:
+    """タクティクを 1 つ進めた Proof。前の proofState とゴールは :undo 用に積む。"""
+    return replace(
+        proof,
+        state=state,
+        goals=tuple(goals),
+        script=(*proof.script, tactic),
+        stack=(*proof.stack, (proof.state, proof.goals)),
+    )
+
+
+def tactic_undo(proof: Proof) -> Proof | None:
+    """最後のタクティクを取り消した Proof。取り消せるタクティクが無ければ None。"""
+    match proof.stack:
+        case (*rest, (state, goals)):
+            return replace(
+                proof,
+                state=state,
+                goals=goals,
+                script=proof.script[:-1],
+                stack=tuple(rest),
+            )
+        case _:
+            return None
 
 
 def plain(s: str) -> str:

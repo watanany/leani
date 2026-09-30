@@ -874,6 +874,24 @@ def mark(src, word="sorry", nth=0):
     }
 
 
+def describe_証明モードのタクティクの記録():
+
+    START = leani.types.Proof(state=0, goals=("⊢ p ∧ q",), gen=1)
+
+    @story("E1")
+    def it_タクティクを進めると前の状態とゴールを積む():
+        got = leani.pure.tactic_step(START, 3, ["⊢ p", "⊢ q"], "constructor")
+        assert (got.state, got.goals, got.gen) == (3, ("⊢ p", "⊢ q"), 1)
+        assert got.script == ("constructor",)
+        assert got.stack == ((0, ("⊢ p ∧ q",)),)
+
+    @story("E1")
+    def it_取り消すと状態とゴールとスクリプトがそろって戻る():
+        step = leani.pure.tactic_step(START, 3, ["⊢ p", "⊢ q"], "constructor")
+        assert leani.pure.tactic_undo(step) == START
+        assert leani.pure.tactic_undo(START) is None
+
+
 def describe_sorry_の置き換え():
     """
     repl の pos / endPos で切り出してスクリプトに置き換える。桁は codepoint 単位で、

@@ -131,7 +131,7 @@ INVARIANTS = [
     ),
     (
         "証明モードの proofState は今のエンジンのもの",
-        lambda r: r.proof is None or r.proof_gen == r.eng.gen,
+        lambda r: r.proof is None or r.proof.gen == r.eng.gen,
     ),
     (
         "エンジンのプロセスが実行中である",
