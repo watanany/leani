@@ -107,6 +107,26 @@ def describe_複数行の宣言():
         assert repl.declarations == []
 
 
+def describe_ノートブックのセルの終わり():
+
+    @story("J1")
+    def it_セルの終わりで入力途中の宣言を確定する(repl):
+        repl.feed("def cellEnd : Nat :=", "  7")
+        assert repl.declarations == [], "セルの終わりの前に実行した"
+        repl.feed_with(repl.repl.end_block)
+        assert len(repl.declarations) == 1
+        assert "7" in repl.feed("cellEnd")
+
+    @story("J1", "C6")
+    def it_セルの終わりで閉じていない複数行ブロックは実行しない(repl):
+        repl.feed(":{", "def unclosed := 1")
+        out = repl.feed_with(repl.repl.end_block)
+        assert ":} が無い" in out, out
+        assert repl.declarations == []
+        assert not repl.repl.explicit
+        assert repl.repl.buf == []
+
+
 def describe_証明モード():
 
     @story("E2")

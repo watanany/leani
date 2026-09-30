@@ -76,6 +76,18 @@ def lean_strs(xs: Sequence[str]) -> str:
     return "#[" + ", ".join(lean_str(x) for x in xs) + "]"
 
 
+COMPLETE_DELIMS = ' \t\n(),[]{};"'
+
+
+def name_start(text: str) -> int:
+    """
+    text の末尾にある名前が始まる位置。補完でカーソルの前の名前を切り出すため。
+
+    Lean の名前は `.` を含むので、`.` では区切らない。
+    """
+    return max(text.rfind(d) for d in COMPLETE_DELIMS) + 1
+
+
 def name_chunk(prefix: str) -> str:
     """
     定数名をまとめて取得する単位。名前空間があれば最後の `.` まで、無ければ

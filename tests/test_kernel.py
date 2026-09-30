@@ -244,7 +244,7 @@ def describe_起動と再起動の失敗():
         cfg = leani.config.EnvConfig.make("t")
         mocker.patch.object(leani.kernel, "resolve", return_value=cfg)
         mocker.patch.object(leani.kernel, "problem", return_value=None)
-        fake = mocker.MagicMock(explicit=False, buf=[])
+        fake = mocker.MagicMock()
         fake.feed.return_value = None
         make = mocker.patch.object(leani.kernel, "Repl", return_value=fake)
         return leani.kernel.LeaniKernel(), make, fake

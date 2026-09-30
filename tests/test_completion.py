@@ -5,14 +5,38 @@ Mathlib には定数が 47 万件あり、1 回の問い合わせに 1 秒かか
 """
 
 from conftest import story
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.document import Document
 
 from leani.queries import COMPLETE_QUERY
+from leani.repl import NameCompleter
 
 
 def chunk_queries(spy):
     """定数を全件たどる問い合わせの回数。重いのはこの問い合わせだけ。"""
     head = COMPLETE_QUERY.split("%s")[0]
     return sum(1 for c in spy.call_args_list if c.args[0].startswith(head))
+
+
+def describe_端末の_Tab_補完():
+
+    @story("D1")
+    def it_Tab_で置き換える範囲はカーソルの前の名前だけ():
+        asked = []
+
+        def names(prefix):
+            asked.append(prefix)
+            return ["Nat.succ"]
+
+        got = list(
+            NameCompleter(names).get_completions(
+                Document("#check Nat.suc"), CompleteEvent()
+            )
+        )
+        assert asked == ["Nat.suc"]
+        assert [(g.text, g.start_position) for g in got] == [
+            ("Nat.succ", -len("Nat.suc"))
+        ]
 
 
 def describe_名前空間ごとのキャッシュ():

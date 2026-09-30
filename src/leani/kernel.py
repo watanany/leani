@@ -17,8 +17,8 @@ from ipykernel.kernelbase import Kernel
 
 from leani.abbrev import abbrev_candidates
 from leani.config import problem, resolve
-from leani.pure import dim, red
-from leani.repl import COMPLETE_DELIMS, Repl
+from leani.pure import dim, name_start, red
+from leani.repl import Repl
 from leani.types import START_FAILED, ConfigError
 
 # `\to` のように、カーソルの手前が `\` で始まる略記のとき。
@@ -105,18 +105,11 @@ class LeaniKernel(Kernel):
         if repl is None:
             return
 
-        # 前のセルの宣言に、このセルのインデント行を続けないようにする。
-        repl.last = None
+        repl.start_block()
         for line in code.split("\n"):
             if repl.feed(line) == "quit":
                 self.out.write(dim(":q はノートブックでは何もしない"))
-
-        # セルの終わりで入力を確定する。端末で空行を入力したときと同じ。
-        if repl.explicit:
-            self.out.fail(red(":} が無いので、:{ から後ろは実行しなかった"))
-            repl.discard()
-        elif repl.buf:
-            repl.feed("")
+        repl.end_block()
 
     async def do_execute(  # type: ignore[override]
         self,
@@ -174,7 +167,7 @@ class LeaniKernel(Kernel):
             start = m.start()
             matches = abbrev_candidates(m[1])
         else:
-            start = max(before.rfind(d) for d in COMPLETE_DELIMS) + 1
+            start = name_start(before)
             try:
                 matches = self.repl.complete_names(before[start:]) if self.repl else []
             except Exception:
@@ -190,7 +183,7 @@ class LeaniKernel(Kernel):
 
     async def do_shutdown(self, restart: bool) -> dict[str, Any]:
         if self.repl is not None:
-            self.repl.eng.kill()
+            self.repl.close()
         return {"status": "ok", "restart": restart}
 
 

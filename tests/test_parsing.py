@@ -179,6 +179,14 @@ def describe_宣言の名前の取り出し():
         assert leani.queries.DECL_NAME.findall("#eval 1 + 1") == []
 
 
+def describe_補完する名前の切り出し():
+
+    @story("D1")
+    def it_区切り文字の直後から名前を切り出す():
+        assert leani.pure.name_start("#check (Nat.suc") == len("#check (")
+        assert leani.pure.name_start("Nat.suc") == 0, "`.` で区切った"
+
+
 def describe_補完の候補をまとめて取得する単位():
     """名前空間があればそこまで、無ければ先頭 2 文字。"""
 

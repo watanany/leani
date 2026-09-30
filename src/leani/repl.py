@@ -47,6 +47,7 @@ from leani.pure import (
     loogle_text,
     messages,
     name_chunk,
+    name_start,
     not_evaluable_reason,
     red,
     shorten,
@@ -175,8 +176,6 @@ class Last:
     env_before: int | None = None
 
 
-COMPLETE_DELIMS = ' \t\n(),[]{};"'
-
 # 再実行できなかった宣言は Engine.unplayed に保留する。その案内。
 PENDING_HINT = "これらの宣言は環境に追加せず、保留にした。:restart で再実行できる"
 
@@ -212,10 +211,8 @@ class NameCompleter(Completer):
         document: Document,
         complete_event: CompleteEvent,  # noqa: ARG002 (prompt_toolkit が渡す)
     ) -> Iterator[Completion]:
-        # Lean の名前は . を含むので区切りにしない。
         text = document.text_before_cursor
-        head = max(text.rfind(d) for d in COMPLETE_DELIMS)
-        prefix = text[head + 1 :]
+        prefix = text[name_start(text) :]
         for name in self.names(prefix):
             yield Completion(name, start_position=-len(prefix))
 
@@ -688,6 +685,28 @@ class Repl:
         self.remember("\n".join(self.buf))
         self.buf, self.ready, self.explicit = [], None, False
         self.restore_undone()
+
+    def start_block(self) -> None:
+        """
+        ノートブックのセルの始まり。前のセルの宣言に、このセルのインデント行を
+        続けないようにする。
+        """
+        self.last = None
+
+    def end_block(self) -> None:
+        """
+        ノートブックのセルの終わりで入力を確定する。端末で空行を入力したときと同じ。
+        :{ が閉じていなければ、:{ から後ろを捨てて、そのことを表示する。
+        """
+        if self.explicit:
+            self.out.fail(red(":} が無いので、:{ から後ろは実行しなかった"))
+            self.discard()
+        elif self.buf:
+            self.feed("")
+
+    def close(self) -> None:
+        """エンジンを終了させる。"""
+        self.eng.kill()
 
     def feed(self, line: str) -> Step | None:
         """
