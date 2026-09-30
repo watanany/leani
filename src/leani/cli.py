@@ -172,8 +172,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             ensure_engine(cfg.engine, tc, asked=True)
             return 0
 
-        # loop() も try の中で呼ぶ。エンジンの再起動時に、エンジンを用意し直せない
-        # ことがある。
+        # loop() も try の中で呼ぶ。:env で元の環境にも戻れないと、loop() は
+        # EnvLost を投げる。再起動の失敗は Repl.revive が表示してセッションを
+        # 続けるので、ここには届かない。
         return Repl(cfg, args.preload).loop()
     except START_FAILED as e:
         die(str(e) or "エンジンが起動しなかった")
