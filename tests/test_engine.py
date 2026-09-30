@@ -152,6 +152,50 @@ def describe_証明モード():
         assert "2" in repl.feed("1 + 1"), "REPL まで終了した"
 
     @story("E1")
+    def it_エラーになったタクティクはスクリプトに記録しない(repl):
+        repl.feed("theorem bad : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        assert "nosuchLemma" in repl.feed("exact nosuchLemma")
+        assert "(空)" in repl.feed(":script")
+        assert "1 = 1" in repl.feed(":goals")
+
+    @story("E1")
+    def it_エンジンが返したエラーを表示してゴールを変えない(repl, mocker):
+        repl.feed("theorem lost : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        state = repl.repl.proof.state
+        mocker.patch.object(
+            repl.engine, "send_tactic", return_value={"message": "Unknown proof state."}
+        )
+        assert "Unknown proof state." in repl.feed("rfl")
+        assert repl.repl.proof.state == state
+        mocker.stopall()
+        assert "1 = 1" in repl.feed(":goals")
+
+    @story("E2")
+    def it_提案を読み取れなければ入力したタクティクを記録する(repl, mocker):
+        repl.feed("theorem cut : 1 = 1 ∧ 2 = 2 := by sorry")
+        repl.feed(":prove")
+        real = repl.engine.send_tactic
+
+        def cut_suggestion(src, state):
+            resp = real(src, state)
+            broken = {"severity": "info", "data": "Try this: exact (foo"}
+            return {**resp, "messages": [*resp.get("messages", []), broken]}
+
+        mocker.patch.object(repl.engine, "send_tactic", side_effect=cut_suggestion)
+        assert "提案を読み取れなかった" in repl.feed("constructor")
+        assert "constructor" in repl.feed(":script")
+
+    @story("E3")
+    def it_sorry_の位置が分からなければ宣言は_sorry_のままだと知らせる(repl, mocker):
+        repl.feed("theorem lostPos : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        mocker.patch.object(leani.repl, "splice_sorry", return_value=None)
+        assert "sorry の位置を読み取れなかった" in repl.feed("rfl")
+        assert repl.declarations == ["theorem lostPos : 1 = 1 := by sorry"]
+
+    @story("E1")
     def it_証明モードの外の_goals_で残っている_sorry_を表示する(repl):
         repl.feed("theorem t4 : 3 = 3 := by sorry")
         out = repl.feed(":goals")
@@ -1294,6 +1338,31 @@ def describe_sorry_の置き換えの途中でエンジンが異常終了する(
         assert repl.declarations == ["theorem died : True := by trivial"]
         assert "sorry のままにしておく" not in out, out
         assert repl.repl.eng.unplayed == [], repl.repl.eng.unplayed
+
+    @story("E3", "F1")
+    def it_再起動したあとの再実行も失敗したら_sorry_のままと知らせる(repl, mocker):
+        repl.feed("theorem died2 : True := by sorry")
+        repl.feed(":prove")
+
+        real = leani.engine.Engine.send_cmd
+        hit = []
+        error = {"severity": "error", "data": "boom", "pos": {"line": 1, "column": 0}}
+
+        def die_then_fail(self, src, **kw):
+            if "by trivial" in src:
+                hit.append(src)
+                if len(hit) == 1:
+                    raise leani.types.EngineDied()
+                else:
+                    return {"env": 0, "messages": [error]}
+            return real(self, src, **kw)
+
+        mocker.patch.object(leani.engine.Engine, "send_cmd", die_then_fail)
+        out = repl.feed("trivial")
+        mocker.stopall()
+
+        assert "エンジンを再起動したので、sorry のままにしておく" in out, out
+        assert repl.declarations == ["theorem died2 : True := by sorry"]
 
 
 def describe_再起動に失敗したときの証明モード():
