@@ -7,10 +7,9 @@
 
 import contextlib
 import io
-import json
 
 import pytest
-from conftest import story
+from conftest import interrupt_after_write, story
 
 import leani
 
@@ -237,28 +236,13 @@ def describe_エンジンが異常終了してもセッションが続く():
     def it_再起動中にもう一度中断しても応答がずれない(repl, mocker):
         repl.feed("def before := 5")
         eng = repl.engine
-        real_cmd, real_exchange = eng.send_cmd, eng._exchange
-        state = {"first": True, "second": False}
-
-        def interrupt_once(src, fresh=False):
-            if state["first"] and src.startswith("#eval 0"):
-                state["first"], state["second"] = False, True
-                raise leani.types.Interrupted()
-            return real_cmd(src, fresh=fresh)
-
-        def interrupt_replay(obj):
-            # replay で宣言を送った直後、レスポンスを読む前に中断する。
-            if state["second"] and obj.get("cmd") == "def before := 5":
-                state["second"] = False
-                eng.proc.stdin.write(json.dumps(obj) + "\n\n")
-                eng.proc.stdin.flush()
-                raise KeyboardInterrupt
-            return real_exchange(obj)
-
-        mocker.patch.object(eng, "send_cmd", side_effect=interrupt_once)
-        mocker.patch.object(eng, "_exchange", side_effect=interrupt_replay)
+        first = interrupt_after_write(mocker, eng, lambda o: o.get("cmd") == "#eval 0")
+        # replay で宣言を送った直後にも中断する。
+        second = interrupt_after_write(
+            mocker, eng, lambda o: bool(first) and o.get("cmd") == "def before := 5"
+        )
         repl.feed("#eval 0")
-        assert not state["second"], "replay の途中で中断していない"
+        assert second, "replay の途中で中断していない"
         assert "5" in repl.feed("before")
         assert "2" in repl.feed("1 + 1")
 
@@ -558,7 +542,7 @@ def describe_読み込みの中断():
         eng = repl.engine
         keep = (eng.env, list(eng.stack), list(eng.log))
 
-        mocker.patch.object(eng, "send_cmd", side_effect=leani.types.Interrupted())
+        interrupt_after_write(mocker, eng, lambda o: "loaded" in o.get("cmd", ""))
         with pytest.raises(leani.types.Interrupted):
             eng.load_file(str(tmp_path / "any.lean"), "def loaded := 1\n")
         assert (eng.env, eng.stack, eng.log) == keep
@@ -809,16 +793,7 @@ def describe_タクティクの途中でエンジンが変わる():
         repl.feed("theorem again : 1 = 1 := by sorry")
         repl.feed(":prove")
 
-        real = leani.engine.Engine.send_tactic
-        hit = []
-
-        def stop_once(self, src, state):
-            if not hit:
-                hit.append(src)
-                raise leani.types.Interrupted()
-            return real(self, src, state)
-
-        mocker.patch.object(leani.engine.Engine, "send_tactic", stop_once)
+        interrupt_after_write(mocker, repl.engine, lambda o: "tactic" in o)
         out = repl.feed("rfl")
         assert "再開できる" in out, out
 
@@ -889,16 +864,9 @@ def describe_replay_が途中で止まったとき():
         for one in ("def r1 := 1", "def r2 := 2", "def r3 := 3"):
             repl.feed(one)
 
-        real = leani.engine.Engine.send_cmd
-        hit = []
-
-        def once(self, src, **kw):
-            if src.startswith("def r2") and not hit:
-                hit.append(src)
-                raise leani.types.Interrupted()
-            return real(self, src, **kw)
-
-        mocker.patch.object(leani.engine.Engine, "send_cmd", once)
+        interrupt_after_write(
+            mocker, repl.engine, lambda o: o.get("cmd", "").startswith("def r2")
+        )
         out = repl.feed(":restart")  # Driver が毎行 INVARIANTS を見る
 
         assert "再実行しなかった宣言: 2 件" in out, out

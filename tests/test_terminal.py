@@ -3,6 +3,8 @@
 ここはエンジンの層よりさらに時間がかかるので、端末なしで確認できるものは置かない。
 """
 
+import time
+
 from conftest import WIDE_PROMPT, piped, story
 
 
@@ -31,7 +33,7 @@ def describe_行編集():
         assert term.cursor_line().rstrip().endswith("1 + 1"), term.cursor_line()
         assert "2" in term.line("")
 
-    @story("A4", "F4")
+    @story("F4")
     def it_Ctrl__C_で入力途中の行を捨てる(terminal):
         term = terminal()
         term.type("def half : Nat")
@@ -40,6 +42,23 @@ def describe_行編集():
         term.type("\x03")
         assert "^C" in term.wait_prompt()
         assert "2" in term.line("1 + 1"), "入力途中の内容が残っている"
+
+    @story("A4")
+    def it_Ctrl__C_で評価中の計算を止めても宣言が残る(terminal, tmp_path):
+        term = terminal()
+        term.line("def before := 5")
+        # 評価が始まってから中断する。評価の前 (完結判定の途中など) に中断すると、
+        # 確かめたいエンジンの中断にならない。
+        mark = tmp_path / "started"
+        term.type(f'#eval do IO.FS.writeFile "{mark}" ""; IO.sleep 60000\r')
+        t0 = time.time()
+        while not mark.exists():
+            assert time.time() - t0 < 30, "評価が始まらない"
+            term.settle(0.1)
+        term.type("\x03")
+        term.wait_prompt(timeout=60)
+        assert time.time() - t0 < 30, "中断しても止まらず、評価が最後まで実行された"
+        assert "5" in term.line("before")
 
     @story("C3", "F3")
     def it_捨てた入力途中のブロックも履歴には残る(terminal):

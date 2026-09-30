@@ -24,6 +24,7 @@ env のスタックと証明モードを持つ状態機械で、バグは単発�
 import contextlib
 import fcntl
 import io
+import json
 import os
 import pty
 import re
@@ -190,6 +191,32 @@ def repl():
     driver = Driver()
     yield driver
     driver.close()
+
+
+def interrupt_after_write(mocker, eng, when):
+    """
+    when(リクエスト) が真になった最初のリクエストで Ctrl-C を再現する。
+
+    リクエストを書いたあと、レスポンスを読む前に KeyboardInterrupt を raise する。
+    実際の Ctrl-C も、たいていエンジンが計算している途中、つまりこの位置で起きる。
+    send_cmd で Interrupted を直接 raise すると、Engine.send がプロセスを止める
+    処理も、読んでいないレスポンスがパイプに残る状態もテストできない。
+    中断したリクエストを返すリストを返す。
+    """
+    real = eng._exchange
+    hit = []
+
+    def exchange(obj):
+        if not hit and when(obj):
+            hit.append(obj)
+            eng.proc.stdin.write(json.dumps(obj) + "\n\n")
+            eng.proc.stdin.flush()
+            raise KeyboardInterrupt
+        else:
+            return real(obj)
+
+    mocker.patch.object(eng, "_exchange", side_effect=exchange)
+    return hit
 
 
 # ------------------------------------------------------------------ 端末
