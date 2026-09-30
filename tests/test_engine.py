@@ -122,6 +122,7 @@ def describe_証明モード():
         # ユーザーが入力することがある。
         assert "証明モードではない" in repl.feed(":done")
         assert "証明モードではない" in repl.feed(":goals")
+        assert "証明モードではない" in repl.feed(":script")
 
     @story("E1", "F2")
     def it_undo_のあとの_prove_が手前の宣言を消さない(repl):
@@ -141,6 +142,15 @@ def describe_証明モード():
         assert "∧" in repl.feed(":goals"), "constructor の前のゴールに戻っていない"
         assert "constructor" not in repl.feed(":script")
         assert "取り消せるタクティクが無い" in repl.feed(":undo")
+
+    @story("E1")
+    @pytest.mark.parametrize("quit", [":q", ":quit"])
+    def it_証明モードの_q_は証明モードだけを終了する(repl, quit):
+        repl.feed("theorem t6 : 1 = 1 := by sorry")
+        repl.feed(":prove")
+        assert "証明モードを終了した" in repl.feed(quit)
+        assert repl.repl.proof is None
+        assert "2" in repl.feed("1 + 1"), "REPL まで終了した"
 
     @story("E1")
     def it_証明モードの外の_goals_で残っている_sorry_を表示する(repl):
@@ -492,7 +502,7 @@ def describe_書き直しをやめたとき():
 def describe_項の位置の_sorry():
     """`:= sorry` の位置にはタクティクを書けないので、置き換えに失敗する。"""
 
-    @story("D3", "E3")
+    @story("E3")
     def it_置き換えられなければ_sorry_のまま残す(repl):
         repl.feed("def termSorry : Nat := sorry")
         repl.feed(":prove")
@@ -1025,6 +1035,35 @@ def describe_型と_docstring():
     @story("D2")
     def it_無い名前はエラーを表示する(repl):
         assert "Nat.nosuchThing" in repl.feed(":i Nat.nosuchThing")
+
+
+def describe_型と定義の表示():
+
+    @story("D2")
+    @pytest.mark.parametrize("cmd", [":t", ":type"])
+    def it_t_は式の型を表示する(repl, cmd):
+        assert "Nat" in repl.feed(f"{cmd} 1 + 1")
+
+    @story("D3")
+    def it_p_は定義の本体を表示する(repl):
+        repl.feed("def shown := 1 + 2")
+        assert "1 + 2" in repl.feed(":p shown")
+
+    @story("D3", "H1")
+    def it_p_に名前が無ければ名前が必要と伝える(repl):
+        assert ":p には名前が必要" in repl.feed(":p")
+
+
+def describe_宣言の取り消し():
+
+    @story("F2")
+    def it_undo_n_で_n_件取り消す(repl):
+        repl.feed("def u1 := 1")
+        repl.feed("def u2 := 2")
+        repl.feed("def u3 := 3")
+        repl.feed(":undo 2")
+        assert repl.declarations == ["def u1 := 1"]
+        assert "1" in repl.feed("u1")
 
 
 def describe_依存している公理():
