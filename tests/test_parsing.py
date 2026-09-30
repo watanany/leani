@@ -4,6 +4,7 @@ import io
 import os
 import subprocess
 import sys
+import urllib.error
 
 import pytest
 from conftest import ROOT, leani, story
@@ -1126,6 +1127,20 @@ def describe_定理検索():
         # 1 行で報告する。
         mocker.patch("urllib.request.urlopen", side_effect=OSError("名前が引けない"))
         with pytest.raises(leani.types.SearchError, match="名前が引けない"):
+            leani.search.loogle("Nat")
+
+    @story("D4", "F4")
+    def it_HTTP_のエラーはコードと理由を_SearchError_にする(mocker):
+        err = urllib.error.HTTPError("u", 503, "Service Unavailable", {}, None)
+        mocker.patch("urllib.request.urlopen", side_effect=err)
+        with pytest.raises(leani.types.SearchError) as e:
+            leani.search.loogle("Nat")
+        assert str(e.value) == "503 Service Unavailable"
+
+    @story("D4", "F4")
+    def it_応答がオブジェクトでなければ_SearchError(mocker):
+        mocker.patch("urllib.request.urlopen", return_value=io.BytesIO(b"[1, 2]"))
+        with pytest.raises(leani.types.SearchError, match="オブジェクトではない"):
             leani.search.loogle("Nat")
 
 

@@ -1290,7 +1290,7 @@ class Repl:
     def cmd_loogle(self, arg: str) -> None:
         """loogle に問い合わせる。エンジンは操作しないので、環境は変わらない。"""
         if not arg:
-            self.out.write(
+            self.out.fail(
                 red(":loogle には名前か型のパターンが必要  (例: |- ?a + ?b = ?b + ?a)")
             )
             return

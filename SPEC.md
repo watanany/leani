@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 40 件、テスト 302 件。括弧の中はテストの場所
+ストーリー 40 件、テスト 305 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -194,6 +194,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - パターンが無ければ問い合わせない (engine / 定理を外部サービスで探す)
 - 問い合わせても環境は変わらない (engine / 定理を外部サービスで探す)
 - loogle が応答しなくてもセッションは続く (engine / 定理を外部サービスで探す)
+- パターンの無い loogle のセルは status が error になる (kernel / セルの実行)
 - 名前と型と定義されている module を表示する (parsing / 定理検索)
 - 件数を絞ったときは全体の件数も表示する (parsing / 定理検索)
 - 長い行は端末の幅で切り詰める (parsing / 定理検索)
@@ -201,6 +202,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - エラーは翻訳せずに候補を添える (parsing / 定理検索)
 - 記号を含むクエリも壊さずに送る (parsing / 定理検索)
 - 応答が無ければ SearchError (parsing / 定理検索)
+- HTTP のエラーはコードと理由を SearchError にする (parsing / 定理検索)
+- 応答がオブジェクトでなければ SearchError (parsing / 定理検索)
 
 ### D5 open した名前空間の名前も、ソースに書くのと同じ短い名前で Tab 補完したい
 
@@ -359,6 +362,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - 無いコマンドを入力したら知らせてセッションを続ける (engine / コマンドの一覧)
 - loogle が応答しなくてもセッションは続く (engine / 定理を外部サービスで探す)
+- HTTP のエラーはコードと理由を SearchError にする (parsing / 定理検索)
+- 応答がオブジェクトでなければ SearchError (parsing / 定理検索)
 - Ctrl-C で入力途中の行を捨てる (terminal / 行編集)
 - Ctrl-C で外部コマンドを止めてもセッションが残る (terminal / 外部コマンド)
 - UTF-8 で読めないバイトがあっても後続の行を失わない (terminal / 端末でない入力)
@@ -524,6 +529,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - silent のセルは何も表示しない (kernel / セルの実行)
 - 証明を完了すると sorry を置き換える (kernel / セルの実行)
 - 閉じていない複数行ブロックのセルはエラーになり次のセルは実行できる (kernel / セルの実行)
+- パターンの無い loogle のセルは status が error になる (kernel / セルの実行)
 - q はノートブックでは何もしない (kernel / セルの実行)
 - 設定のエラーはセルに表示して次のセルでもう一度起動する (kernel / 起動と再起動の失敗)
 - 今の Python で leani kernel を起動するカーネルを登録する (kernel / カーネルの登録)
