@@ -443,7 +443,7 @@ def describe_コマンドの一覧():
     def it_証明モードの_help_では証明用のコマンドを表示する(repl):
         repl.feed("theorem t5 : 1 = 1 := by sorry")
         repl.feed(":prove")
-        assert "1 行が 1 タクティク" in repl.feed(":help")
+        assert "1 回の入力が 1 タクティク" in repl.feed(":help")
 
     @story("H1", "F4")
     def it_無いコマンドを入力したら知らせてセッションを続ける(repl):
