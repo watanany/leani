@@ -54,9 +54,9 @@ uv run mypy
 | ファイル                                           | 内容                                                           |
 |----------------------------------------------------|----------------------------------------------------------------|
 | [README.md](README.md)                             | インストールと、はじめての起動                                 |
-| [docs/proof.md](docs/proof.md)                     | 証明モード                                                     |
-| [docs/config.md](docs/config.md)                   | 設定、環境変数、ファイルの場所                                 |
-| [docs/jupyter.md](docs/jupyter.md)                 | Jupyter のカーネルとして使う方法                               |
+| [guide/proof.md](guide/proof.md)                   | 証明モード                                                     |
+| [guide/config.md](guide/config.md)                 | 設定、環境変数、ファイルの場所                                 |
+| [guide/jupyter.md](guide/jupyter.md)               | Jupyter のカーネルとして使う方法                               |
 | [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`tools/spec.py` がテストから生成する |
 | [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                       |
 | `tests/stories.py`                                 | ユーザーストーリーの一覧                                       |

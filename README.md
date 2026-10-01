@@ -4,9 +4,9 @@
 
 **Lean 4 を、その場で試す REPL**
 
-<img src="docs/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
+<img src="guide/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
 
-[証明モード](docs/proof.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md) · [開発メモ](DEVELOPMENT.md)
+[証明モード](guide/proof.md) · [設定](guide/config.md) · [Jupyter](guide/jupyter.md) · [開発メモ](DEVELOPMENT.md)
 
 </div>
 
