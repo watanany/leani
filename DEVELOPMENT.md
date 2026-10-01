@@ -58,6 +58,6 @@ uv run mypy
 | [docs/config.md](docs/config.md)                   | 設定、環境変数、ファイルの場所                                 |
 | [docs/jupyter.md](docs/jupyter.md)                 | Jupyter のカーネルとして使う方法                               |
 | [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`tools/spec.py` がテストから生成する |
-| [REJECTED.md](REJECTED.md)                         | 採用しなかった案と、その理由                                   |
+| [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                       |
 | `tests/stories.py`                                 | ユーザーストーリーの一覧                                       |
 | `src/leani/`                                       | leani のコード。設計の理由は docstring とコメントに書いてある  |
