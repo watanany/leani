@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555)
 
-[インストール](#インストール) · [使い方](docs/usage.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md)
+[インストール](#インストール) · [証明モード](docs/proof.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md)
 
 <img src="docs/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
 
@@ -35,6 +35,7 @@
 - **書いたらすぐ評価**。式の値がその場で出る。複数行の `def` もそのまま書ける
 - **補完と略記**。Tab で名前を補完し、`\to` と打てば `→` になる
 - **証明モード**。タクティクを 1 つずつ試せる
+- **止めても消えない**。Ctrl-C で評価を止めても、それまでの宣言はそのまま使える
 - **Lake プロジェクトと Mathlib**。プロジェクトの中で起動すれば、そのライブラリを使える
 - **Jupyter**。カーネルとしても使える
 
@@ -57,8 +58,10 @@ leani --setup          # エンジンのビルドだけを先に済ませる
 
 初回はエンジンをビルドするので、ネットワークが必要で、時間もかかる。
 REPL の中では `:help` でコマンドの一覧を表示し、`:q` か Ctrl-D で終了する。
+起動オプションは `leani -h` で確認できる。
 
 Lake プロジェクトの中で使うときは、先に `lake build` しておく。
+していないと、import に失敗して起動しない。
 Mathlib を使うには、Mathlib を依存に持つ Lake プロジェクト (`lake new <名前> math`) で次を実行する。
 
 ```sh
@@ -70,7 +73,7 @@ leani -i Mathlib
 
 | ページ | 内容 |
 |---|---|
-| [使い方](docs/usage.md) | 証明モード、うまくいかないとき |
+| [証明モード](docs/proof.md) | `:prove` で証明を組み立てる流れ |
 | [設定](docs/config.md) | 設定ファイル、init ファイル、環境変数、ファイルの場所 |
 | [Jupyter で使う](docs/jupyter.md) | カーネルとしてのインストールと使い方 |
 | [開発](CONTRIBUTING.md) | テストと lint の実行方法、開発用のドキュメント |
