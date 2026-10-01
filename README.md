@@ -1,10 +1,21 @@
+<div align="center">
+
 # leani
 
-![leani で式を評価して補完の候補を表示したところ](docs/screenshot.png)
+**Lean 4 のための、気持ちよく書ける REPL**
 
-leani は Lean 4 の REPL である。
+![Lean 4](https://img.shields.io/badge/Lean-4-0b2e4e)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python&logoColor=white)
+![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555)
+
+[インストール](#インストール) · [使い方](docs/usage.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md)
+
+<img src="docs/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
+
+</div>
+
 ファイルを作って `lake env lean` を実行しなくても、式の値や宣言の結果をその場で確かめられる。
-エンジンには leanprover-community/repl を使う。
+エンジンには [leanprover-community/repl](https://github.com/leanprover-community/repl) を使う。
 
 ```
 λ> 1 + 1
@@ -19,64 +30,49 @@ leani は Lean 4 の REPL である。
 λ> Std.Time.PlainDateT<Tab>    → Std.Time.PlainDateTime に補完される
 ```
 
-leani は macOS と Linux で使える。
+## 特徴
+
+- **式はそのまま評価**。式は `#eval` で、宣言はそのまま実行する。複数行の入力は Lean のパーサで判定する
+- **定数名の補完と略記**。Tab で定数名を補完し、`\to` は space で `→` になる
+- **証明モード**。`sorry` の箇所で `:prove` を実行すると、タクティクを 1 つずつ試せる
+- **Lake プロジェクトと Mathlib**。プロジェクトの中で起動すると、その `lean_lib` を import する
+- **Jupyter**。カーネルとしても使える
 
 ## インストール
 
-leani を使うには、次のソフトウェアが必要である。
+[elan](https://lean-lang.org/install)、git、[uv](https://docs.astral.sh/uv/getting-started/installation/) を入れてから、次を実行する。
 
-- elan (Lean と `lake` を管理するツール)。インストール方法は https://lean-lang.org/install を参照
-- git (leani がエンジンを取得するときに使う)
-- uv。インストール方法は https://docs.astral.sh/uv/getting-started/installation/ を参照。Python 3.11 以上が無い場合は、uv が Python を用意する
-
-次のコマンドで leani をインストールする。
-
-```
+```sh
 uv tool install git+https://github.com/watanany/leani
 ```
 
-uv は `leani` コマンドを `~/.local/bin` に置く。
-`~/.local/bin` が PATH に無い場合は、`uv tool update-shell` を実行する。
+`leani` コマンドが見つからなければ、`uv tool update-shell` を実行する。
 
-## はじめての起動
+## はじめる
 
-Lake プロジェクトの外で `leani` を実行すると、leani は elan のデフォルトの Lean で起動する。
-`1 + 1` を入力して `2` が表示されれば、準備は完了している。
-
-leani は Lean のバージョンごとに、初回の起動時にエンジンを GitHub から clone してビルドする。
-このため、初回の起動にはネットワークが必要で、時間もかかる。
-先にビルドだけ済ませたい場合は `leani --setup` を実行する。
-
-Lake プロジェクトの中で `leani` を実行すると、leani はそのプロジェクトの `lean_lib` を import して起動する。
-leani はプロジェクトをビルドしないので、先にプロジェクトで `lake build` を実行しておく。
-
-Mathlib を使う場合は、Mathlib を依存に持つ Lake プロジェクトを用意する (`lake new <名前> math` で作れる)。
-そのプロジェクトで次のコマンドを実行する。
-
+```sh
+leani                  # elan のデフォルトの Lean で起動する
+leani --setup          # エンジンのビルドだけを先に済ませる
 ```
+
+初回は Lean のバージョンごとにエンジンを GitHub から clone してビルドするので、ネットワークが必要で、時間もかかる。
+REPL の中では `:help` でコマンドの一覧を表示し、`:q` か Ctrl-D で終了する。
+
+Lake プロジェクトの中で起動すると、そのプロジェクトの `lean_lib` を import する。
+leani はプロジェクトをビルドしないので、先に `lake build` しておく。
+Mathlib を使うには、Mathlib を依存に持つ Lake プロジェクト (`lake new <名前> math`) で次を実行する。
+
+```sh
 lake exe cache get
 leani -i Mathlib
 ```
 
-Mathlib を import すると、起動に 6〜11 秒かかる。
-`lake exe cache get` か `lake build` を実行していないと、leani は `import に失敗した` と表示して起動を中止する。
-
-## よく使うコマンド
-
-REPL の中で `:help` を実行すると、すべてのコマンドを確認できる。
-
-| コマンド           | 説明                                                      |
-|--------------------|-----------------------------------------------------------|
-| `:t <expr>`        | 式の型を表示する (`#check`)                               |
-| `:l <file>` / `:r` | ファイルを読み込む / 読み込み直す                         |
-| `:prove`           | `sorry` の証明モードを始める。タクティクを 1 つずつ試せる |
-| `:save <file>`     | 実行した宣言を `.lean` ファイルに書き出す                 |
-| `:q`               | leani を終了する (Ctrl-D でも終了する)                    |
-
 ## ドキュメント
 
-- [使い方](docs/usage.md): 機能、すべてのコマンド、証明モード、起動オプション
-- [設定](docs/config.md): 設定ファイル、init ファイル、環境変数、ファイルの場所
-- [エラーが出たとき](docs/troubleshooting.md): エラーメッセージごとの対処
-- [Jupyter で使う](docs/jupyter.md): Jupyter のカーネルとしてのインストールと使い方
-- [開発](CONTRIBUTING.md): テストと lint の実行方法、開発用のドキュメント
+| ページ | 内容 |
+|---|---|
+| [使い方](docs/usage.md) | 機能、すべてのコマンド、証明モード、起動オプション |
+| [設定](docs/config.md) | 設定ファイル、init ファイル、環境変数、ファイルの場所 |
+| [エラーが出たとき](docs/troubleshooting.md) | エラーメッセージごとの対処 |
+| [Jupyter で使う](docs/jupyter.md) | カーネルとしてのインストールと使い方 |
+| [開発](CONTRIBUTING.md) | テストと lint の実行方法、開発用のドキュメント |
