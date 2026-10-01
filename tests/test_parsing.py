@@ -487,7 +487,7 @@ def describe_設定の値の型():
 
 
 def describe_起動する環境の決め方():
-    """docs/config.md の「起動する環境の決まり方」と、エンジンの優先順位。"""
+    """guide/config.md の「起動する環境の決まり方」と、エンジンの優先順位。"""
 
     CFG = {
         "default": "d",

@@ -1,4 +1,6 @@
-# 開発
+# 開発メモ
+
+leani を手元で直すときに気をつけていることのメモ。
 
 ## インストール
 
@@ -52,11 +54,10 @@ uv run mypy
 | ファイル                                           | 内容                                                           |
 |----------------------------------------------------|----------------------------------------------------------------|
 | [README.md](README.md)                             | インストールと、はじめての起動                                 |
-| [docs/usage.md](docs/usage.md)                     | 機能、コマンド、起動オプション                                 |
-| [docs/config.md](docs/config.md)                   | 設定、環境変数、ファイルの場所                                 |
-| [docs/troubleshooting.md](docs/troubleshooting.md) | エラーが出たときの対処                                         |
-| [docs/jupyter.md](docs/jupyter.md)                 | Jupyter のカーネルとして使う方法                               |
+| [guide/proof.md](guide/proof.md)                   | 証明モード                                                     |
+| [guide/config.md](guide/config.md)                 | 設定、環境変数、ファイルの場所                                 |
+| [guide/jupyter.md](guide/jupyter.md)               | Jupyter のカーネルとして使う方法                               |
 | [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`tools/spec.py` がテストから生成する |
-| [REJECTED.md](REJECTED.md)                         | 採用しなかった案と、その理由                                   |
+| [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                       |
 | `tests/stories.py`                                 | ユーザーストーリーの一覧                                       |
 | `src/leani/`                                       | leani のコード。設計の理由は docstring とコメントに書いてある  |
