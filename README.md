@@ -8,7 +8,7 @@
 ![Python](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python&logoColor=white)
 ![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-555)
 
-[インストール](#インストール) · [証明モード](docs/proof.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md)
+[インストール](#インストール) · [証明モード](docs/proof.md) · [設定](docs/config.md) · [Jupyter](docs/jupyter.md) · [開発](CONTRIBUTING.md)
 
 <img src="docs/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
 
@@ -68,12 +68,3 @@ Mathlib を使うには、Mathlib を依存に持つ Lake プロジェクト (`l
 lake exe cache get
 leani -i Mathlib
 ```
-
-## ドキュメント
-
-| ページ | 内容 |
-|---|---|
-| [証明モード](docs/proof.md) | `:prove` で証明を組み立てる流れ |
-| [設定](docs/config.md) | 設定ファイル、init ファイル、環境変数、ファイルの場所 |
-| [Jupyter で使う](docs/jupyter.md) | カーネルとしてのインストールと使い方 |
-| [開発](CONTRIBUTING.md) | テストと lint の実行方法、開発用のドキュメント |
