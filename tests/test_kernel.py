@@ -163,6 +163,13 @@ def fib : Nat → Nat
         assert status == "ok"
         assert "5" in out, out
 
+    @story("J1")
+    def it_colon_shell_の出力をセルに表示する(kernel):
+        status, out, err = run(kernel, ":! echo to-out; echo to-err >&2; exit 3")
+        assert status == "ok"  # 終了コードは見ない (端末と同じ)
+        assert out.endswith("to-out\n"), out
+        assert err == "to-err\n", err
+
     @story("J1", "D4")
     def it_パターンの無い_colon_loogle_のセルは_status_が_error_になる(kernel):
         # 引数を確かめたところで止まるので、loogle には問い合わせない。

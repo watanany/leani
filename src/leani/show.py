@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import subprocess
 import sys
 import textwrap
 from typing import NoReturn
@@ -31,6 +32,11 @@ class Console:
 
     def fail(self, text: str) -> None:
         print(text, flush=True)
+
+    def shell(self, cmd: str) -> None:
+        # 出力を受け取らず、端末につないだまま実行する。vim のような対話するコマンドも
+        # 使えるように。
+        subprocess.run(cmd, shell=True, check=False)
 
 
 def die(msg: str) -> NoReturn:

@@ -7,6 +7,7 @@ leani/__init__.py から import しない。"""
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from importlib.metadata import version
 from typing import Any
@@ -73,6 +74,23 @@ class CellOutput:
         self.failed = True
         if not self.silent:
             print(text, file=sys.stderr, flush=True)
+
+    def shell(self, cmd: str) -> None:
+        # 子プロセスの出力は sys.stdout を通らず、カーネルを起動した端末に出る。
+        # 受け取ってからセルに表示する。セルからは入力できないので、stdin は空にする
+        # (読もうとするコマンドが止まらないように)。終了コードは見ない (端末と同じ)。
+        done = subprocess.run(
+            cmd,
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        if not self.silent:
+            print(done.stdout, end="", flush=True)
+            print(done.stderr, end="", file=sys.stderr, flush=True)
 
 
 class LeaniKernel(Kernel):

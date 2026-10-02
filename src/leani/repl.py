@@ -7,7 +7,6 @@ from __future__ import annotations
 import contextlib
 import os
 import shutil
-import subprocess
 import sys
 import textwrap
 import time
@@ -1241,7 +1240,7 @@ class Repl:
         """`:` で始まる行を処理する。"quit" を返したらループを抜ける。"""
         if line.startswith(":!"):
             try:
-                subprocess.run(line[2:].strip(), shell=True, check=False)
+                self.out.shell(line[2:].strip())
             except KeyboardInterrupt:
                 # 子プロセスは同じプロセスグループにいるので、Ctrl-C の SIGINT は
                 # leani にも届く。止めたいのは子プロセスだけ。ここでループを抜けると
