@@ -161,14 +161,14 @@ def fib : Nat → Nat
         assert "5" in out, out
 
     @story("J1", "D4")
-    def it_パターンの無い_loogle_のセルは_status_が_error_になる(kernel):
+    def it_パターンの無い_colon_loogle_のセルは_status_が_error_になる(kernel):
         # 引数を確かめたところで止まるので、loogle には問い合わせない。
         status, _, err = run(kernel, ":loogle")
         assert status == "error"
         assert "パターンが必要" in err, err
 
     @story("J1")
-    def it_q_はノートブックでは何もしない(kernel):
+    def it_colon_q_はノートブックでは何もしない(kernel):
         _, out, _ = run(kernel, ":q")
         assert "ノートブックでは何もしない" in out, out
         _, out, _ = run(kernel, "#eval 3 + 3")

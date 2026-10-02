@@ -16,7 +16,13 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.completion import (
+    CompleteEvent,
+    Completer,
+    Completion,
+    ExecutableCompleter,
+    PathCompleter,
+)
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
@@ -46,6 +52,7 @@ from leani.pure import (
     lean_strs,
     loogle_text,
     messages,
+    meta_names,
     name_chunk,
     name_start,
     nested_action,
@@ -158,6 +165,9 @@ PROOF_HELP = (
     ":goals ゴール  :script スクリプト  :undo 取り消す  :done 終了"
 )
 
+# Tab で補完するコマンド名。HELP から取り出すので、HELP に載せたものだけが候補になる。
+META_NAMES = meta_names(HELP)
+
 
 @dataclass(frozen=True)
 class Held:
@@ -205,21 +215,87 @@ class BlockHistory(FileHistory):
         super().append_string(string)
 
 
-class NameCompleter(Completer):
-    """Tab キーで定数名を補完する。候補は Repl が返す。"""
+class ShellCompleter(Completer):
+    """
+    `:!` の後を Tab キーで補完する。1 語目は PATH にあるコマンド、2 語目からは
+    ファイルのパス。1 語目でも `/` を含んでいれば `./run.sh` のようなパスとして扱う。
+    """
 
-    def __init__(self, names: Callable[[str], list[str]]) -> None:
-        self.names = names
+    def __init__(self) -> None:
+        self.cmds = ExecutableCompleter()
+        self.paths = PathCompleter(expanduser=True)
 
     def get_completions(
+        self, document: Document, complete_event: CompleteEvent
+    ) -> Iterator[Completion]:
+        head, _, word = document.text_before_cursor.rpartition(" ")
+        inner = self.cmds if head.strip() == "" and "/" not in word else self.paths
+        # 候補はカーソルの前の語に対する位置で返るので、語だけを渡せばよい。
+        yield from inner.get_completions(Document(word), complete_event)
+
+
+def lean_or_dir(path: str) -> bool:
+    """:l と :save で補完するパス。.lean ファイルとディレクトリだけにする。"""
+    return path.endswith(".lean") or os.path.isdir(path)
+
+
+def config_envs() -> list[str]:
+    """設定ファイルに書いた環境の名前。設定ファイルを読めなければ候補を出さない。"""
+    try:
+        return sorted(load_config().get("env") or {})
+    except ConfigError:
+        return []
+
+
+def pick(words: Sequence[str], prefix: str) -> Iterator[Completion]:
+    """words のうち prefix で始まるものを、prefix を置き換える候補にする。"""
+    return (
+        Completion(w, start_position=-len(prefix))
+        for w in words
+        if w.startswith(prefix)
+    )
+
+
+class NameCompleter(Completer):
+    """
+    Tab キーで補完する。ふだんは定数名を補完し、候補は Repl が返す。`:` で始まる行では
+    コマンド名を補完し、そのあとはコマンドに合わせて補完する。`:l` と `:save` の後は
+    ファイルのパス、`:env` の後は設定ファイルに書いた環境の名前、`:!` の後は
+    ShellCompleter に任せる。
+    """
+
+    def __init__(
         self,
-        document: Document,
-        complete_event: CompleteEvent,  # noqa: ARG002 (prompt_toolkit が渡す)
+        names: Callable[[str], list[str]],
+        envs: Callable[[], list[str]] = list,
+    ) -> None:
+        self.names = names
+        self.envs = envs
+        self.shell = ShellCompleter()
+        self.files = PathCompleter(file_filter=lean_or_dir, expanduser=True)
+
+    def get_completions(
+        self, document: Document, complete_event: CompleteEvent
     ) -> Iterator[Completion]:
         text = document.text_before_cursor
-        prefix = text[name_start(text) :]
-        for name in self.names(prefix):
-            yield Completion(name, start_position=-len(prefix))
+        head, sep, arg = text.partition(" ")
+        match (head, sep):
+            case (h, _) if h.startswith(":!"):
+                yield from self.shell.get_completions(
+                    Document(text[2:]), complete_event
+                )
+            case (h, "") if h.startswith(":"):
+                yield from pick(META_NAMES, h[1:])
+            case (":l" | ":load" | ":save", _):
+                yield from self.files.get_completions(
+                    Document(arg.lstrip()), complete_event
+                )
+            case (":env", _):
+                yield from pick(self.envs(), arg.lstrip())
+            case _:
+                prefix = text[name_start(text) :]
+                for name in self.names(prefix):
+                    yield Completion(name, start_position=-len(prefix))
 
 
 class Repl:
@@ -352,7 +428,7 @@ class Repl:
                 complete_style=CompleteStyle.MULTI_COLUMN,
             )
 
-        Repl._session.completer = NameCompleter(self.complete_names)
+        Repl._session.completer = NameCompleter(self.complete_names, config_envs)
 
     def remember(self, src: str) -> None:
         """履歴に 1 件として追加する。複数行の宣言も全体で 1 件になる。"""

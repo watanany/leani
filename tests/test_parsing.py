@@ -1292,11 +1292,11 @@ def describe_Lake_プロジェクトの判定():
 def describe_起動オプション():
 
     @story("G6")
-    def it_i_を繰り返すと_import_がすべて残る():
+    def it_dash_i_を繰り返すと_import_がすべて残る():
         assert leani.cli.parse_args(["-i", "A", "--import", "B"]).imports == ["A", "B"]
 
     @story("G5")
-    def it_e_で環境の名前を受け取る():
+    def it_dash_e_で環境の名前を受け取る():
         assert leani.cli.parse_args(["-e", "m"]).name == "m"
         assert leani.cli.parse_args(["--env", "m"]).name == "m"
 
@@ -1336,7 +1336,7 @@ def describe_起動():
         }
 
     @story("G3")
-    def it_setup_は用意済みならエンジンを用意しない(cli, tmp_path, capsys):
+    def it_dash_dash_setup_は用意済みならエンジンを用意しない(cli, tmp_path, capsys):
         os.makedirs(tmp_path / "eng/.lake/build/bin")
         (tmp_path / "eng/.lake/build/bin/repl").touch()
         assert leani.cli.main(["leani", "--setup"]) == 0
@@ -1344,7 +1344,7 @@ def describe_起動():
         assert "用意済み" in capsys.readouterr().out
 
     @story("G3")
-    def it_setup_は未用意ならエンジンを用意する(cli):
+    def it_dash_dash_setup_は未用意ならエンジンを用意する(cli):
         assert leani.cli.main(["leani", "--setup"]) == 0
         cli["ensure"].assert_called_once_with(
             cli["cfg"].engine, "leanprover/lean4:v1", asked=True
@@ -1381,7 +1381,7 @@ def describe_起動():
         cli["repl"].assert_called_once_with(cli["cfg"], "foo.lean")
 
     @story("G7")
-    def it_V_は環境とバージョンと設定ファイルの場所を表示して終わる(
+    def it_dash_V_は環境とバージョンと設定ファイルの場所を表示して終わる(
         cli, mocker, capsys
     ):
         tc = "leanprover/lean4:v1"

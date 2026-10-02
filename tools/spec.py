@@ -16,11 +16,13 @@ leani で「何ができて、どういう性質を持つか」の一覧が必�
 取る。テストが 0 件のストーリーには「確かめているテストが無い。」と表示する。
 それが分かることがこの表の目的。
 
-テスト名を文に戻す規則は 3 つだけ。
+テスト名を文に戻す規則は 5 つだけ。
 
-    __                     ハイフン   Ctrl__C   -> Ctrl-C
-    片側が ASCII の _      空白       do_by     -> do by / IO_の式 -> IO の式
-    それ以外の _           詰める     行を_待つ -> 行を待つ
+    __                     ハイフン   Ctrl__C     -> Ctrl-C
+    語の先頭の colon_      :          colon_save  -> :save (関数名に : を書けないため)
+    語の先頭の dash_       -          dash_e      -> -e / dash_dash_setup -> --setup
+    片側が ASCII の _      空白       do_by       -> do by / IO_の式 -> IO の式
+    それ以外の _           詰める     行を_待つ   -> 行を待つ
 
 describe の docstring は SPEC.md には出さない。ストーリーごとに並べ替えると同じ
 説明が何度も出るので、docstring はテストのそばに置いたままにする。
@@ -29,6 +31,7 @@ describe の docstring は SPEC.md には出さない。ストーリーごとに
 import ast
 import glob
 import os
+import re
 import sys
 from typing import TypedDict
 
@@ -56,8 +59,12 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 
 def ascii_word(ch: str) -> bool:
-    """ASCII の英数字 1 文字か。名前の端では空文字が渡されるので、その場合は False。"""
-    return bool(ch) and ch.isascii() and ch.isalnum()
+    """
+    ASCII の英数字か `:` か `-` の 1 文字か。`:` と `-` は `:save` や `-e` のような
+    コマンド名とオプションの先頭なので、英数字と同じく前の `_` を空白にする。名前の端
+    では空文字が渡されるので、その場合は False。
+    """
+    return bool(ch) and ch.isascii() and (ch.isalnum() or ch in ":-")
 
 
 def spaced(part: str) -> str:
@@ -73,7 +80,13 @@ def spaced(part: str) -> str:
 
 def label(name: str, prefix: str) -> str:
     """関数名を仕様の 1 文に戻す。"""
-    return "-".join(spaced(p) for p in name[len(prefix) :].split("__"))
+    parts = name[len(prefix) :].split("__")
+    return "-".join(spaced(symbols(p)) for p in parts)
+
+
+def symbols(part: str) -> str:
+    """語の先頭の `colon_` を `:` に、`dash_` を `-` に戻す。関数名に書けない記号。"""
+    return re.sub(r"(?<![^_])dash_", "-", re.sub(r"(?<![^_])colon_", ":", part))
 
 
 # ------------------------------------------------------------ テストを集める
