@@ -51,6 +51,29 @@ def describe_式の評価():
         assert "none=true" in out, out
         assert "error" not in out.lower(), out
 
+    @story("A1", "B1")
+    def it_do_の外の_action_は_do_で包み直す(repl, tmp_path):
+        path = tmp_path / "note.txt"
+        path.write_text("from file\n")
+        out = repl.feed(f'IO.print (← IO.FS.readFile "{path}")')
+        assert "from file" in out, out
+        assert "error" not in out.lower(), out
+
+    @story("A1", "B1")
+    def it_do_で包み直した式も_IO_として読み直す(repl):
+        out = repl.feed(
+            'IO.println s!"none={(← IO.getEnv "LEANI_NO_SUCH_VAR").isNone}"'
+        )
+        assert "none=true" in out, out
+        assert "error" not in out.lower(), out
+
+    @story("A5")
+    def it_do_で包み直した式のエラー位置は元の入力の中を指す(repl):
+        out = repl.feed("IO.println (← pure (1 + true))")
+        # 1 + true の位置。do で包んだ分 (1 行 4 桁) を戻していなければずれる。
+        assert "1:21  IO.println (← pure (1 + true))" in out, out
+        assert "\n" + " " * 26 + "^" * 8 + "\n" in out, out
+
     @story("B1")
     def it_do_ブロックでファイルを読める(repl, tmp_path):
         path = tmp_path / "note.txt"

@@ -283,6 +283,18 @@ def describe_評価できない理由():
         assert leani.pure.not_evaluable_reason("Unknown identifier `x`") is None
 
 
+def describe_do_の外の_action():
+
+    @story("A1")
+    def it_do_の外に書いた_action_のエラーを見分ける():
+        blob = "Nested action `← f` must be nested inside a `do` expression."
+        assert leani.pure.nested_action(blob)
+
+    @story("A1")
+    def it_ほかのエラーは_do_の外の_action_と見なさない():
+        assert not leani.pure.nested_action("Unknown identifier `x`")
+
+
 def describe_エラー位置の範囲():
     """メッセージの位置を、送ったソースの座標からその行の中に収める。"""
 

@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 40 件、テスト 319 件。括弧の中はテストの場所
+ストーリー 40 件、テスト 324 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -18,9 +18,13 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 単独の式は評価されて値が表示される (engine / 式の評価)
 - IO の式はそのまま実行される (engine / 式の評価)
 - do ブロックは IO として読み直す (engine / 式の評価)
+- do の外の action は do で包み直す (engine / 式の評価)
+- do で包み直した式も IO として読み直す (engine / 式の評価)
 - ふつうの行は単独の入力 (parsing / 継続行の判定)
 - command として読めたらそのまま送る (parsing / 入力が完結したかの判定)
 - term としてしか読めなければ eval に包む (parsing / 入力が完結したかの判定)
+- do の外に書いた action のエラーを見分ける (parsing / do の外の action)
+- ほかのエラーは do の外の action と見なさない (parsing / do の外の action)
 
 ### A2 評価できないとき、なぜできないのか (noncomputable か Repr 無し) を知りたい
 
@@ -45,6 +49,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 ### A5 エラーがあったとき、入力のどこが悪いのかを行の中で知りたい
 
+- do で包み直した式のエラー位置は元の入力の中を指す (engine / 式の評価)
 - eval で包んだ分だけ位置を戻す (parsing / エラー位置の範囲)
 - 位置が行の外なら範囲を返さない (parsing / エラー位置の範囲)
 - 範囲の幅は行の長さに収める (parsing / エラー位置の範囲)
@@ -55,6 +60,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - IO の式はそのまま実行される (engine / 式の評価)
 - do ブロックは IO として読み直す (engine / 式の評価)
+- do の外の action は do で包み直す (engine / 式の評価)
+- do で包み直した式も IO として読み直す (engine / 式の評価)
 - do ブロックでファイルを読める (engine / 式の評価)
 - do ブロックでプロセスを起動して出力を受け取れる (engine / 式の評価)
 

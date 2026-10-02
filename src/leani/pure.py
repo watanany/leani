@@ -19,6 +19,7 @@ from leani.queries import (
     CANNOT_EVAL,
     ERR_POS,
     INCOMPLETE,
+    NESTED_ACTION,
     NO_REPR,
     NONCOMPUTABLE,
 )
@@ -639,3 +640,8 @@ def not_evaluable_reason(blob: str) -> str | None:
         return "評価できない"
     else:
         return None
+
+
+def nested_action(blob: str) -> bool:
+    """#eval のエラー文が、do の外に `(← e)` を書いたというエラーか。"""
+    return NESTED_ACTION.search(blob) is not None
