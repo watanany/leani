@@ -74,7 +74,12 @@ class Replay(NamedTuple):
 
 
 class Engine:
-    """repl のサブプロセス 1 つ。異常終了したら restart() で再起動する。"""
+    """
+    repl のサブプロセス 1 つ。異常終了したら restart() で再起動する。
+
+    env、base、stack、log、unplayed、init_src は Engine のメソッドだけが書き換える。
+    Repl はこれらを読むだけにする。
+    """
 
     def __init__(self, cfg: EnvConfig) -> None:
         self.cfg = cfg
@@ -294,6 +299,20 @@ class Engine:
 
         return True
 
+    def reset(self) -> int:
+        """
+        宣言をすべて捨てて base の環境に戻る。保留中の宣言も捨て、その件数を返す。
+
+        base が無い (boot に失敗した) ときは `NoEnvironment` を raise する。env に
+        None を設定し直しても、どの入力も送れない状態のまま保留だけが消える。
+        """
+        if self.base is None:
+            raise NoEnvironment("元になる環境が無いのに :reset しようとした")
+
+        left = len(self.unplayed)
+        self.env, self.stack, self.log, self.unplayed = self.base, [], [], []
+        return left
+
     def save_header(self) -> str:
         """
         :save が書き出すヘッダ。設定の import に、:l したファイルの import を追加する。
@@ -417,6 +436,22 @@ class Engine:
         self.loaded, self.loaded_src = None, None
         return f"{loaded} を読み込み直せなかった: {why}"
 
+    def run_init(self, src: str) -> Response:
+        """
+        init のソースを今の環境で実行する。エラーが無ければ、その環境を base にし、
+        再起動したときに再実行できるよう src を init_src に保存する。
+
+        エラーのときは状態を変えずに応答を返す。表示と init_src の扱いは呼び出し側が
+        決める。
+        """
+        resp = self.send_cmd(src)
+        if has_error(resp):
+            return resp
+
+        self.env = self.base = resp["env"]
+        self.init_src = src
+        return resp
+
     def reapply_init(self) -> str | None:
         """
         init を今の base の上でもう一度実行する。エラーになったら init_src を捨てて
@@ -430,7 +465,7 @@ class Engine:
             return None
 
         try:
-            resp = self.send_cmd(self.init_src)
+            resp = self.run_init(self.init_src)
         except (EngineDied, Interrupted):
             return (
                 "init ファイルの再実行中に、"
@@ -441,7 +476,6 @@ class Engine:
             self.init_src = None
             return "init ファイルを再実行したらエラーになった"
 
-        self.env = self.base = resp["env"]
         return None
 
     def probe_env(self, env: int) -> str | None:
