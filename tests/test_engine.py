@@ -111,6 +111,13 @@ def describe_複数行の宣言():
         assert "3" in repl.feed("three")
         assert len(repl.declarations) == 1, "前の入力の続きとして扱わずに 2 件になった"
 
+    @story("C2")
+    def it_空行で確定したブロックの直後のインデントした行も続きとして扱う(repl):
+        repl.block("def pick : Nat → Nat", "  | 0 => 10")
+        repl.block("  | _ => 20")
+        assert "20" in repl.feed("pick 3")
+        assert len(repl.declarations) == 1, "前の入力の続きとして扱わずに 2 件になった"
+
     @story("C1")
     def it_エラーになった宣言は環境を進めない(repl):
         repl.feed('def broken : Nat := "oops"')
