@@ -183,7 +183,7 @@ def scan_header(text: str) -> tuple[list[str], set[int]]:
     探すと、doc コメントに書いた `import Foo` を本物の import と取り違える。
     それを :save のヘッダに書き出すと、repl はヘッダ全体を無視して起動するので、
     書き出したファイルは :l でも lean でもエラーになる。import 行を取り除く処理
-    でも同じで、コメントの行を消してコメントを壊す。
+    でも同じで、コメントの行を消してコメントをおかしくする。
     """
     mods: list[str] = []
     at: set[int] = set()

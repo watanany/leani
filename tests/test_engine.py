@@ -392,7 +392,7 @@ def describe_エンジンが異常終了してもセッションが続く():
 
     @story("F1")
     def it_エンジンが_PANIC_したら宣言を環境に追加せず警告する(repl, mocker):
-        # PANIC したあとのエンジンは状態が壊れている可能性があるので、結果を
+        # PANIC したあとのエンジンは状態がおかしくなっている可能性があるので、結果を
         # 普通の結果として扱わない。
         real = repl.engine.send_cmd
         panic = {"env": 99, "messages": [{"severity": "info", "data": PANIC}]}
@@ -688,7 +688,7 @@ def describe_init_の扱い():
         assert "99" in repl.feed("fromInit"), ":reset で init が消えた"
 
     @story("G2")
-    def it_init_に書いた_open_が入力した行にも効く(repl, tmp_path, mocker):
+    def it_init_に書いた_open_は入力した行でも有効になる(repl, tmp_path, mocker):
         init = tmp_path / "init.lean"
         init.write_text("open Nat\n")
         mocker.patch.object(leani.repl, "INIT", str(init))
@@ -975,7 +975,7 @@ def describe_折り返した提案():
 
     @story("E2")
     def it_置き換えを実行しないときもスクリプトを切り詰めない(repl):
-        # sorry が 2 個以上あると close_sorry がすぐに return するので、壊れた
+        # sorry が 2 個以上あると close_sorry がすぐに return するので、途中で切れた
         # スクリプトを「証明完了」として表示したまま誰も気付けない。
         repl.feed(
             f"theorem twoHoles (a b c d e f : Nat) {HYPS} : "
@@ -1736,7 +1736,8 @@ def describe_元になる環境を失ったとき():
             repl.repl.replay_into(["def two := 2"])
         out = buf.getvalue()
 
-        # 実行すると repl は env 無しのリクエストから Init だけの環境を勝手に作る。
+        # 実行すると repl は env 無しのリクエストから Init だけの環境を新しく
+        # 作ってしまう。
         # 「再実行した」と報告しながら、設定の import が無い環境に宣言を追加する
         # ことになる。
         assert "再実行できなかった" in out, out

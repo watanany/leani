@@ -428,7 +428,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - init の再実行中に異常終了しても init を捨てない (engine / 再起動のあとで読み込み直せないとき)
 - 再起動しても init の宣言が残る (engine / init の扱い)
 - :reset しても init の宣言が残る (engine / init の扱い)
-- init に書いた open が入力した行にも効く (engine / init の扱い)
+- init に書いた open は入力した行でも有効になる (engine / init の扱い)
 - :reset しても init の open が残る (engine / init の扱い)
 - エラーのある init は知らせて環境を変えない (engine / init の扱い)
 - 読めない init は理由を表示する (engine / init の扱い)
@@ -474,7 +474,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - --setup は用意済みならエンジンを用意しない (parsing / 起動)
 - --setup は未用意ならエンジンを用意する (parsing / 起動)
 
-### G4 import や設定を書き間違えたとき、壊れた環境のまま起動せずに知らせてほしい
+### G4 import や設定を書き間違えたとき、おかしな環境のまま起動せずに知らせてほしい
 
 - 切り替え先が起動できなければ元の環境に戻る (engine / 環境の切り替え)
 - エラーのある init は知らせて環境を変えない (engine / init の扱い)

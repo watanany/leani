@@ -1021,7 +1021,7 @@ def describe_sorry_の置き換え():
 
 
 def describe_ファイルの_import():
-    """:save のヘッダに書き戻すため、読み込んだファイルの import を覚える。"""
+    """:save のヘッダに書き戻すため、読み込んだファイルの import を記録する。"""
 
     @story("B3", "B4")
     def it_import_の行だけを取り出す():
@@ -1035,7 +1035,8 @@ def describe_ファイルの_import():
     @story("B3", "B4")
     def it_コメントの中の_import_は数えない():
         # ヘッダに書くと repl はヘッダ全体を捨てて起動するので、書き出したファイルは
-        # :l でも lean でもエラーになる。import 行を取り除く処理も doc コメントを壊す。
+        # :l でも lean でもエラーになる。import 行を取り除く処理も doc コメントの
+        # 中身を変える。
         src = "/-\nimport Nope.NotAModule\n-/\n-- import Also.Not\nimport Std\n"
         assert leani.pure.import_lines(src) == ["Std"]
         assert "import Nope.NotAModule" in leani.pure.strip_imports(src)
@@ -1060,7 +1061,7 @@ def describe_ファイルの_import():
 
         assert len(mods) == len(at)
         # コメントの中の import を取り出していない。取り出すと :save した
-        # ファイルが壊れる。
+        # ファイルがおかしくなる。
         assert all(lines[n].split()[:1] == ["import"] for n in at)
         # 取り除いたあとに新しい import 行が現れることはない。ヘッダの終わりは
         # 変わらないので、1 回ですべて取り除ける。
