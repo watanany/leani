@@ -147,6 +147,9 @@ class Output(Protocol):
     def shell(self, cmd: str) -> None:
         """:! で shell のコマンドを実行し、その出力を表示する。"""
 
+    def page(self, text: str) -> None:
+        """長くなることがある表示 (:abbrev の一覧)。端末では pager で表示する。"""
+
 
 # 例外は raise するモジュールと except するモジュールが違うので、どちらでもなく
 # ここに置く。例外は状態を持たないので、純粋なモジュールから raise しても副作用には

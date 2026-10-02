@@ -1392,3 +1392,46 @@ def describe_起動():
         assert f"Lean:     {tc}" in out, out
         assert leani.places.CONFIG in out, out
         assert not cli["repl"].called
+
+
+def describe_略記の一覧():
+    """`:abbrev` の表示。`man ascii` のように、キーと記号の組を複数の列に並べる。"""
+
+    @story("C7")
+    def it_キーの先頭で絞り込む():
+        got = leani.abbrev.abbrev_lookup("le")
+        assert ("le", "≤") in got
+        assert all(k.startswith("le") for k, _ in got)
+        assert leani.abbrev.abbrev_lookup("\\le") == got
+
+    @story("C7")
+    def it_記号からその記号を入力する略記を調べる():
+        got = leani.abbrev.abbrev_lookup("→")
+        assert [k for k, _ in got] == ["->", "imp", "r", "r-", "rightarrow", "to"]
+
+    @story("C7")
+    def it_上から下へ_左の列から右の列へ読む順に並べる():
+        pairs = [("a", "α"), ("b", "β"), ("c", "γ")]
+        assert leani.abbrev.abbrev_table(pairs, 13).split("\n") == [
+            "\\a α   \\c γ",
+            "\\b β",
+        ]
+
+    @story("C7")
+    def it_全角の記号は_2_文字分として列を揃える():
+        pairs = [("x", "あ"), ("y", "b"), ("z", "c"), ("w", "d")]
+        assert leani.abbrev.abbrev_table(pairs, 12).split("\n") == [
+            "\\x あ   \\z c",
+            "\\y b    \\w d",
+        ]
+
+    @story("C7")
+    def it_幅に収まる範囲で列を増やす():
+        pairs = leani.abbrev.abbrev_lookup("")
+        rows = []
+        for width in [40, 80, 120]:
+            lines = leani.abbrev.abbrev_table(pairs, width).split("\n")
+            assert all(leani.abbrev.cell_width(line) <= width for line in lines)
+            rows.append(len(lines))
+        # 40 では、いちばん長いキー (25 文字) の列と並べると幅を超えるので 1 列になる。
+        assert rows == [len(pairs), -(-len(pairs) // 2), -(-len(pairs) // 4)]

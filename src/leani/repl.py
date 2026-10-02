@@ -29,7 +29,7 @@ from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.shortcuts import CompleteStyle
 
-from leani.abbrev import expand_abbrev
+from leani.abbrev import abbrev_lookup, abbrev_table, expand_abbrev
 from leani.boot import prepare
 from leani.config import EnvConfig, load_config, problem, resolve
 from leani.engine import Engine, Replay, Undone
@@ -153,6 +153,7 @@ HELP = """\
   :time               実行時間の表示を切り替える
   :{ ... :}           複数行を明示的に囲む
   :! <cmd>            shell のコマンドを実行する
+  :abbrev [s]         略記の一覧を表示する (s で始まる略記 / 記号 s を入力する略記)
   :restart            エンジンを再起動して、宣言を再実行する
   :help, :h, :?       このヘルプを表示する
   :q, :quit           終了する (Ctrl-D)
@@ -1300,6 +1301,8 @@ class Repl:
                 )
             case "restart":
                 self.cmd_restart()
+            case "abbrev":
+                self.cmd_abbrev(arg)
             case _:
                 self.out.fail(red(f"不明なコマンド: :{cmd}  (:help)"))
 
@@ -1332,6 +1335,14 @@ class Repl:
 
         self.proof = back
         self.out.write(dim(f"proofState {back.state}"))
+
+    def cmd_abbrev(self, arg: str) -> None:
+        pairs = abbrev_lookup(arg)
+        if pairs:
+            width = shutil.get_terminal_size().columns
+            self.out.page(abbrev_table(pairs, width))
+        else:
+            self.out.write(dim(f"略記が無い: {arg}"))
 
     def cmd_type(self, arg: str) -> None:
         if not arg:

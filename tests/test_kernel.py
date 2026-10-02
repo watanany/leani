@@ -170,6 +170,12 @@ def fib : Nat → Nat
         assert out.endswith("to-out\n"), out
         assert err == "to-err\n", err
 
+    @story("J1", "C7")
+    def it_colon_abbrev_の一覧をセルに表示する(kernel):
+        status, out, _ = run(kernel, ":abbrev →")
+        assert status == "ok"
+        assert "\\to" in out, out
+
     @story("J1", "D4")
     def it_パターンの無い_colon_loogle_のセルは_status_が_error_になる(kernel):
         # 引数を確かめたところで止まるので、loogle には問い合わせない。

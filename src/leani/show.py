@@ -4,6 +4,8 @@
 
 from __future__ import annotations
 
+import pydoc
+import shutil
 import subprocess
 import sys
 import textwrap
@@ -37,6 +39,15 @@ class Console:
         # 出力を受け取らず、端末につないだまま実行する。vim のような対話するコマンドも
         # 使えるように。
         subprocess.run(cmd, shell=True, check=False)
+
+    def page(self, text: str) -> None:
+        # 画面に収まらないときだけ pager ($PAGER か less) を使う。`leani | tee log`
+        # のように端末でなければ、そのまま出力する。
+        tall = text.count("\n") + 1 >= shutil.get_terminal_size().lines
+        if sys.stdout.isatty() and tall:
+            pydoc.pager(text)
+        else:
+            self.write(text)
 
 
 def die(msg: str) -> NoReturn:
