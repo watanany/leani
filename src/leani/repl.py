@@ -392,7 +392,7 @@ class Repl:
         if not src.strip():
             return
 
-        resp = self.guard(lambda: self.eng.send_cmd(src))
+        resp = self.guard(lambda: self.eng.run_init(src))
         if resp is None:
             return
         elif has_error(resp):
@@ -400,9 +400,6 @@ class Repl:
             render(self.out, resp, src)
             return
         else:
-            # 再起動したときに init を再実行できるよう、Engine に保存する。
-            self.eng.env = self.eng.base = resp["env"]
-            self.eng.init_src = src
             self.out.write(dim(f"-- {INIT} を読み込んだ"))
 
     # -- 行編集 -----------------------------------------------------------
@@ -620,12 +617,13 @@ class Repl:
         if self.eng.env is None:
             # ここはユーザーに案内を表示する層。Engine のチェックで出る例外を
             # そのまま「内部エラー」として表示すると、テキストが残っていることも、
-            # 次に何をすればよいかもユーザーに伝わらない。
+            # 次に何をすればよいかもユーザーに伝わらない。宣言を保留にするのは
+            # Engine.replay に任せ、案内だけをここで表示する。
+            self.eng.replay(log)
             self.out.write(
                 yellow(f"環境が無いので、宣言 {len(log)} 件を再実行できなかった")
             )
             self.out.write(dim(f"  {PENDING_HINT}"))
-            self.eng.unplayed = list(log) + self.eng.unplayed
             return
 
         out = self.guard(lambda: self.eng.replay(log))
@@ -1617,10 +1615,9 @@ class Repl:
             self.out.fail(red("元になる環境が無い。:restart で再起動できる"))
             return
 
-        self.eng.env, self.eng.stack, self.eng.log = self.eng.base, [], []
         # 保留も捨てる。残すと、:reset で消したはずの宣言が次の :restart で
         # 戻ってくる。
-        left, self.eng.unplayed = len(self.eng.unplayed), []
+        left = self.eng.reset()
         self.proof, self.last = None, None
         self.clear_pending()
         self.out.write(dim(f"env {self.eng.env} に戻した"))
