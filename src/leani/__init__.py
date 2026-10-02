@@ -28,7 +28,7 @@ leani: Lean 4 の対話 REPL。
     types    純粋      型と例外
     places   読み取り  設定、履歴、キャッシュのパス
     queries  定数      エンジンに送るクエリ
-    abbrev   純粋      略記表と展開
+    abbrev   純粋      略記表、展開、一覧の整形
     pure     純粋      判定と整形
     config   読み取り  設定
     boot     副作用    起動の用意
