@@ -74,7 +74,12 @@ class Replay(NamedTuple):
 
 
 class Engine:
-    """repl のサブプロセス 1 つ。異常終了したら restart() で再起動する。"""
+    """
+    repl のサブプロセス 1 つ。異常終了したら restart() で再起動する。
+
+    env、base、stack、log、unplayed、init_src は Engine のメソッドだけが書き換える。
+    Repl はこれらを読むだけにする。
+    """
 
     def __init__(self, cfg: EnvConfig) -> None:
         self.cfg = cfg
