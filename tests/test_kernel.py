@@ -19,8 +19,11 @@ import time
 import pytest
 from conftest import SRC, leani, story
 from jupyter_client.manager import start_new_kernel
+from prompt_toolkit.completion import CompleteEvent
+from prompt_toolkit.document import Document
 
 import leani.kernel
+from leani.repl import NameCompleter
 
 
 @pytest.fixture(scope="module")
@@ -189,6 +192,51 @@ def describe_補完():
         head, matches = complete(kernel, "theorem x : p \\to")
         assert head == "\\to"
         assert matches[0] == "→", matches
+
+    @story("J2", "H1")
+    def it_コマンド名を補完する(kernel):
+        head, matches = complete(kernel, ":re")
+        assert head == "re"
+        assert matches == ["reload", "reset", "restart"], matches
+
+    @story("J2", "B4")
+    def it_セルの_2_行目でも_colon_l_の後のパスを補完する(kernel):
+        run(
+            kernel, ":! touch cell.lean cell.md"
+        )  # カーネルのカレントディレクトリに作る
+        head, matches = complete(kernel, "#eval 1\n:l cell.")
+        assert head == "cell."
+        assert matches == ["cell.lean"], matches
+
+
+def jupyter(text):
+    """NameCompleter の候補を Jupyter の形に直したもの。定数名の候補は常に Nat.succ。"""
+    got = NameCompleter(lambda _: ["Nat.succ"]).get_completions(
+        Document(text), CompleteEvent()
+    )
+    return leani.kernel.jupyter_matches(text, list(got))
+
+
+def describe_Jupyter_の補完の形():
+
+    @story("J2", "B5")
+    @pytest.mark.usefixtures("place")
+    def it_続きの文字だけの候補を語全体に直す():
+        assert jupyter(":! leanf") == (len(":! "), ["leanfoo"])
+        assert jupyter(":! cat bin/leanf") == (len(":! cat bin/"), ["leanfoo"])
+
+    @story("J2", "B4")
+    @pytest.mark.usefixtures("place")
+    def it_ディレクトリには_slash_を付ける():
+        assert jupyter(":l ") == (len(":l "), ["bin/", "notes.lean"])
+
+    @story("J2", "D1")
+    def it_定数名はそのまま置き換える():
+        assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
+
+    @story("J2")
+    def it_候補が無ければカーソルの位置を返す():
+        assert jupyter(":env ") == (len(":env "), [])
 
 
 def describe_エンジンの異常終了と中断():

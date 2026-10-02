@@ -50,21 +50,6 @@ def completions(text, envs=list):
     return sorted(g.text for g in got)
 
 
-@pytest.fixture
-def place(tmp_path, monkeypatch):
-    """PATH とカレントディレクトリを、決まったファイルだけがある場所にする。"""
-    bin_ = tmp_path / "bin"
-    bin_.mkdir()
-    for name in ("leanfoo", "leanbar"):
-        (bin_ / name).write_text("")
-        (bin_ / name).chmod(0o755)
-    (bin_ / "leannoexec").write_text("")
-    (tmp_path / "notes.lean").write_text("")
-    (tmp_path / "notes.md").write_text("")
-    monkeypatch.setenv("PATH", str(bin_))
-    monkeypatch.chdir(tmp_path)
-
-
 def describe_shell_コマンドの_Tab_補完():
 
     @story("B5")
