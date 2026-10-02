@@ -944,8 +944,8 @@ def describe_履歴の書き出し():
 def describe_折り返した提案():
     """
     simp? の結果は 100 桁前後で折り返される。2 行目以降を取り出さないと、閉じていない
-    スクリプトを「証明完了」として表示したまま何も知らせない (sorry が 2 個以上あると
-    置き換えを実行しないので、問題に気付く場所が無い)。
+    スクリプトを「証明完了」として表示したまま何も知らせない (項の位置の sorry は
+    置き換えても再実行がエラーになるので、問題に気付く場所が無い)。
     """
 
     HYPS = (
@@ -974,9 +974,9 @@ def describe_折り返した提案():
         assert leani.pure.balanced(decl), decl
 
     @story("E2")
-    def it_置き換えを実行しないときもスクリプトを切り詰めない(repl):
-        # sorry が 2 個以上あると close_sorry がすぐに return するので、途中で切れた
-        # スクリプトを「証明完了」として表示したまま誰も気付けない。
+    def it_項の位置の_sorry_でもスクリプトを切り詰めない(repl):
+        # 表示したスクリプトは、置き換えが成功したかどうかに関係なく画面に残る。
+        # 途中で切れていると、「証明完了」と表示したまま誰も気付けない。
         repl.feed(
             f"theorem twoHoles (a b c d e f : Nat) {HYPS} : "
             "(a + b + c + d + e + f = 21) ∧ True := ⟨sorry, sorry⟩"
@@ -1718,8 +1718,8 @@ def describe_元になる環境を失ったとき():
 
         out = repl.feed(":reset")
         # base は終了したプロセスの id。設定し直すと submit の「env が無い」ガードが
-        # 無効になり、import が 1 つも無い環境に宣言が追加される (何を書いても
-        # エラーになる)。
+        # 無効になり、repl はどの入力にも "Unknown environment." を返すだけになる
+        # (何を書いてもエラーになる)。
         assert "元になる環境が無い" in out, out
         assert repl.repl.eng.unplayed == ["def held := 1"]
 

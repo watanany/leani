@@ -57,8 +57,9 @@ class CellOutput:
     カーネル用の Output。セル 1 つ分の表示を出し、エラーがあったかを記録する。
 
     ipykernel は sys.stdout と sys.stderr をセルの出力に送るので、ここでは print する
-    だけでよい。エンジンを用意するときの表示 (boot) も同じ sys.stdout に出るので、
-    順番が入れ替わらない。
+    だけでよい。エンジンを用意するときの boot の表示も同じ sys.stdout に出るので、
+    順番が入れ替わらない。boot が実行するコマンド (git clone、lake build) の出力は
+    sys.stdout を通らないので、カーネルを起動した端末に出る。
     """
 
     def __init__(self) -> None:

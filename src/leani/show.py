@@ -41,8 +41,8 @@ class Console:
         subprocess.run(cmd, shell=True, check=False)
 
     def page(self, text: str) -> None:
-        # 画面に収まらないときだけ pager ($PAGER か less) を使う。`leani | tee log`
-        # のように端末でなければ、そのまま出力する。
+        # 画面に収まらないときだけ pager ($MANPAGER か $PAGER。無ければ less など) を
+        # 使う。`leani | tee log` のように端末でなければ、そのまま出力する。
         tall = text.count("\n") + 1 >= shutil.get_terminal_size().lines
         if sys.stdout.isatty() and tall:
             pydoc.pager(text)

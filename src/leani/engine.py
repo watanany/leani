@@ -49,7 +49,8 @@ class Loaded(NamedTuple):
     resp: Response
     bad: bool
     src: str
-    note: str | None = None  # init を再適用できなかったときの理由
+    # probe_env が失敗した理由か、init を再適用できなかったときの理由
+    note: str | None = None
 
 
 class Replay(NamedTuple):
@@ -89,7 +90,7 @@ class Engine:
         self.proc_env = self._proc_env()
         self.proc: subprocess.Popen[str] | None = None
         self.env: int | None = None  # 今の env id
-        self.base: int | None = None  # 起動直後 / :l 直後の env id
+        self.base: int | None = None  # 起動直後 / :l 直後 (init を含む) の env id
         self.stack: list[int] = []  # :undo 用
         self.log: list[str] = []  # 受理した宣言。再起動時に replay する
         self.unplayed: list[str] = []  # 入力したが env に追加されていない宣言
@@ -476,8 +477,8 @@ class Engine:
 
         if self.env is None:
             # 実行する環境が無い。送れば send_cmd がエラーにするが、これは
-            # 「何件成功したか」を返す関数なので、例外を raise せずに全件を
-            # 保留にし、理由を Replay に含めて返す。
+            # 「どの宣言を環境に戻せたか」を返す関数なので、例外を raise せずに
+            # 全件を保留にし、理由を Replay に含めて返す。
             self.unplayed = list(log) + self.unplayed
             return Replay([], [], list(log), ["環境が無いので再実行できない"], [])
 

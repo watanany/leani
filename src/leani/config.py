@@ -54,7 +54,7 @@ class EnvConfig:
 
     @property
     def header(self) -> str:
-        """設定された import 行。:save したファイルの先頭にそのまま書ける形。"""
+        """設定された import 行。起動時と、import の無いファイルの :l で使う。"""
         return "".join(f"import {m}\n" for m in self.imports)
 
     @property
@@ -250,9 +250,10 @@ def guess_env(
     project: str | None, imports: Sequence[str], engine: str | None
 ) -> EnvConfig:
     """
-    設定に環境が無いときに推測する。カレントディレクトリから lakefile を持つ親
-    ディレクトリを探し、その lean_lib を import する。Lake プロジェクトの外なら
-    Lean 本体だけで起動する。
+    名前で環境を選ばないときに推測する。-e も default も無いときと、-e を付けずに
+    -p か -i を付けたときに使う。-p が無ければ、カレントディレクトリから lakefile を
+    持つ親ディレクトリを探す。-i が無ければ、その lean_lib を import する。
+    Lake プロジェクトの外なら Lean 本体だけで起動する。
     """
     root = project if project is not None else lake_root(os.getcwd())
     mods = imports or (lake_libs(root) if root else ())

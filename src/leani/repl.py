@@ -599,7 +599,10 @@ class Repl:
         )
 
     def replay_into(self, log: Sequence[str]) -> None:
-        """入力した宣言を今のエンジンで再実行する。:env の切り替え後に使う。"""
+        """
+        入力した宣言を今のエンジンで再実行する。:env の切り替え後と、エンジンの
+        再起動で env id が無効になった宣言をテキストから戻すときに使う。
+        """
         if not log:
             return
 
@@ -803,10 +806,10 @@ class Repl:
         そこで次のように判定する:
 
         * パーサが「途中」と返したら継続行を読む (ブロックを始める)。
-        * ブロックの中では、インデント行が続く限り読む。空行かインデントの無い行を
-          受け取ったら確定する。
-        * ブロックを始めずに確定したあとでインデント行を受け取ったら、直前の入力の
-          続きとして読み直す (環境も 1 つ戻す)。
+        * ブロックの中では、インデント行が続く限り読む。空行を受け取ったら確定する。
+          パーサが「完結」と返したあとなら、インデントの無い行を受け取っても確定する。
+        * 確定した直後にインデント行を受け取ったら、直前の入力の続きとして読み直す
+          (環境も 1 つ戻す)。
         """
         if self.explicit:
             step = self.feed_explicit(line)
@@ -1124,7 +1127,10 @@ class Repl:
         self.close_sorry(script)
 
     def drop_proof(self) -> None:
-        """エンジンが再起動されたので証明モードを終了する。何が起きたかはユーザーに表示する。"""
+        """
+        エンジンが再起動されたか、再起動に失敗したので、証明モードを終了する。
+        何が起きたかはユーザーに表示する。
+        """
         self.proof, self.last = None, None
         self.out.write(
             yellow("証明していたエンジンが終了したので、証明モードを終了した")
@@ -1143,7 +1149,7 @@ class Repl:
             self.out.write(dim("  :restart で再起動してから入力し直す"))
 
     def close_sorry(self, script: str) -> None:
-        """`by sorry` をスクリプトで置き換えて、宣言を再実行する。"""
+        """:prove で選んだ sorry をスクリプトで置き換えて、宣言を再実行する。"""
         held = self.held
         if held is None or held.at is None:
             return
@@ -1537,8 +1543,9 @@ class Repl:
         try:
             with open(path, "w") as f:
                 # 起動時と同じヘッダを書く。設定の import だけだと lean で直接
-                # 実行したときにエラーになる (leani は :l のときだけ import Lean を
-                # 追加する)。:l したファイルの import も追加する (save_header)。
+                # 実行したときにエラーになる (leani は起動時と :l のときに
+                # import Lean を自分で追加する)。:l したファイルの import も
+                # 追加する (save_header)。
                 f.write(f"{self.eng.save_header()}\n{body}\n")
         except OSError as e:
             self.out.fail(red(f"書き出せなかった: {e}"))
@@ -1565,7 +1572,7 @@ class Repl:
             self.out.fail(red(f"読めない: {path} ({e.strerror})"))
             return
 
-        left = len(self.eng.unplayed)  # 読み込みが成功すると保留も作り直される
+        left = len(self.eng.unplayed)  # 読み込みが成功すると保留は捨てられる
         out = self.guard(lambda: self.eng.load_file(path, src))
         if out is None:
             return

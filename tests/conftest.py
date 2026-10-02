@@ -410,8 +410,9 @@ def piped(src, tmp_path, timeout=180, args=()):
     """
     パイプ越しに leani へ渡して、出力をすべて返す。
 
-    端末が無いときの処理を確認するためのもの。stdin が tty でないと入力は
-    strict デコードになるので、デコードできないバイトの扱いはここでしか確認できない。
+    端末が無いときの処理を確認するためのもの。stdin が tty でないときだけ、cli.main が
+    stdin のデコードを errors="replace" に設定し直す。デコードできないバイトの扱いは
+    ここでしか確認できない。
     """
     env = dict(
         os.environ,

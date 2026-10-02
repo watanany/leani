@@ -1,8 +1,8 @@
 """外部サービスに問い合わせる (副作用)。
 
 loogle で定理を検索する。エンジンとは関係なく、loogle は JSON だけを返す。整形は
-pure にある。外部と通信するのはこのモジュールだけで、失敗はすべて SearchError に
-まとめる (ネットワークの問題で REPL を終了させないため)。"""
+pure にある。leani が自分で HTTP リクエストを送るのはこのモジュールだけで、失敗は
+すべて SearchError にまとめる (ネットワークの問題で REPL を終了させないため)。"""
 
 from __future__ import annotations
 

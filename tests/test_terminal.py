@@ -157,7 +157,10 @@ def describe_外部コマンド():
 
 
 def describe_端末でない入力():
-    """パイプで渡したとき。入力が strict デコードになるのはここだけ。"""
+    """
+    パイプで渡したとき。cli.main が stdin を errors="replace" でデコードするのは
+    ここだけ。
+    """
 
     @story("F4")
     def it_UTF__8_で読めないバイトがあっても後続の行を失わない(tmp_path):
