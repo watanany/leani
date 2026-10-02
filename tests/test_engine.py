@@ -793,6 +793,16 @@ def describe_書き直しをやめたとき():
         assert "3" in repl.feed("three"), "確定した書き直しが巻き戻された"
         assert len(repl.declarations) == 1
 
+    @story("C2", "E1")
+    def it_sorry_を含む宣言の続きを捨てたら_prove_も戻る(repl):
+        repl.feed("def withSorry : Nat := sorry")
+        # 続きを書いているあいだは宣言が取り消されているので、保留した sorry も
+        # 今の環境のものではない (Driver が 1 行ごとに確かめる)。
+        repl.feed("  + 1")
+        repl.feed_with(repl.repl.discard)  # Ctrl-C
+
+        assert "⊢" in repl.feed(":prove"), "取り消した宣言の sorry が戻っていない"
+
 
 def describe_項の位置の_sorry():
     """`:= sorry` の位置にはタクティクを書けないので、置き換えに失敗する。"""
@@ -1459,13 +1469,41 @@ def describe_保留した宣言とエンジンの世代():
     @story("F1", "C2")
     def it_無効になった_env_id_を設定し直さない(repl):
         repl.feed("def held := 1")
-        repl.repl.undone = repl.repl.eng.pop_decl()  # 前の宣言を書き直している途中
+        # 前の宣言を書き直している途中
+        repl.repl.undone = (repl.repl.eng.pop_decl(), None)
         repl.feed(":restart")
 
         repl.repl.restore_undone()  # 書き直さずにやめた
         # 無効になった env id を設定すると repl は "Unknown environment." しか返さず、
         # 何を入力しても反応しない端末になる。テキストから再実行する。
         assert "2" in repl.feed("#eval held + 1")
+
+    @story("C2", "E1", "F1", "A4")
+    def it_再起動のあとで書き直しをやめたら前の宣言の_sorry_を残さない(repl, mocker):
+        repl.feed("theorem s1 : True := by sorry")
+        repl.feed("def other := 1")
+
+        real = leani.engine.Engine.query
+        dead = []
+
+        def die_once(self, src, **kw):
+            if not dead:
+                dead.append(src)
+                raise leani.types.EngineDied()
+            return real(self, src, **kw)
+
+        # other の続きを書き始めると other は取り消され、完結判定の途中で
+        # エンジンが終了する。再起動の replay で s1 の sorry を保留し直す。
+        mocker.patch.object(leani.engine.Engine, "query", die_once)
+        repl.feed("  + 1")
+        mocker.stopall()
+        # Ctrl-C で other をテキストから再実行する。直前の宣言は other なので、
+        # s1 の sorry を保留したままにすると、:prove が other の環境で s1 の
+        # 証明を始める。
+        repl.feed_with(repl.repl.discard)
+
+        assert "sorry が無い" in repl.feed(":prove")
+        assert "1" in repl.feed("other")
 
     @story("F1")
     def it_無効な_env_id_を持っていたらそのことを報告する(repl):

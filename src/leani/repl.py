@@ -174,7 +174,12 @@ META_NAMES = meta_names(HELP)
 
 @dataclass(frozen=True)
 class Held:
-    """:prove を待っている sorry と、その sorry を含む宣言。"""
+    """
+    :prove を待っている sorry と、その sorry を含む宣言。
+
+    保留するのは直前の宣言の sorry だけである。環境を変える操作は、保留を捨てるか、
+    今の環境の宣言の sorry で作り直す。
+    """
 
     sorries: tuple[Sorry, ...]
     src: str  # sorry を含む宣言のソース
@@ -335,7 +340,8 @@ class Repl:
         self.ready: Kind | None = None  # 構文的に完結しているときの送り方
         self.last: Last | None = None
         self.explicit = False  # :{ ... :} の中か
-        self.undone: Undone | None = None  # rewind で取り消した宣言
+        # rewind で取り消した宣言と、その宣言の sorry の保留
+        self.undone: tuple[Undone, Held | None] | None = None
         self.show_time = False
 
         # 証明モード
@@ -589,7 +595,12 @@ class Repl:
         していた宣言は replay で環境に戻っている。新しい proofState を取得し直さないと、
         宣言はあるのに :prove が「sorry が無い」と表示するだけになり、ユーザーは
         :undo するしかなくなる。
+
+        戻した最後の宣言に sorry が無ければ、保留も捨てる。submit_cmd と同じく、
+        保留するのは直前の宣言の sorry だけである。残すと、前の宣言の proofState で
+        :prove が証明モードを始める。
         """
+        self.held = None
         if not out.sorries or not out.done:
             return
 
@@ -924,16 +935,21 @@ class Repl:
             return
         else:
             # 書き直しをやめたときに戻せるよう保存しておく
-            # (Ctrl-C / Ctrl-D / ブロックの入力をやめたとき)。
-            self.undone = self.eng.pop_decl()
+            # (Ctrl-C / Ctrl-D / ブロックの入力をやめたとき)。取り消した宣言の
+            # sorry の保留も、今の環境のものではなくなるので一緒に保存する。
+            self.undone = (self.eng.pop_decl(), self.held)
+            self.held = None
 
     def restore_undone(self) -> None:
         """rewind で取り消した宣言を戻す。書き直さずにやめたとき。"""
         if self.undone is None:
             return
 
-        undone, self.undone = self.undone, None
-        if not self.eng.push_decl(undone) and undone.src is not None:
+        (undone, held), self.undone = self.undone, None
+        if self.eng.push_decl(undone):
+            self.held = held
+            return
+        if undone.src is not None:
             # 保存しているあいだにエンジンが再起動された。保存した env id は無効に
             # なっているので設定できない。テキストから再実行する。
             self.replay_into([undone.src])
