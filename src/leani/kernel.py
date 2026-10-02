@@ -249,4 +249,8 @@ class LeaniKernel(Kernel):
 
 
 if __name__ == "__main__":
-    IPKernelApp.launch_instance(kernel_class=LeaniKernel)
+    # ipykernel は既定で fd 1 と 2 の出力を取り込み、その時点で実行中のセルに表示する。
+    # エンジンやその子プロセスがあとから書いた出力が、関係の無いセル (silent のセル
+    # も含む) に表示されないように、取り込みを止める。その出力はカーネルを起動した
+    # 端末に表示される。
+    IPKernelApp.launch_instance(kernel_class=LeaniKernel, capture_fd_output=False)
