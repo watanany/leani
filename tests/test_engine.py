@@ -1307,6 +1307,11 @@ def describe_切り替えに失敗したとき():
 def describe_実行時間():
     """重い計算を切り分けるための目安。デフォルトでは表示しない (ノイズになる)。"""
 
+    @story("C7")
+    def it_colon_abbrev_で略記の一覧を表示する(repl):
+        assert "\\to" in repl.feed(":abbrev →")
+        assert "略記が無い" in repl.feed(":abbrev nosuch")
+
     @story("A3")
     def it_colon_time_で実行時間を表示する(repl):
         assert "on" in repl.feed(":time")

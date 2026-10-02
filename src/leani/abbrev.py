@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Final
 
 # 略記表。VS Code の Lean 拡張にある 1857 件のうち 1829 件を使う。値も元の表のまま
@@ -378,3 +379,74 @@ def abbrev_candidates(name: str) -> list[str]:
         keys = sorted(k for k in ABBREV if k.startswith(name) and k != name)
         first = [name] if name in ABBREV else []
         return list(dict.fromkeys(ABBREV[k] for k in first + keys))
+
+
+def abbrev_lookup(arg: str) -> list[tuple[str, str]]:
+    """
+    `:abbrev` で表示する (キー, 記号) を、キーの順に返す。
+
+    arg がすべて ASCII なら、arg で始まるキーを返す (先頭の `\\` は無くてもよい)。
+    それ以外なら記号とみなして、その記号を入力できるキーを返す。端末では
+    `:abbrev \\le` と入力して space を押すと `:abbrev ≤` になるので、どちらの形でも
+    調べられるようにする。
+    """
+    if arg.isascii():
+        key = arg.removeprefix("\\")
+        return [(k, s) for k, s in ABBREV.items() if k.startswith(key)]
+    else:
+        return [(k, s) for k, s in ABBREV.items() if s == arg]
+
+
+def cell_width(text: str) -> int:
+    """端末で表示したときの幅。全角は 2、結合文字は 0。幅が決まっていない文字は 1。"""
+    return sum(
+        0
+        if unicodedata.combining(c)
+        else 2
+        if unicodedata.east_asian_width(c) in "WF"
+        else 1
+        for c in text
+    )
+
+
+def abbrev_table(pairs: list[tuple[str, str]], width: int) -> str:
+    """
+    (キー, 記号) を `man ascii` のように複数の列に並べる。上から下へ、次に左の列から
+    右の列へ読む順に並べる。列の数は、幅に収まる範囲でいちばん多くする。
+    """
+    cells = [(f"\\{k}", s) for k, s in pairs]
+    for n in range(len(cells), 0, -1):
+        rows = -(-len(cells) // n)
+        cols = [cells[i : i + rows] for i in range(0, len(cells), rows)]
+        if fits(cols, width) or n == 1:
+            return "\n".join(table_row(cols, r) for r in range(rows))
+        else:
+            continue
+    return ""
+
+
+def column_widths(col: list[tuple[str, str]]) -> tuple[int, int]:
+    """1 列のキーの幅と記号の幅。"""
+    return max(len(k) for k, _ in col), max(cell_width(s) for _, s in col)
+
+
+def fits(cols: list[list[tuple[str, str]]], width: int) -> bool:
+    used = sum(k + 1 + s for k, s in map(column_widths, cols)) + GAP * (len(cols) - 1)
+    return used <= width
+
+
+# 列と列のあいだの空白。
+GAP = 3
+
+
+def table_row(cols: list[list[tuple[str, str]]], r: int) -> str:
+    """r 行目。列ごとにキーと記号の幅を揃える。"""
+    parts = []
+    for col in cols:
+        if r < len(col):
+            kw, sw = column_widths(col)
+            key, sym = col[r]
+            parts.append(f"{key:<{kw}} {sym}" + " " * (sw - cell_width(sym)))
+        else:
+            parts.append("")
+    return (" " * GAP).join(parts).rstrip()

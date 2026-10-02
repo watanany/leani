@@ -92,6 +92,10 @@ class CellOutput:
             print(done.stdout, end="", flush=True)
             print(done.stderr, end="", file=sys.stderr, flush=True)
 
+    def page(self, text: str) -> None:
+        # セルの出力はスクロールして読めるので、pager は使わない。
+        self.write(text)
+
 
 class LeaniKernel(Kernel):
     implementation = "leani"
