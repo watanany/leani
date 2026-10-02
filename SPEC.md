@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 41 件、テスト 335 件。括弧の中はテストの場所
+ストーリー 41 件、テスト 342 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -106,6 +106,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - :l が保留を捨てるなら件数を表示する (engine / 保留と環境の切り替え)
 - :save のヘッダに書かない (engine / コメントに書いた import)
 - 読み込んだと表示しない (engine / 解決できない import のファイル)
+- セルの 2 行目でも :l の後のパスを補完する (kernel / 補完)
+- ディレクトリには slash を付ける (kernel / Jupyter の補完の形)
 - import の行だけを取り出す (parsing / ファイルの import)
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 入れ子のコメントの終わりを正しく判定する (parsing / ファイルの import)
@@ -120,6 +122,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 2 語目からはファイルのパスを補完する (completion / shell コマンドの Tab 補完)
 - 1 語目でも slash を含めばパスを補完する (completion / shell コマンドの Tab 補完)
 - shell コマンドの中では定数名を補完しない (completion / shell コマンドの Tab 補完)
+- 続きの文字だけの候補を語全体に直す (kernel / Jupyter の補完の形)
 
 ## C. 複数行の宣言を書く
 
@@ -194,6 +197,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 自分で実行した宣言も候補に表示される (completion / 候補)
 - 1 文字では候補を表示しない (completion / 候補)
 - 名前を補完する (kernel / 補完)
+- 定数名はそのまま置き換える (kernel / Jupyter の補完の形)
 - 修飾子や属性が付いていても名前を取り出せる (parsing / 宣言の名前の取り出し)
 - 宣言でないものからは名前を取り出さない (parsing / 宣言の名前の取り出し)
 - 区切り文字の直後から名前を切り出す (parsing / 補完する名前の切り出し)
@@ -556,6 +560,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 証明モードの :help では証明用のコマンドを表示する (engine / コマンドの一覧)
 - 無いコマンドを入力したら知らせてセッションを続ける (engine / コマンドの一覧)
 - :p に名前が無ければ名前が必要と伝える (engine / 型と定義の表示)
+- コマンド名を補完する (kernel / 補完)
 - 不明なオプションはエラーで終了する (parsing / 起動オプション)
 
 ## J. ノートブックで使う
@@ -570,6 +575,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - silent のセルは何も表示しない (kernel / セルの実行)
 - 証明を完了すると sorry を置き換える (kernel / セルの実行)
 - 閉じていない複数行ブロックのセルはエラーになり次のセルは実行できる (kernel / セルの実行)
+- :shell の出力をセルに表示する (kernel / セルの実行)
 - パターンの無い :loogle のセルは status が error になる (kernel / セルの実行)
 - :q はノートブックでは何もしない (kernel / セルの実行)
 - 設定のエラーはセルに表示して次のセルでもう一度起動する (kernel / 起動と再起動の失敗)
@@ -579,6 +585,12 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
 - 名前を補完する (kernel / 補完)
 - 略記を記号に補完する (kernel / 補完)
+- コマンド名を補完する (kernel / 補完)
+- セルの 2 行目でも :l の後のパスを補完する (kernel / 補完)
+- 続きの文字だけの候補を語全体に直す (kernel / Jupyter の補完の形)
+- ディレクトリには slash を付ける (kernel / Jupyter の補完の形)
+- 定数名はそのまま置き換える (kernel / Jupyter の補完の形)
+- 候補が無ければカーソルの位置を返す (kernel / Jupyter の補完の形)
 
 ### J3 ノートブックでも、エンジンの異常終了や中断で宣言を失いたくない
 

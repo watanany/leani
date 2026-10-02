@@ -195,6 +195,21 @@ class Driver:
 
 
 @pytest.fixture
+def place(tmp_path, monkeypatch):
+    """PATH とカレントディレクトリを、決まったファイルだけがある場所にする。"""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for name in ("leanfoo", "leanbar"):
+        (bin_ / name).write_text("")
+        (bin_ / name).chmod(0o755)
+    (bin_ / "leannoexec").write_text("")
+    (tmp_path / "notes.lean").write_text("")
+    (tmp_path / "notes.md").write_text("")
+    monkeypatch.setenv("PATH", str(bin_))
+    monkeypatch.chdir(tmp_path)
+
+
+@pytest.fixture
 def repl():
     driver = Driver()
     yield driver

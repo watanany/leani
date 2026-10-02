@@ -7,6 +7,7 @@ leani/__init__.py から import しない。"""
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from importlib.metadata import version
 from typing import Any
@@ -14,15 +15,41 @@ from typing import Any
 from ipykernel.iostream import OutStream
 from ipykernel.kernelapp import IPKernelApp
 from ipykernel.kernelbase import Kernel
+from prompt_toolkit.completion import CompleteEvent, Completion
+from prompt_toolkit.document import Document
 
 from leani.abbrev import abbrev_candidates
 from leani.config import problem, resolve
-from leani.pure import dim, name_start, red
-from leani.repl import Repl
+from leani.pure import dim, red
+from leani.repl import NameCompleter, Repl, config_envs
 from leani.types import START_FAILED, ConfigError, EnvLost
 
 # `\to` のように、カーソルの手前が `\` で始まる略記のとき。
 ABBREV_HEAD = re.compile(r"\\([^\s\\]*)$")
+
+
+def jupyter_matches(line: str, got: list[Completion]) -> tuple[int, list[str]]:
+    """
+    prompt_toolkit の候補を、Jupyter の形 (置き換えを始める位置と候補) に直す。
+
+    PathCompleter と ExecutableCompleter は、カーソルの後に足す文字 (`leanf` に対する
+    `oo`) だけを返す。JupyterLab はそれをそのまま一覧に表示するので、入力済みの部分を
+    含めた語 (`leanfoo`) に直す。入力済みの部分は表示用の名前 (display) から分かる。
+    ディレクトリは `/` まで入れて、続けて Tab を押せるようにする。Jupyter の候補は
+    置き換えを始める位置が 1 つなので、いちばん手前の位置に揃える。
+    """
+    spans = []
+    for c in got:
+        cut = len(line) + c.start_position
+        shown = c.display_text
+        name = shown.removesuffix("/")
+        typed = name[: len(name) - len(c.text)] if name.endswith(c.text) else ""
+        begin = cut - len(typed) if line[:cut].endswith(typed) else cut
+        word = line[begin:cut] + c.text + ("/" if shown.endswith("/") else "")
+        spans.append((begin, word))
+
+    start = min((b for b, _ in spans), default=len(line))
+    return start, [line[start:b] + w for b, w in spans]
 
 
 class CellOutput:
@@ -47,6 +74,23 @@ class CellOutput:
         self.failed = True
         if not self.silent:
             print(text, file=sys.stderr, flush=True)
+
+    def shell(self, cmd: str) -> None:
+        # 子プロセスの出力は sys.stdout を通らず、カーネルを起動した端末に出る。
+        # 受け取ってからセルに表示する。セルからは入力できないので、stdin は空にする
+        # (読もうとするコマンドが止まらないように)。終了コードは見ない (端末と同じ)。
+        done = subprocess.run(
+            cmd,
+            shell=True,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            errors="replace",
+            check=False,
+        )
+        if not self.silent:
+            print(done.stdout, end="", flush=True)
+            print(done.stderr, end="", file=sys.stderr, flush=True)
 
 
 class LeaniKernel(Kernel):
@@ -168,11 +212,16 @@ class LeaniKernel(Kernel):
             start = m.start()
             matches = abbrev_candidates(m[1])
         else:
-            start = name_start(before)
-            try:
-                matches = self.repl.complete_names(before[start:]) if self.repl else []
-            except Exception:
-                matches = []
+            # 端末と同じ補完を使う。セルは複数行なので、カーソルのある行だけを渡す。
+            head = before.rfind("\n") + 1
+            line = before[head:]
+            got = list(
+                NameCompleter(self.complete_names, config_envs).get_completions(
+                    Document(line), CompleteEvent()
+                )
+            )
+            at, matches = jupyter_matches(line, got)
+            start = head + at
 
         return {
             "status": "ok",
@@ -181,6 +230,13 @@ class LeaniKernel(Kernel):
             "cursor_end": cursor_pos,
             "metadata": {},
         }
+
+    def complete_names(self, prefix: str) -> list[str]:
+        """定数名の候補。エンジンが起動していないときと失敗したときは候補を出さない。"""
+        try:
+            return self.repl.complete_names(prefix) if self.repl else []
+        except Exception:
+            return []
 
     async def do_shutdown(self, restart: bool) -> dict[str, Any]:
         if self.repl is not None:
