@@ -457,8 +457,8 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - ビルドに失敗したら手動の手順にタグを含める (parsing / エンジンを自動で用意できないとき)
 - lakefile が無ければ None を返す (parsing / Lake プロジェクトの判定)
 - Lake プロジェクトの外なら Lean 本体だけで起動する (parsing / Lake プロジェクトの判定)
-- setup は用意済みならエンジンを用意しない (parsing / 起動)
-- setup は未用意ならエンジンを用意する (parsing / 起動)
+- --setup は用意済みならエンジンを用意しない (parsing / 起動)
+- --setup は未用意ならエンジンを用意する (parsing / 起動)
 
 ### G4 import や設定を書き間違えたとき、壊れた環境のまま起動せずに知らせてほしい
 
@@ -519,7 +519,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - import だけを指定したら default を使わない (parsing / 起動する環境の決め方)
 - 環境の engine は最上位の engine より優先する (parsing / 起動する環境の決め方)
 - 名前を付けずに起動したら環境の engine は使わない (parsing / 起動する環境の決め方)
-- e で環境の名前を受け取る (parsing / 起動オプション)
+- -e で環境の名前を受け取る (parsing / 起動オプション)
 - 値の無いオプションはエラーで終了する (parsing / 起動オプション)
 - プロンプトが設定どおりに変わる (terminal / 環境の切り替え)
 
@@ -539,12 +539,12 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - 設定が無ければ Lake プロジェクトの環境で起動する (parsing / Lake プロジェクトの判定)
 - Lake プロジェクトの外なら Lean 本体だけで起動する (parsing / Lake プロジェクトの判定)
 - import を指定したら lean lib の代わりにそれを使う (parsing / Lake プロジェクトの判定)
-- i を繰り返すと import がすべて残る (parsing / 起動オプション)
+- -i を繰り返すと import がすべて残る (parsing / 起動オプション)
 - 値の無いオプションはエラーで終了する (parsing / 起動オプション)
 
 ### G7 どの環境、Lean のバージョン、設定ファイルで動いているかを確かめたい
 
-- V は環境とバージョンと設定ファイルの場所を表示して終わる (parsing / 起動)
+- -V は環境とバージョンと設定ファイルの場所を表示して終わる (parsing / 起動)
 
 ## H. コマンドを知る
 
