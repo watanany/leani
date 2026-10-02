@@ -153,7 +153,8 @@ HELP = """\
   :time               実行時間の表示を切り替える
   :{ ... :}           複数行を明示的に囲む
   :! <cmd>            shell のコマンドを実行する
-  :abbrev [s]         略記の一覧を表示する (s で始まる略記 / 記号 s を入力する略記)
+  :abbrev [s]         略記の一覧を表示する
+                      s が記号ならその記号の略記、それ以外なら s で始まる略記
   :restart            エンジンを再起動して、宣言を再実行する
   :help, :h, :?       このヘルプを表示する
   :q, :quit           終了する (Ctrl-D)
@@ -1342,7 +1343,8 @@ class Repl:
             width = shutil.get_terminal_size().columns
             self.out.page(abbrev_table(pairs, width))
         else:
-            self.out.write(dim(f"略記が無い: {arg}"))
+            what = "で始まる" if arg.isascii() else "を入力する"
+            self.out.write(dim(f"{arg} {what}略記は無い"))
 
     def cmd_type(self, arg: str) -> None:
         if not arg:

@@ -1410,7 +1410,7 @@ def describe_略記の一覧():
         assert [k for k, _ in got] == ["->", "imp", "r", "r-", "rightarrow", "to"]
 
     @story("C7")
-    def it_上から下へ_左の列から右の列へ読む順に並べる():
+    def it_列の下まで並べたら右の列に続ける():
         pairs = [("a", "α"), ("b", "β"), ("c", "γ")]
         assert leani.abbrev.abbrev_table(pairs, 13).split("\n") == [
             "\\a α   \\c γ",
@@ -1418,7 +1418,7 @@ def describe_略記の一覧():
         ]
 
     @story("C7")
-    def it_全角の記号は_2_文字分として列を揃える():
+    def it_全角の文字は_2_文字分の幅で列を揃える():
         pairs = [("x", "あ"), ("y", "b"), ("z", "c"), ("w", "d")]
         assert leani.abbrev.abbrev_table(pairs, 12).split("\n") == [
             "\\x あ   \\z c",

@@ -555,6 +555,12 @@ def describe_コマンドの一覧():
         assert "不明なコマンド: :nosuch" in repl.feed(":nosuch")
         assert "2" in repl.feed("1 + 1")
 
+    @story("C7")
+    def it_colon_abbrev_で略記の一覧を表示する(repl):
+        assert "\\to" in repl.feed(":abbrev →")
+        assert "nosuch で始まる略記は無い" in repl.feed(":abbrev nosuch")
+        assert "あ を入力する略記は無い" in repl.feed(":abbrev あ")
+
 
 def describe_エンジンを再起動できないとき():
     """boot が失敗することもある。leani は報告して続ける (異常終了しない)。"""
@@ -1306,11 +1312,6 @@ def describe_切り替えに失敗したとき():
 
 def describe_実行時間():
     """重い計算を切り分けるための目安。デフォルトでは表示しない (ノイズになる)。"""
-
-    @story("C7")
-    def it_colon_abbrev_で略記の一覧を表示する(repl):
-        assert "\\to" in repl.feed(":abbrev →")
-        assert "略記が無い" in repl.feed(":abbrev nosuch")
 
     @story("A3")
     def it_colon_time_で実行時間を表示する(repl):

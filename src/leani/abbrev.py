@@ -398,7 +398,10 @@ def abbrev_lookup(arg: str) -> list[tuple[str, str]]:
 
 
 def cell_width(text: str) -> int:
-    """端末で表示したときの幅。全角は 2、結合文字は 0。幅が決まっていない文字は 1。"""
+    """
+    端末で表示したときの幅。全角は 2、結合文字は 0。全角か半角かが決まっていない
+    文字は 1 とする。
+    """
     return sum(
         0
         if unicodedata.combining(c)
@@ -411,8 +414,8 @@ def cell_width(text: str) -> int:
 
 def abbrev_table(pairs: list[tuple[str, str]], width: int) -> str:
     """
-    (キー, 記号) を `man ascii` のように複数の列に並べる。上から下へ、次に左の列から
-    右の列へ読む順に並べる。列の数は、幅に収まる範囲でいちばん多くする。
+    (キー, 記号) を `man ascii` のように複数の列に並べる。縦に並べ、列の下まで行ったら
+    右の列に続ける。列の数は、幅に収まる範囲でいちばん多くする。
     """
     cells = [(f"\\{k}", s) for k, s in pairs]
     for n in range(len(cells), 0, -1):
