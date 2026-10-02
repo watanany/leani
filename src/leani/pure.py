@@ -91,6 +91,16 @@ def name_start(text: str) -> int:
     return max(text.rfind(d) for d in COMPLETE_DELIMS) + 1
 
 
+def meta_names(help_text: str) -> tuple[str, ...]:
+    """
+    ヘルプに書いてある `:` コマンドの名前 (`:` は付けない)。補完の候補にする。
+
+    ヘルプから取り出すので、ヘルプに載せたコマンドだけが候補になる。`:{` と `:!` は
+    名前ではないので含めない。
+    """
+    return tuple(sorted(set(re.findall(r"(?<![\w:]):(\w+)", help_text))))
+
+
 def name_chunk(prefix: str) -> str:
     """
     定数名をまとめて取得する単位。名前空間があれば最後の `.` まで、無ければ

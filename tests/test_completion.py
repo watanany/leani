@@ -9,8 +9,10 @@ from conftest import story
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
+from leani.pure import meta_names
 from leani.queries import COMPLETE_QUERY
-from leani.repl import NameCompleter
+from leani.repl import META_NAMES, NameCompleter, config_envs
+from leani.types import ConfigError
 
 
 def chunk_queries(spy):
@@ -40,50 +42,91 @@ def describe_端末の_Tab_補完():
         ]
 
 
-def shell_completions(text):
+def completions(text, envs=list):
     """NameCompleter が返す候補の文字列。定数名の候補は常に Nat.succ を返す。"""
-    got = NameCompleter(lambda _: ["Nat.succ"]).get_completions(
+    got = NameCompleter(lambda _: ["Nat.succ"], envs).get_completions(
         Document(text), CompleteEvent()
     )
     return sorted(g.text for g in got)
 
 
-def describe_shell_コマンドの_Tab_補完():
+@pytest.fixture
+def place(tmp_path, monkeypatch):
+    """PATH とカレントディレクトリを、決まったファイルだけがある場所にする。"""
+    bin_ = tmp_path / "bin"
+    bin_.mkdir()
+    for name in ("leanfoo", "leanbar"):
+        (bin_ / name).write_text("")
+        (bin_ / name).chmod(0o755)
+    (bin_ / "leannoexec").write_text("")
+    (tmp_path / "notes.lean").write_text("")
+    (tmp_path / "notes.md").write_text("")
+    monkeypatch.setenv("PATH", str(bin_))
+    monkeypatch.chdir(tmp_path)
 
-    @pytest.fixture
-    def place(tmp_path, monkeypatch):
-        bin_ = tmp_path / "bin"
-        bin_.mkdir()
-        for name in ("leanfoo", "leanbar"):
-            (bin_ / name).write_text("")
-            (bin_ / name).chmod(0o755)
-        (bin_ / "leannoexec").write_text("")
-        (tmp_path / "notes.lean").write_text("")
-        (tmp_path / "notes.md").write_text("")
-        monkeypatch.setenv("PATH", str(bin_))
-        monkeypatch.chdir(tmp_path)
+
+def describe_shell_コマンドの_Tab_補完():
 
     @story("B5")
     @pytest.mark.usefixtures("place")
     def it_1_語目は_PATH_にある実行できるコマンドを補完する():
-        assert shell_completions(":! leanf") == ["oo"]
-        assert shell_completions(":!lean") == ["bar", "foo"]
+        assert completions(":! leanf") == ["oo"]
+        assert completions(":!lean") == ["bar", "foo"]
 
     @story("B5")
     @pytest.mark.usefixtures("place")
     def it_2_語目からはファイルのパスを補完する():
-        assert shell_completions(":! cat notes.") == ["lean", "md"]
-        assert shell_completions(":! cat bin/leanf") == ["oo"]
+        assert completions(":! cat notes.") == ["lean", "md"]
+        assert completions(":! cat bin/leanf") == ["oo"]
 
     @story("B5")
     @pytest.mark.usefixtures("place")
     def it_1_語目でも_slash_を含めばパスを補完する():
-        assert shell_completions(":! ./notes.l") == ["ean"]
+        assert completions(":! ./notes.l") == ["ean"]
 
     @story("B5")
     @pytest.mark.usefixtures("place")
     def it_shell_コマンドの中では定数名を補完しない():
-        assert shell_completions(":! cat Nat.su") == []
+        assert completions(":! cat Nat.su") == []
+
+
+def describe_コマンドの_Tab_補完():
+
+    @story("H1")
+    def it_コマンド名は_HELP_に載っているものを補完する():
+        assert completions(":re") == ["reload", "reset", "restart"]
+        assert completions(":") == list(META_NAMES)
+
+    @story("H1")
+    def it_HELP_から_コマンド名だけを取り出す():
+        help_text = "  :t, :type <expr>  型\n  :{ ... :}  囲む\n  :! <cmd>\n(:l で読む)"
+        assert meta_names(help_text) == ("l", "t", "type")
+
+    @story("B4")
+    @pytest.mark.usefixtures("place")
+    def it_l_の後は_lean_ファイルとディレクトリだけを補完する():
+        assert completions(":l notes.") == ["lean"]
+        assert completions(":load ") == ["bin", "notes.lean"]
+
+    @story("B3")
+    @pytest.mark.usefixtures("place")
+    def it_save_の後も_lean_ファイルのパスを補完する():
+        assert completions(":save no") == ["tes.lean"]
+
+    @story("G5")
+    def it_env_の後は設定ファイルに書いた環境の名前を補完する():
+        envs = lambda: ["mathlib", "plain"]  # noqa: E731
+        assert completions(":env ", envs) == ["mathlib", "plain"]
+        assert completions(":env ma", envs) == ["mathlib"]
+
+    @story("G5")
+    def it_設定ファイルを読めなければ環境の名前を補完しない(mocker):
+        mocker.patch("leani.repl.load_config", side_effect=ConfigError("壊れている"))
+        assert config_envs() == []
+
+    @story("D1")
+    def it_t_の後は定数名を補完する():
+        assert completions(":t Nat.su") == ["Nat.succ"]
 
 
 def describe_名前空間ごとのキャッシュ():
