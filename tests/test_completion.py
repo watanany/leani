@@ -4,6 +4,7 @@ Mathlib には定数が 47 万件あり、1 回の問い合わせに 1 秒かか
 まとめて取得してキャッシュし、宣言を実行するたびにキャッシュを捨てないことが要点。
 """
 
+import pytest
 from conftest import story
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
@@ -37,6 +38,52 @@ def describe_端末の_Tab_補完():
         assert [(g.text, g.start_position) for g in got] == [
             ("Nat.succ", -len("Nat.suc"))
         ]
+
+
+def shell_completions(text):
+    """NameCompleter が返す候補の文字列。定数名の候補は常に Nat.succ を返す。"""
+    got = NameCompleter(lambda _: ["Nat.succ"]).get_completions(
+        Document(text), CompleteEvent()
+    )
+    return sorted(g.text for g in got)
+
+
+def describe_shell_コマンドの_Tab_補完():
+
+    @pytest.fixture
+    def place(tmp_path, monkeypatch):
+        bin_ = tmp_path / "bin"
+        bin_.mkdir()
+        for name in ("leanfoo", "leanbar"):
+            (bin_ / name).write_text("")
+            (bin_ / name).chmod(0o755)
+        (bin_ / "leannoexec").write_text("")
+        (tmp_path / "notes.lean").write_text("")
+        (tmp_path / "notes.md").write_text("")
+        monkeypatch.setenv("PATH", str(bin_))
+        monkeypatch.chdir(tmp_path)
+
+    @story("B5")
+    @pytest.mark.usefixtures("place")
+    def it_1_語目は_PATH_にある実行できるコマンドを補完する():
+        assert shell_completions(":! leanf") == ["oo"]
+        assert shell_completions(":!lean") == ["bar", "foo"]
+
+    @story("B5")
+    @pytest.mark.usefixtures("place")
+    def it_2_語目からはファイルのパスを補完する():
+        assert shell_completions(":! cat notes.") == ["lean", "md"]
+        assert shell_completions(":! cat bin/leanf") == ["oo"]
+
+    @story("B5")
+    @pytest.mark.usefixtures("place")
+    def it_1_語目でも_slash_を含めばパスを補完する():
+        assert shell_completions(":! ./notes.l") == ["ean"]
+
+    @story("B5")
+    @pytest.mark.usefixtures("place")
+    def it_shell_コマンドの中では定数名を補完しない():
+        assert shell_completions(":! cat Nat.su") == []
 
 
 def describe_名前空間ごとのキャッシュ():

@@ -16,7 +16,13 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 from prompt_toolkit import PromptSession
-from prompt_toolkit.completion import CompleteEvent, Completer, Completion
+from prompt_toolkit.completion import (
+    CompleteEvent,
+    Completer,
+    Completion,
+    ExecutableCompleter,
+    PathCompleter,
+)
 from prompt_toolkit.document import Document
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
@@ -205,18 +211,42 @@ class BlockHistory(FileHistory):
         super().append_string(string)
 
 
+class ShellCompleter(Completer):
+    """
+    `:!` の後を Tab キーで補完する。1 語目は PATH にあるコマンド、2 語目からは
+    ファイルのパス。1 語目でも `/` を含んでいれば `./run.sh` のようなパスとして扱う。
+    """
+
+    def __init__(self) -> None:
+        self.cmds = ExecutableCompleter()
+        self.paths = PathCompleter(expanduser=True)
+
+    def get_completions(
+        self, document: Document, complete_event: CompleteEvent
+    ) -> Iterator[Completion]:
+        head, _, word = document.text_before_cursor.rpartition(" ")
+        inner = self.cmds if head.strip() == "" and "/" not in word else self.paths
+        # 候補はカーソルの前の語に対する位置で返るので、語だけを渡せばよい。
+        yield from inner.get_completions(Document(word), complete_event)
+
+
 class NameCompleter(Completer):
-    """Tab キーで定数名を補完する。候補は Repl が返す。"""
+    """
+    Tab キーで定数名を補完する。候補は Repl が返す。`:!` の後は ShellCompleter に
+    任せる。
+    """
 
     def __init__(self, names: Callable[[str], list[str]]) -> None:
         self.names = names
+        self.shell = ShellCompleter()
 
     def get_completions(
-        self,
-        document: Document,
-        complete_event: CompleteEvent,  # noqa: ARG002 (prompt_toolkit が渡す)
+        self, document: Document, complete_event: CompleteEvent
     ) -> Iterator[Completion]:
         text = document.text_before_cursor
+        if text.startswith(":!"):
+            yield from self.shell.get_completions(Document(text[2:]), complete_event)
+            return
         prefix = text[name_start(text) :]
         for name in self.names(prefix):
             yield Completion(name, start_position=-len(prefix))

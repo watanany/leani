@@ -8,7 +8,7 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 
     uv run python tools/spec.py
 
-ストーリー 40 件、テスト 324 件。括弧の中はテストの場所
+ストーリー 41 件、テスト 328 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -111,6 +111,13 @@ leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめ�
 - ファイル名とハイフンは読み込むファイルとして受け取る (parsing / 起動オプション)
 - 指定したファイルを Repl に渡す (parsing / 起動)
 - ファイルを指定して起動すると宣言を使える (terminal / 端末でない入力)
+
+### B5 :! で実行する shell のコマンドでも、コマンド名とパスを Tab で補完したい
+
+- 1 語目は PATH にある実行できるコマンドを補完する (completion / shell コマンドの Tab 補完)
+- 2 語目からはファイルのパスを補完する (completion / shell コマンドの Tab 補完)
+- 1 語目でも slash を含めばパスを補完する (completion / shell コマンドの Tab 補完)
+- shell コマンドの中では定数名を補完しない (completion / shell コマンドの Tab 補完)
 
 ## C. 複数行の宣言を書く
 
