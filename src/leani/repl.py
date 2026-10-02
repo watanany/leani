@@ -48,6 +48,7 @@ from leani.pure import (
     messages,
     name_chunk,
     name_start,
+    nested_action,
     not_evaluable_reason,
     red,
     shorten,
@@ -886,23 +887,40 @@ class Repl:
 
     def submit_term(self, src: str) -> bool:
         """式として #eval に包んで送る。環境は進めない。"""
-        wrapped = "#eval\n" + textwrap.indent(src, "  ")
-        resp = self.guard(lambda: self.eng.send_cmd(wrapped))
+        is_do, head, col = src.lstrip().startswith("do"), "", 2
+        resp = self.guard(
+            lambda: self.eng.send_cmd("#eval\n" + textwrap.indent(src, "  "))
+        )
         if resp is None or panic_check(self.out, resp):
             return False
 
         errs = errors(resp)
         blob = "\n".join(m.get("data", "") for m in errs)
 
+        # `(← e)` は do の中でしか書けないので、do の外では必ずエラーになる。
+        # このエラーのときだけ do で包み直すので、ほかの入力の意味は変わらない。
+        # 元の行の相対的なインデントを保つため、`do` は前の行に置く。
+        if errs and not is_do and nested_action(blob):
+            is_do, head, col = True, " do", 4
+            resp = self.guard(
+                lambda: self.eng.send_cmd(
+                    f"#eval{head}\n" + textwrap.indent(src, " " * col)
+                )
+            )
+            if resp is None or panic_check(self.out, resp):
+                return False
+            errs = errors(resp)
+            blob = "\n".join(m.get("data", "") for m in errs)
+
         # `do` を単体で書くと、Lean は最初の action からモナドを決めてしまう
         # (IO.getEnv なら BaseIO)。GHCi と同じく IO として読み直す。
-        if errs and src.lstrip().startswith("do") and "BaseIO" in blob:
-            retry = "#eval show IO _ from\n" + textwrap.indent(src, "  ")
+        if errs and is_do and "BaseIO" in blob:
+            retry = f"#eval show IO _ from{head}\n" + textwrap.indent(src, " " * col)
             again = self.guard(lambda: self.eng.send_cmd(retry))
             if again is not None and panic_check(self.out, again):
                 return False
             elif again is not None and not has_error(again):
-                render(self.out, again, src, line_off=1, col_off=2)
+                render(self.out, again, src, line_off=1, col_off=col)
                 self.last = Last(src, advanced=False)
                 return True
 
@@ -910,7 +928,9 @@ class Repl:
         reason = not_evaluable_reason(blob) if errs else None
         if reason is not None:
             out = self.guard(
-                lambda: self.eng.query("#check\n" + textwrap.indent(src, "  "))
+                lambda: self.eng.query(
+                    f"#check{head}\n" + textwrap.indent(src, " " * col)
+                )
             )
             if out:
                 self.out.write(out.rstrip())
@@ -918,7 +938,7 @@ class Repl:
                 self.last = Last(src, advanced=False)
                 return True
 
-        render(self.out, resp, src, line_off=1, col_off=2)
+        render(self.out, resp, src, line_off=1, col_off=col)
         self.last = Last(src, advanced=False)
         return True
 

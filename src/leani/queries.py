@@ -96,3 +96,6 @@ NO_REPR = re.compile(
     r"could not synthesize.*(Repr|ToString|ToExpr|Eval)", re.DOTALL | re.IGNORECASE
 )
 CANNOT_EVAL = re.compile(r"cannot evaluate", re.IGNORECASE)
+
+# `(← e)` を do の外に書いたときのエラー。do で包み直して送る。
+NESTED_ACTION = re.compile(r"must be nested inside a `do` expression")
