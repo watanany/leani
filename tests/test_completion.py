@@ -104,17 +104,17 @@ def describe_コマンドの_Tab_補完():
 
     @story("B4")
     @pytest.mark.usefixtures("place")
-    def it_l_の後は_lean_ファイルとディレクトリだけを補完する():
+    def it_colon_l_の後は_lean_ファイルとディレクトリだけを補完する():
         assert completions(":l notes.") == ["lean"]
         assert completions(":load ") == ["bin", "notes.lean"]
 
     @story("B3")
     @pytest.mark.usefixtures("place")
-    def it_save_の後も_lean_ファイルのパスを補完する():
+    def it_colon_save_の後も_lean_ファイルのパスを補完する():
         assert completions(":save no") == ["tes.lean"]
 
     @story("G5")
-    def it_env_の後は設定ファイルに書いた環境の名前を補完する():
+    def it_colon_env_の後は設定ファイルに書いた環境の名前を補完する():
         envs = lambda: ["mathlib", "plain"]  # noqa: E731
         assert completions(":env ", envs) == ["mathlib", "plain"]
         assert completions(":env ma", envs) == ["mathlib"]
@@ -125,7 +125,7 @@ def describe_コマンドの_Tab_補完():
         assert config_envs() == []
 
     @story("D1")
-    def it_t_の後は定数名を補完する():
+    def it_colon_t_の後は定数名を補完する():
         assert completions(":t Nat.su") == ["Nat.succ"]
 
 

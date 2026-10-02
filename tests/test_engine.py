@@ -183,7 +183,7 @@ def describe_証明モード():
         assert "証明モードではない" in repl.feed(":script")
 
     @story("E1", "F2")
-    def it_undo_のあとの_prove_が手前の宣言を消さない(repl):
+    def it_colon_undo_のあとの_colon_prove_が手前の宣言を消さない(repl):
         repl.feed("def keepme := 42")
         repl.feed("theorem t0 : 1 = 1 := by sorry")
         repl.feed(":undo")
@@ -192,7 +192,7 @@ def describe_証明モード():
         assert len(repl.declarations) == 1
 
     @story("E1")
-    def it_undo_でタクティクを_1_つ取り消す(repl):
+    def it_colon_undo_でタクティクを_1_つ取り消す(repl):
         repl.feed("theorem t3 : 1 = 1 ∧ 2 = 2 := by sorry")
         repl.feed(":prove")
         repl.feed("constructor")
@@ -215,7 +215,7 @@ def describe_証明モード():
 
     @story("E1")
     @pytest.mark.parametrize("quit", [":q", ":quit"])
-    def it_証明モードの_q_は証明モードだけを終了する(repl, quit):
+    def it_証明モードの_colon_q_は証明モードだけを終了する(repl, quit):
         repl.feed("theorem t6 : 1 = 1 := by sorry")
         repl.feed(":prove")
         assert "証明モードを終了した" in repl.feed(quit)
@@ -286,7 +286,7 @@ def describe_証明モード():
         assert repl.declarations == ["theorem lostPos : 1 = 1 := by sorry"]
 
     @story("E1")
-    def it_証明モードの外の_goals_で残っている_sorry_を表示する(repl):
+    def it_証明モードの外の_colon_goals_で残っている_sorry_を表示する(repl):
         repl.feed("theorem t4 : 3 = 3 := by sorry")
         out = repl.feed(":goals")
         assert "sorry 1" in out, out
@@ -306,7 +306,7 @@ def describe_ファイルの読み書き():
             driver.close()
 
     @story("B3", "B4")
-    def it_save_したファイルを読み込み直せる(repl, tmp_path):
+    def it_colon_save_したファイルを読み込み直せる(repl, tmp_path):
         path = tmp_path / "saved.lean"
         repl.feed("def saved := 7")
         assert str(path) in repl.feed(f":save {path}")
@@ -337,7 +337,7 @@ def describe_ファイルの読み書き():
         assert "読めない" in repl.feed(f":l {path}")
 
     @story("B4")
-    def it_編集したファイルを_r_で読み込み直す(repl, tmp_path):
+    def it_編集したファイルを_colon_r_で読み込み直す(repl, tmp_path):
         path = tmp_path / "edited.lean"
         path.write_text("def edited := 1\n")
         repl.feed(f":l {path}")
@@ -346,7 +346,7 @@ def describe_ファイルの読み書き():
         assert "2" in repl.feed("edited"), repl.feed("edited")
 
     @story("B4", "F2")
-    def it_ファイルを読み込んでいなければ_r_は起動直後に戻す(repl):
+    def it_ファイルを読み込んでいなければ_colon_r_は起動直後に戻す(repl):
         repl.feed("def gone := 1")
         repl.feed(":r")
         assert repl.declarations == []
@@ -472,7 +472,7 @@ def describe_エンジンが異常終了してもセッションが続く():
         assert "5" in repl.feed("before")
 
     @story("A4", "F1")
-    def it_再起動を中断しても_restart_でやり直せる(repl, mocker):
+    def it_再起動を中断しても_colon_restart_でやり直せる(repl, mocker):
         repl.feed("def before := 5")
         mocker.patch.object(
             leani.engine.Engine, "boot", side_effect=leani.types.Interrupted()
@@ -523,7 +523,7 @@ def describe_環境の切り替え():
         assert "2" in repl.feed("1 + 1"), "使えなくなっている"
 
     @story("G5")
-    def it_引数の無い_env_は今の環境と切り替え先を表示する(repl):
+    def it_引数の無い_colon_env_は今の環境と切り替え先を表示する(repl):
         out = repl.feed(":env")
         assert "core" in out, out
         assert "切り替え先: core wide" in out, out
@@ -539,13 +539,13 @@ def describe_環境の切り替え():
 def describe_コマンドの一覧():
 
     @story("H1")
-    def it_help_でコマンドの一覧を表示する(repl):
+    def it_colon_help_でコマンドの一覧を表示する(repl):
         out = repl.feed(":help")
         assert ":prove" in out, out
         assert ":env" in out, out
 
     @story("H1")
-    def it_証明モードの_help_では証明用のコマンドを表示する(repl):
+    def it_証明モードの_colon_help_では証明用のコマンドを表示する(repl):
         repl.feed("theorem t5 : 1 = 1 := by sorry")
         repl.feed(":prove")
         assert "1 回の入力が 1 タクティク" in repl.feed(":help")
@@ -671,7 +671,7 @@ def describe_init_の扱い():
         assert "99" in repl.feed("fromInit"), ":restart で init が消えた"
 
     @story("F2", "G2")
-    def it_reset_しても_init_の宣言が残る(repl, tmp_path, mocker):
+    def it_colon_reset_しても_init_の宣言が残る(repl, tmp_path, mocker):
         init = tmp_path / "init.lean"
         init.write_text("def fromInit := 99\n")
         mocker.patch.object(leani.repl, "INIT", str(init))
@@ -692,7 +692,7 @@ def describe_init_の扱い():
         assert "2" in repl.feed("succ 1")
 
     @story("F2", "G2")
-    def it_reset_しても_init_の_open_が残る(repl, tmp_path, mocker):
+    def it_colon_reset_しても_init_の_open_が残る(repl, tmp_path, mocker):
         init = tmp_path / "init.lean"
         init.write_text("open Nat\n")
         mocker.patch.object(leani.repl, "INIT", str(init))
@@ -812,7 +812,7 @@ def describe_環境全体が置き換わるとき():
 def describe_引数の受け取り():
 
     @story("F2")
-    def it_undo_の引数が数でなくても異常終了しない(repl):
+    def it_colon_undo_の引数が数でなくても異常終了しない(repl):
         # 上付きの ²。isdigit() は True を返すが、int() は変換できない。
         repl.feed("def a := 1")
         repl.feed("def b := 2")
@@ -1174,7 +1174,7 @@ def describe_replay_が途中で止まったとき():
         assert repl.repl.eng.unplayed == ["def r2 := 2", "def r3 := 3"]
 
     @story("F1", "F2")
-    def it_次の_restart_で再実行する(repl, mocker):
+    def it_次の_colon_restart_で再実行する(repl, mocker):
         for one in ("def s1 := 1", "def s2 := 2"):
             repl.feed(one)
 
@@ -1267,7 +1267,7 @@ def describe_切り替えに失敗したとき():
         assert "42" in repl.feed("typedHere")
 
     @story("G4", "G5")
-    def it_env_で元の環境にも戻れなければ終了を知らせる例外になる(repl, mocker):
+    def it_colon_env_で元の環境にも戻れなければ終了を知らせる例外になる(repl, mocker):
         # 環境が無いまま続けても、どの入力もエラーになるだけ。端末 (cli) はこの
         # 例外で終了し、カーネルは次のセルでエンジンを起動し直す。
         mocker.patch.object(
@@ -1308,7 +1308,7 @@ def describe_実行時間():
     """重い計算を切り分けるための目安。デフォルトでは表示しない (ノイズになる)。"""
 
     @story("A3")
-    def it_time_で実行時間を表示する(repl):
+    def it_colon_time_で実行時間を表示する(repl):
         assert "on" in repl.feed(":time")
         out = repl.feed("1 + 1")
         assert "2" in out, out
@@ -1342,7 +1342,7 @@ def describe_少しずつ組み立てる():
 def describe_型と_docstring():
 
     @story("D2")
-    def it_i_は型と_docstring_を表示する(repl):
+    def it_colon_i_は型と_docstring_を表示する(repl):
         out = repl.feed(":i Nat.succ")
         assert "Nat.succ : Nat → Nat" in out, out
         assert "successor" in out, out
@@ -1356,23 +1356,23 @@ def describe_型と定義の表示():
 
     @story("D2")
     @pytest.mark.parametrize("cmd", [":t", ":type"])
-    def it_t_は式の型を表示する(repl, cmd):
+    def it_colon_t_は式の型を表示する(repl, cmd):
         assert "Nat" in repl.feed(f"{cmd} 1 + 1")
 
     @story("D3")
-    def it_p_は定義の本体を表示する(repl):
+    def it_colon_p_は定義の本体を表示する(repl):
         repl.feed("def shown := 1 + 2")
         assert "1 + 2" in repl.feed(":p shown")
 
     @story("D3", "H1")
-    def it_p_に名前が無ければ名前が必要と伝える(repl):
+    def it_colon_p_に名前が無ければ名前が必要と伝える(repl):
         assert ":p には名前が必要" in repl.feed(":p")
 
 
 def describe_宣言の取り消し():
 
     @story("F2")
-    def it_undo_n_で_n_件取り消す(repl):
+    def it_colon_undo_n_で_n_件取り消す(repl):
         repl.feed("def u1 := 1")
         repl.feed("def u2 := 2")
         repl.feed("def u3 := 3")
@@ -1483,7 +1483,7 @@ def describe_環境に無い宣言の扱い():
         assert repl.repl.eng.unplayed == ["def usesB := libB + 1"]
 
     @story("B3", "F2")
-    def it_save_はコメントとして添える(repl, tmp_path):
+    def it_colon_save_はコメントとして添える(repl, tmp_path):
         path = tmp_path / "lib3.lean"
         path.write_text("def libC := 10\n")
         repl.feed(f":l {path}")
@@ -1501,7 +1501,7 @@ def describe_環境に無い宣言の扱い():
         assert "def other := 1" in text, text
 
     @story("F2")
-    def it_reset_したら保留も捨てる(repl, tmp_path):
+    def it_colon_reset_したら保留も捨てる(repl, tmp_path):
         path = tmp_path / "lib4.lean"
         path.write_text("def libD := 10\n")
         repl.feed(f":l {path}")
@@ -1521,7 +1521,7 @@ def describe_環境に無い宣言の扱い():
 def describe_読み込んだファイルの_import():
 
     @story("B3", "B4")
-    def it_save_に書き戻す(repl, tmp_path):
+    def it_colon_save_に書き戻す(repl, tmp_path):
         src = tmp_path / "withimport.lean"
         src.write_text("import Lean.Elab.Frontend\n\ndef needsFrontend := 1\n")
         repl.feed(f":l {src}")
@@ -1567,14 +1567,14 @@ def describe_保留と環境の切り替え():
         return lib
 
     @story("G5", "F2")
-    def it_env_の切り替えでも保留を引き継ぐ(repl, tmp_path):
+    def it_colon_env_の切り替えでも保留を引き継ぐ(repl, tmp_path):
         _strand(repl, tmp_path, "envKeep")
 
         repl.feed(":env wide")
         assert repl.repl.eng.unplayed == ["def envKeepUse := envKeepDep + 1"]
 
     @story("B4", "F2")
-    def it_l_が保留を捨てるなら件数を表示する(repl, tmp_path):
+    def it_colon_l_が保留を捨てるなら件数を表示する(repl, tmp_path):
         _strand(repl, tmp_path, "loadDrop")
 
         other = tmp_path / "other2.lean"
@@ -1588,7 +1588,7 @@ def describe_保留と環境の切り替え():
 def describe_コメントに書いた_import():
 
     @story("B3", "B4")
-    def it_save_のヘッダに書かない(repl, tmp_path):
+    def it_colon_save_のヘッダに書かない(repl, tmp_path):
         lib = tmp_path / "doc.lean"
         lib.write_text("/-\nimport Nope.NotAModule\n-/\ndef documented := 1\n")
         repl.feed(f":l {lib}")
@@ -1707,7 +1707,7 @@ def describe_元になる環境を失ったとき():
         assert repl.repl.eng.unplayed == ["def held := 1"]
 
     @story("F1", "F2")
-    def it_reset_は受け付けずに保留を残す(repl, mocker):
+    def it_colon_reset_は受け付けずに保留を残す(repl, mocker):
         _no_env(repl, mocker)
 
         out = repl.feed(":reset")
