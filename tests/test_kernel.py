@@ -26,6 +26,13 @@ import leani.kernel
 from leani.repl import NameCompleter
 
 
+def kernel_env():
+    # ipykernel は PYTEST_CURRENT_TEST があると、子プロセスの出力を取り込まない。
+    # Jupyter で使うときと同じ動きにするため、この変数を渡さない。
+    env = {k: v for k, v in os.environ.items() if k != "PYTEST_CURRENT_TEST"}
+    return dict(env, PYTHONPATH=SRC)
+
+
 @pytest.fixture(scope="module")
 def kernel(tmp_path_factory):
     # テスト用の kernelspec を作り、JUPYTER_PATH でその場所を指定する。ユーザーの
@@ -53,7 +60,7 @@ def kernel(tmp_path_factory):
         km, kc = start_new_kernel(
             kernel_name="leani-test",
             cwd=str(tmp_path_factory.mktemp("cwd")),
-            env=dict(os.environ, PYTHONPATH=SRC),
+            env=kernel_env(),
         )
     yield km, kc
     kc.stop_channels()
@@ -77,6 +84,23 @@ def run(kernel, code, timeout=120):
 
     reply = kc.get_shell_msg(timeout=timeout)
     return reply["content"]["status"], "".join(out), "".join(err)
+
+
+def run_silent(kernel, code, timeout=120):
+    """silent でセルを実行して (status, stream の文字列のリスト) を返す。"""
+    _, kc = kernel
+    msg_id = kc.execute(code, silent=True)
+    streams = []
+    while True:
+        m = kc.get_iopub_msg(timeout=timeout)
+        if m["parent_header"].get("msg_id") != msg_id:
+            continue
+        if m["msg_type"] == "stream":
+            streams.append(m["content"]["text"])
+        elif m["msg_type"] == "status" and m["content"]["execution_state"] == "idle":
+            break
+    # reply を読まずに残すと、次の run が 1 つ前のセルの status を読む。
+    return kc.get_shell_msg(timeout=timeout)["content"]["status"], streams
 
 
 def complete(kernel, code):
@@ -126,21 +150,22 @@ def fib : Nat → Nat
 
     @story("J1")
     def it_silent_のセルは何も表示しない(kernel):
-        _, kc = kernel
-        msg_id = kc.execute("#eval 3 + 4", silent=True)
-        streams = []
-        while True:
-            m = kc.get_iopub_msg(timeout=60)
-            if m["parent_header"].get("msg_id") != msg_id:
-                continue
-            if m["msg_type"] == "stream":
-                streams.append(m["content"]["text"])
-            elif (
-                m["msg_type"] == "status" and m["content"]["execution_state"] == "idle"
-            ):
-                break
-        # reply を読まずに残すと、次の run が 1 つ前のセルの status を読む。
-        assert kc.get_shell_msg(timeout=60)["content"]["status"] == "ok"
+        status, streams = run_silent(kernel, "#eval 3 + 4")
+        assert status == "ok"
+        assert streams == []
+
+    @story("J1")
+    def it_前のセルで起動したプロセスの出力を_silent_のセルに表示しない(kernel):
+        # 1 秒後に stderr に書くプロセスを起動し、その間に silent のセルを実行する。
+        # カーネルが fd 2 の出力を取り込んでいると、その出力は実行中のセルに表示される。
+        spawn = (
+            "#eval do let _ ← IO.Process.spawn "
+            '{ cmd := "sh", args := #["-c", "sleep 1; echo late >&2"], '
+            "stderr := .inherit }"
+        )
+        assert run(kernel, spawn)[0] == "ok"
+        status, streams = run_silent(kernel, "#eval (IO.sleep 3000 : IO Unit)")
+        assert status == "ok"
         assert streams == []
 
     @story("J1", "E3")
