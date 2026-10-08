@@ -1070,8 +1070,8 @@ def describe_ファイルの_import():
 
 def describe_略記の展開():
     """
-    `\name` を Lean の記号に変換する。変換は space で確定し、キー入力のたびには
-    確認しない。
+    `\name` を Lean の記号に変換する。変換は space か Tab で確定し、キー入力の
+    たびには確認しない。
     """
 
     @story("C5")
