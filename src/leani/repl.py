@@ -798,8 +798,9 @@ class Repl:
                 return "quit"
 
         # 呼び出した複数行は全体で 1 件なので、末尾に空行を渡して確定させる。
-        waiting = bool(self.buf or self.explicit)
-        if len(lines) > 1 and waiting:
+        # ブロックが途中なら確定させず、続きの行を待つ。Ctrl-C で捨てた入力は
+        # 途中のまま履歴に残るので、呼び出して続きを書けるようにする。
+        if len(lines) > 1 and self.ready is not None:
             return self.feed("")
         else:
             return None
