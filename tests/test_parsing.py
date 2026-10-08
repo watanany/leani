@@ -1116,6 +1116,30 @@ def describe_略記の展開():
         assert leani.abbrev.expand_abbrev(head + "\\" + key) == want
 
 
+def describe_略記の候補():
+    """
+    Tab で略記を補完するときに、カーソルの手前の `\name` から記号の候補を作る。
+    """
+
+    @story("C8", "J2")
+    def it_カーソルの手前の略記の名前を取り出す():
+        assert leani.abbrev.abbrev_head("theorem x : p \\to") == "to"
+        assert leani.abbrev.abbrev_head("(\\.") == "."
+        assert leani.abbrev.abbrev_head("\\") == ""
+
+    @story("C8", "J2")
+    def it_略記の途中でなければ名前を取り出さない():
+        assert leani.abbrev.abbrev_head("Nat.suc") is None
+        assert leani.abbrev.abbrev_head("\\to x") is None, "空白のあとは略記ではない"
+
+    @story("C8", "J2")
+    def it_一致する略記の記号を先頭に置く():
+        # `\a` は α になる。`\all` の ∀ などはそのあとに続く。
+        got = leani.abbrev.abbrev_candidates("a")
+        assert got[0] == "α", got
+        assert "∀" in got, got
+
+
 def describe_定理検索():
     """
     loogle に問い合わせた結果を表示用の形に整形する。

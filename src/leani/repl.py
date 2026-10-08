@@ -15,6 +15,8 @@ from dataclasses import dataclass, replace
 from typing import cast
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application import get_app
+from prompt_toolkit.buffer import Buffer
 from prompt_toolkit.completion import (
     CompleteEvent,
     Completer,
@@ -23,13 +25,20 @@ from prompt_toolkit.completion import (
     PathCompleter,
 )
 from prompt_toolkit.document import Document
+from prompt_toolkit.filters import Condition
 from prompt_toolkit.formatted_text import ANSI
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.key_binding.key_processor import KeyPressEvent
 from prompt_toolkit.shortcuts import CompleteStyle
 
-from leani.abbrev import abbrev_lookup, abbrev_table, expand_abbrev
+from leani.abbrev import (
+    abbrev_candidates,
+    abbrev_head,
+    abbrev_lookup,
+    abbrev_table,
+    expand_abbrev,
+)
 from leani.boot import prepare
 from leani.config import EnvConfig, load_config, problem, resolve
 from leani.engine import Engine, Replay, Undone
@@ -102,31 +111,43 @@ from leani.types import (
 
 def abbrev_keys() -> KeyBindings:
     """
-    space キーに略記の変換を割り当てる。
+    space キーと Tab キーに略記の変換を割り当てる。
 
-    Tab キーは補完だけに使う。端末では space で変換できるので、Tab キーにも変換を
-    割り当てる必要が無い。Jupyter では、カーネルは space キーの入力を受け取れない
-    ので、Tab キーで変換する (kernel の do_complete)。どちらでも、変換になるのは
-    カーソルの前に `\\` があるときだけで、Lean の名前には `\\` が入らないので、
-    名前の補完と区別できる。
+    space キーは変換したあとに space 自体も挿入する。変換のきっかけになった space を
+    消費すると `a \\to b` が `a →b` になり、ユーザーは記号を入力するたびに space を
+    追加で入力することになる。略記の表に無ければ何も変換しないので、space キーで
+    空白が挿入されない場面は無い。
 
-    space 自体もそのまま挿入する。変換のきっかけになった space を消費すると
-    `a \\to b` が `a →b` になり、ユーザーは記号を入力するたびに space を追加で
-    入力することになる。略記の表に無ければ何も変換しないので、space キーで空白が
-    挿入されない場面は無い。
+    Tab キーは空白を入れずに変換する。`(·.succ)` や `(\\to)` のように、記号のすぐ
+    あとに文字を続けるときに使う。カーソルの手前が表にある `\\name` のときだけ
+    変換し、それ以外では補完する (NameCompleter)。Lean の名前には `\\` が入らない
+    ので、変換と名前の補完は、ユーザーが入力した文字で区別できる。Jupyter では、
+    カーネルは space キーの入力を受け取れないので、Tab キーの補完だけで略記を
+    置き換える。
     """
     kb = KeyBindings()
 
+    def expand(buf: Buffer) -> None:
+        got = expand_abbrev(buf.document.text_before_cursor)
+        if got is None:
+            return
+        sym, back = got
+        buf.delete_before_cursor(back)
+        buf.insert_text(sym)
+
+    @Condition
+    def at_abbrev() -> bool:
+        head = get_app().current_buffer.document.text_before_cursor
+        return expand_abbrev(head) is not None
+
     @kb.add(" ")
     def _(event: KeyPressEvent) -> None:
-        buf = event.current_buffer
-        got = expand_abbrev(buf.document.text_before_cursor)
-        if got is not None:
-            sym, back = got
-            buf.delete_before_cursor(back)
-            buf.insert_text(sym)
+        expand(event.current_buffer)
+        event.current_buffer.insert_text(" ")
 
-        buf.insert_text(" ")
+    @kb.add("tab", filter=at_abbrev)
+    def _(event: KeyPressEvent) -> None:
+        expand(event.current_buffer)
 
     return kb
 
@@ -135,6 +156,7 @@ HELP = """\
 式を書くと #eval で評価する。宣言はそのまま実行する。入力が終わったかは Lean のパーサで
 判定する。インデントした行か | で始まる行が続くあいだは入力を読み続け、空行で入力を
 確定する。確定した直後にインデントした行を書くと、直前の入力の続きとして読み直す。
+\\to のような略記は space か Tab で記号に変換する。Tab は記号のあとに空白を入れない。
 
   :t, :type <expr>    型を表示する (#check)
   :i, :info <name>    型と docstring を表示する
@@ -270,6 +292,9 @@ class NameCompleter(Completer):
     コマンド名を補完し、そのあとはコマンドに合わせて補完する。`:l` と `:save` の後は
     ファイルのパス、`:env` の後は設定ファイルに書いた環境の名前、`:!` の後は
     ShellCompleter に任せる。
+
+    カーソルの手前が `\\name` の途中なら、行のどこでも略記の記号を補完する。space
+    キーがどこでも略記を変換するので、Tab キーも同じ範囲で変換する。
     """
 
     def __init__(
@@ -287,7 +312,11 @@ class NameCompleter(Completer):
     ) -> Iterator[Completion]:
         text = document.text_before_cursor
         head, sep, arg = text.partition(" ")
+        abbrev = abbrev_head(text)
         match (head, sep):
+            case _ if abbrev is not None:
+                for sym in abbrev_candidates(abbrev):
+                    yield Completion(sym, start_position=-len(abbrev) - 1)
             case (h, _) if h.startswith(":!"):
                 yield from self.shell.get_completions(
                     Document(text[2:]), complete_event

@@ -6,7 +6,6 @@ leani/__init__.py から import しない。"""
 
 from __future__ import annotations
 
-import re
 import subprocess
 import sys
 from importlib.metadata import version
@@ -18,14 +17,10 @@ from ipykernel.kernelbase import Kernel
 from prompt_toolkit.completion import CompleteEvent, Completion
 from prompt_toolkit.document import Document
 
-from leani.abbrev import abbrev_candidates
 from leani.config import problem, resolve
 from leani.pure import dim, red
 from leani.repl import NameCompleter, Repl, config_envs
 from leani.types import START_FAILED, ConfigError, EnvLost
-
-# `\to` のように、カーソルの手前が `\` で始まる略記のとき。
-ABBREV_HEAD = re.compile(r"\\([^\s\\]*)$")
 
 
 def jupyter_matches(line: str, got: list[Completion]) -> tuple[int, list[str]]:
@@ -210,23 +205,19 @@ class LeaniKernel(Kernel):
             }
 
     async def do_complete(self, code: str, cursor_pos: int) -> dict[str, Any]:
+        # 端末と同じ補完を使う。セルは複数行なので、カーソルのある行だけを渡す。
+        # JupyterLab には space で略記を変換する機能が無いので、略記もこの Tab の補完で
+        # 置き換える。
         before = code[:cursor_pos]
-        m = ABBREV_HEAD.search(before)
-        if m:
-            # JupyterLab には space で略記を変換する機能が無いので、Tab で変換する。
-            start = m.start()
-            matches = abbrev_candidates(m[1])
-        else:
-            # 端末と同じ補完を使う。セルは複数行なので、カーソルのある行だけを渡す。
-            head = before.rfind("\n") + 1
-            line = before[head:]
-            got = list(
-                NameCompleter(self.complete_names, config_envs).get_completions(
-                    Document(line), CompleteEvent()
-                )
+        head = before.rfind("\n") + 1
+        line = before[head:]
+        got = list(
+            NameCompleter(self.complete_names, config_envs).get_completions(
+                Document(line), CompleteEvent()
             )
-            at, matches = jupyter_matches(line, got)
-            start = head + at
+        )
+        at, matches = jupyter_matches(line, got)
+        start = head + at
 
         return {
             "status": "ok",

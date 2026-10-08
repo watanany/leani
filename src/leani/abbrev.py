@@ -349,13 +349,13 @@ def expand_abbrev(head: str) -> tuple[str, int] | None:
     """
     カーソルの手前にある `\\name` を記号に置き換える。(記号, 消す文字数) を返す。
 
-    確定は space で行い、キー入力ごとには変換しない。`\\a` `\\all` `\\alpha` の
-    ようにほかのキーの接頭辞になっているキーが 293 件あり、入力するたびに確定
-    すると `\\alpha` を入力できなくなる。space まで待てば、どのキーを入力したのかが
-    一意に決まる。
+    確定は space か Tab で行い、キー入力ごとには変換しない。`\\a` `\\all` `\\alpha`
+    のようにほかのキーの接頭辞になっているキーが 293 件あり、入力するたびに確定
+    すると `\\alpha` を入力できなくなる。space か Tab まで待てば、どのキーを入力した
+    のかが一意に決まる。
 
     表に無ければ None を返す。`\\` のあとを空白まで取り出して、そのまま表を検索
-    するので、`\\to)` のように記号が続いた形は変換しない (先に space を入力する)。
+    するので、`\\to)` のように記号が続いた形は変換しない (先に Tab で変換する)。
     """
     cut = head.rfind("\\")
     name = head[cut + 1 :]
@@ -366,9 +366,24 @@ def expand_abbrev(head: str) -> tuple[str, int] | None:
         return sym, len(name) + 1
 
 
+def abbrev_head(head: str) -> str | None:
+    """
+    カーソルの手前が `\\name` の途中なら、name を返す。Tab で略記を補完するときに使う。
+
+    name は直前の `\\` より後ろで、空白を含まない。`\\` の直後なら空文字列を返す。
+    略記の途中でなければ None を返す。
+    """
+    cut = head.rfind("\\")
+    name = head[cut + 1 :]
+    if cut < 0 or any(c.isspace() for c in name):
+        return None
+    else:
+        return name
+
+
 def abbrev_candidates(name: str) -> list[str]:
     """
-    `\\name` を置き換える記号の候補を返す。Jupyter の Tab 補完で使う。
+    `\\name` を置き換える記号の候補を返す。端末と Jupyter の Tab 補完で使う。
 
     name と一致するキーの記号を先頭に置き、name で始まるほかのキーの記号をキーの
     順に続ける。同じ記号は 1 回だけ返す。name が空なら、候補が多すぎるので返さない。

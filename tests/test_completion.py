@@ -50,6 +50,35 @@ def completions(text, envs=list):
     return sorted(g.text for g in got)
 
 
+def describe_略記の_Tab_補完():
+
+    @story("C8")
+    def it_略記の途中なら記号を補完する():
+        got = list(
+            NameCompleter(lambda _: ["Nat.succ"]).get_completions(
+                Document("theorem x : p \\alp"), CompleteEvent()
+            )
+        )
+        assert [(g.text, g.start_position) for g in got] == [("α", -len("\\alp"))]
+
+    @story("C8")
+    def it_略記の途中なら定数名を問い合わせない():
+        asked = []
+
+        def names(prefix):
+            asked.append(prefix)
+            return []
+
+        list(NameCompleter(names).get_completions(Document("\\to"), CompleteEvent()))
+        assert asked == []
+
+    @story("C8")
+    def it_コマンドの引数の中でも略記を補完する():
+        # space はどこでも略記を変換する。Tab も同じ範囲で変換する。
+        assert "→" in completions(":t p \\to")
+        assert "→" in completions(":! echo \\to")
+
+
 def describe_shell_コマンドの_Tab_補完():
 
     @story("B5")
