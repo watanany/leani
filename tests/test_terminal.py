@@ -86,6 +86,23 @@ def describe_略記の入力():
         assert "#check Nat → Nat" in term.cursor_line(), term.cursor_line()
         assert "Nat → Nat : Type" in term.line("")
 
+    @story("C8")
+    def it_Tab_で記号に変換され_空白は入らない(terminal):
+        # `(· .succ)` では Lean が読めないので、記号のすぐあとに続けられるようにする。
+        term = terminal()
+        term.type("#check (\\.\t.succ : Nat \\to\t)")
+        term.settle()
+        assert "#check (·.succ : Nat →)" in term.cursor_line(), term.cursor_line()
+
+    @story("C8", "D1")
+    def it_略記でなければ_Tab_は名前を補完する(terminal):
+        term = terminal()
+        term.type("#check Nat.suc\t")
+        end = time.time() + 30
+        while "Nat.succ" not in term.cursor_line():
+            assert time.time() < end, term.cursor_line()
+            term.settle()
+
 
 def describe_履歴():
 
