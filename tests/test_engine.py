@@ -958,6 +958,34 @@ def describe_履歴の書き出し():
         assert list(history.load_history_strings()) == []
 
 
+def describe_履歴から呼び出した入力():
+    """
+    履歴から呼び出した複数行は、改行を含む 1 行として Repl.feed_line に渡される。
+    """
+
+    @story("C3")
+    def it_完結したブロックは_Enter_だけで送る(repl):
+        repl.feed_with(
+            lambda: repl.repl.feed_line(
+                "def recalled : Nat -> Nat\n  | 0 => 1\n  | _ => 2"
+            )
+        )
+        assert "def recalled" in repl.declarations[-1]
+        assert repl.repl.buf == []
+
+    @story("C3")
+    def it_途中のブロックは送らずに続きの行を待つ(repl, mocker):
+        # Ctrl-C で捨てた入力も、途中のまま履歴に残る。呼び出してすぐに送ると
+        # unexpected end of input のエラーになる。
+        sent = mocker.spy(repl.repl, "submit")
+        repl.feed_with(
+            lambda: repl.repl.feed_line("#eval do\n  let x := 1\n  for i in [1, 2] do")
+        )
+        assert sent.call_count == 0
+        out = repl.feed("    IO.println (x + i)", "")
+        assert "2\n3" in out, out
+
+
 def describe_折り返した提案():
     """
     simp? の結果は 100 桁前後で折り返される。2 行目以降を取り出さないと、閉じていない
