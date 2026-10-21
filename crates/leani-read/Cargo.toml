@@ -1,0 +1,23 @@
+[package]
+name = "leani-read"
+description = "leani の読み取りの関数 (環境変数、設定、引数)"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+leani-core = { path = "../leani-core" }
+regex = "1"
+toml = "0.9"
+
+# leani-core と同じく、workspace の lints に複雑さの上限と禁じる関数を足す。
+# 上限の値と禁じる関数は clippy.toml に書く。
+[lints.clippy]
+print_stdout = "deny"
+print_stderr = "deny"
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+excessive_nesting = "warn"
+disallowed_methods = "deny"
+disallowed_types = "deny"

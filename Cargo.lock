@@ -432,13 +432,16 @@ name = "leani"
 version = "0.1.0"
 dependencies = [
  "leani-core",
+ "leani-read",
  "portable-pty",
  "proptest",
  "reedline",
  "serde_json",
  "spec",
  "story",
+ "tempfile",
  "test-strategy",
+ "toml",
  "vt100",
 ]
 
@@ -449,6 +452,15 @@ dependencies = [
  "regex",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "leani-read"
+version = "0.1.0"
+dependencies = [
+ "leani-core",
+ "regex",
+ "toml",
 ]
 
 [[package]]

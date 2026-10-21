@@ -14,8 +14,14 @@ use leani_core::abbrev::{
 use leani_core::pure::{self, PAIRS, Style};
 use leani_core::queries::{BLOCK_OPEN, DECL_NAME, INCOMPLETE};
 use leani_core::types::{Json, Kind, Proof, State};
+use leani_read::args::{Args, parse_args};
+use leani_read::config::{self, EnvConfig};
+use leani_read::places::Ctx;
 use proptest::prelude::*;
 use serde_json::json;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
 use story::story;
 use test_strategy::proptest;
 
@@ -633,6 +639,298 @@ mod describe_エンジンのバージョン {
     }
 }
 
+// ----------------------------------------------- 設定のテストのデータ
+
+/// HOME が /home で、vars の環境変数だけがある Ctx。
+fn ctx_with(vars: &[(&str, &str)], cwd: &str) -> Ctx {
+    let var = |k: &str| match (k, vars.iter().find(|(name, _)| *name == k)) {
+        (_, Some((_, v))) => Some(v.to_string()),
+        ("HOME", None) => Some("/home".to_string()),
+        _ => None,
+    };
+    Ctx::new(var, cwd, false)
+}
+
+fn ctx_at(cwd: &str) -> Ctx {
+    ctx_with(&[], cwd)
+}
+
+fn table(src: &str) -> toml::Table {
+    src.parse().expect("TOML として読めない")
+}
+
+fn path_str(p: &Path) -> String {
+    p.to_string_lossy().into_owned()
+}
+
+fn toolchain_dir(dir: &Path, name: &str, tc: &str) -> String {
+    let d = dir.join(name);
+    fs::create_dir(&d).expect("mkdir");
+    fs::write(d.join("lean-toolchain"), format!("{tc}\n")).expect("write");
+    path_str(&d)
+}
+
+fn built_engine(dir: &Path, tc: &str) -> String {
+    let eng = toolchain_dir(dir, "eng", tc);
+    fs::create_dir_all(format!("{eng}/.lake/build/bin")).expect("mkdir");
+    fs::write(format!("{eng}/.lake/build/bin/repl"), "").expect("write");
+    eng
+}
+
+/// names の実行ファイルだけを置いたディレクトリを、PATH として返す。
+/// テストは実行ファイルを実行しないので、中身は空のスクリプトにする。
+fn tools_path(dir: &Path, names: &[&str]) -> String {
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).expect("mkdir");
+    for name in names {
+        let tool = bin.join(name);
+        fs::write(&tool, "#!/bin/sh\n").expect("write");
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    path_str(&bin)
+}
+
+fn tmp() -> tempfile::TempDir {
+    tempfile::tempdir().expect("tempdir")
+}
+
+mod describe_設定の値の型 {
+    //! TOML には何でも書ける。型が違う値は panic ではなく ConfigError にする。
+    use super::*;
+
+    fn resolve_err(src: &str) -> String {
+        config::resolve(&ctx_at("/"), None, None, &[], &table(src))
+            .expect_err("エラーにならない")
+            .0
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_import_を文字列で書いたらエラーにする() {
+        // エラーにせず受け付けると 1 文字ずつの import になり、どれも解決できないので
+        // ヘッダがすべて捨てられる (import Lean も消える)。
+        let why = resolve_err("default = \"m\"\n[env.m]\nimports = \"Mathlib\"\n");
+        assert!(why.contains("配列"), "{why}");
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_文字列で書くべき値が別の型ならエラーにする() {
+        for (key, value) in [("project", "3"), ("engine", "true"), ("prompt", "5")] {
+            let why = resolve_err(&format!("default = \"m\"\n[env.m]\n{key} = {value}\n"));
+            assert!(why.contains(key), "{why}");
+        }
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_表で書くべき値が別の型ならエラーにする() {
+        let why = resolve_err("default = \"m\"\nenv = 3\n");
+        assert!(why.contains("env は表"), "{why}");
+        let why = resolve_err("default = \"m\"\n[env]\nm = \"nope\"\n");
+        assert!(why.contains("env.m は表"), "{why}");
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_default_が文字列でなければエラーにする() {
+        let why = resolve_err("default = 3\n[env.m]\n");
+        assert!(why.contains("default"), "{why}");
+    }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn it_書き方が正しければ値をそのまま読み込む() {
+        let cfg = table("default = \"m\"\n[env.m]\nimports = [\"A\", \"B\"]\nprompt = \"> \"\n");
+        let got = config::resolve(&ctx_at("/"), None, None, &[], &cfg).expect("resolve");
+        assert_eq!(
+            (got.name.as_str(), got.imports, got.prompt.as_str()),
+            ("m", vec!["A".to_string(), "B".to_string()], "> ")
+        );
+    }
+}
+
+mod describe_起動する環境の決め方 {
+    //! guide/config.md の「起動する環境の決まり方」と、エンジンの優先順位。
+    use super::*;
+
+    const CFG: &str = r#"
+default = "d"
+engine = "/top/engine"
+
+[env.d]
+imports = ["D"]
+
+[env.m]
+project = "/m"
+imports = ["M"]
+engine = "/m/engine"
+"#;
+
+    fn resolve(
+        ctx: &Ctx,
+        name: Option<&str>,
+        project: Option<&str>,
+        imports: &[&str],
+    ) -> EnvConfig {
+        let imports = imports.iter().map(|m| m.to_string()).collect::<Vec<_>>();
+        config::resolve(ctx, name, project, &imports, &table(CFG)).expect("resolve")
+    }
+
+    #[story("G5")]
+    #[test]
+    fn it_名前を指定したら_default_より優先する() {
+        assert_eq!(resolve(&ctx_at("/"), Some("m"), None, &[]).name, "m");
+    }
+
+    #[story("G5")]
+    #[test]
+    fn it_名前と_import_を指定したら環境の_imports_を置き換える() {
+        let got = resolve(&ctx_at("/"), Some("m"), Some("/p"), &["X"]);
+        assert_eq!(
+            (got.name.as_str(), got.imports, got.project.as_deref()),
+            ("m", vec!["X".to_string()], Some("/p"))
+        );
+    }
+
+    #[story("G5", "G6")]
+    #[test]
+    fn it_import_だけを指定したら_default_を使わない() {
+        let dir = tmp();
+        let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
+        assert_eq!(
+            (got.name.as_str(), got.imports),
+            ("plain", vec!["X".to_string()])
+        );
+    }
+
+    #[story("G3", "G5")]
+    #[test]
+    fn it_環境の_engine_は最上位の_engine_より優先する() {
+        let ctx = ctx_at("/");
+        let engine = |name| resolve(&ctx, name, None, &[]).engine;
+        assert_eq!(engine(Some("m")).as_deref(), Some("/m/engine"));
+        assert_eq!(engine(None).as_deref(), Some("/top/engine"));
+    }
+
+    #[story("G3")]
+    #[test]
+    fn it_設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
+        let ctx = ctx_with(&[("LEANI_ENGINE", "/env/engine")], "/");
+        let cfg = table("default = \"d\"\n[env.d]\n");
+        let got = config::resolve(&ctx, None, None, &[], &cfg).expect("resolve");
+        assert_eq!(got.engine.as_deref(), Some("/env/engine"));
+    }
+
+    #[story("G3", "G5")]
+    #[test]
+    fn it_名前を付けずに起動したら環境の_engine_は使わない() {
+        let dir = tmp();
+        let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
+        assert_eq!(got.engine.as_deref(), Some("/top/engine"));
+    }
+}
+
+mod describe_起動を中止する理由 {
+    use super::*;
+
+    /// elan、lake、git がそろった PATH の Ctx。
+    fn ctx(dir: &Path) -> Ctx {
+        ctx_with(&[("PATH", &tools_path(dir, &["elan", "lake", "git"]))], "/")
+    }
+
+    fn make(ctx: &Ctx, project: Option<&str>, engine: Option<&str>) -> EnvConfig {
+        EnvConfig::make(ctx, "t", project, &[], None, engine)
+    }
+
+    #[story("G3", "G4")]
+    #[test]
+    fn it_エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
+        let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.34.0");
+        let ctx = ctx(dir.path());
+        let why = config::problem(&ctx, &make(&ctx, Some(&proj), Some(&eng))).unwrap_or_default();
+        assert!(why.contains("バージョンがプロジェクトと違う"), "{why}");
+        assert!(why.contains("lake build repl"), "{why}");
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_Lake_プロジェクトが無ければ起動を中止する() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
+        let no = path_str(&dir.path().join("no"));
+        let ctx = ctx(dir.path());
+        let why = config::problem(&ctx, &make(&ctx, Some(&no), Some(&eng))).unwrap_or_default();
+        assert!(why.contains("Lake プロジェクトが無い"), "{why}");
+    }
+
+    #[story("G3", "G4")]
+    #[test]
+    fn it_指定されたエンジンが無いか未ビルドなら起動を中止する() {
+        let dir = tmp();
+        let ctx = ctx(dir.path());
+        let no = path_str(&dir.path().join("no"));
+        let why = config::problem(&ctx, &make(&ctx, None, Some(&no))).unwrap_or_default();
+        assert!(why.contains("エンジンが無い"), "{why}");
+        let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
+        let why = config::problem(&ctx, &make(&ctx, None, Some(&eng))).unwrap_or_default();
+        assert!(why.contains("未ビルド"), "{why}");
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_elan_lake_git_が_PATH_に無ければ起動を中止する() {
+        // git はエンジンを leani が用意するときだけ必要になる。
+        for tool in ["elan", "lake", "git"] {
+            let dir = tmp();
+            let others = ["elan", "lake", "git"]
+                .into_iter()
+                .filter(|t| *t != tool)
+                .collect::<Vec<_>>();
+            let ctx = ctx_with(&[("PATH", &tools_path(dir.path(), &others))], "/");
+            let why = config::problem(&ctx, &make(&ctx, None, None)).unwrap_or_default();
+            assert!(why.contains(&format!("{tool} が PATH に無い")), "{why}");
+        }
+    }
+
+    #[story("G4")]
+    #[test]
+    fn it_設定がそろっていれば中止しない() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
+        let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.33.0");
+        let ctx = ctx(dir.path());
+        assert_eq!(
+            config::problem(&ctx, &make(&ctx, Some(&proj), Some(&eng))),
+            None
+        );
+    }
+}
+
+mod describe_設定ファイルの読み込み {
+    use super::*;
+
+    #[story("G4")]
+    #[test]
+    fn it_設定ファイルが壊れていたら_ConfigError_にする() {
+        let dir = tmp();
+        let path = dir.path().join("config.toml");
+        fs::write(&path, "default = \n").expect("write");
+        let why = config::load_config(&path_str(&path)).expect_err("エラーにならない");
+        assert!(why.0.contains("設定ファイルを読めない"), "{why}");
+    }
+
+    #[story("G4", "G6")]
+    #[test]
+    fn it_設定ファイルが無ければ空の設定として読む() {
+        let dir = tmp();
+        let got = config::load_config(&path_str(&dir.path().join("none.toml")));
+        assert_eq!(got, Ok(toml::Table::new()));
+    }
+}
+
 const POS_OUT: &str = r#"{"pos": {"line": 99, "column": 0}, "endPos": {"line": 99, "column": 5}}"#;
 
 /// src の中の nth 番目 (0 始まり) の word を、repl と同じ {line, column} で指す。
@@ -1062,6 +1360,147 @@ mod describe_性質一覧 {
         if let Err(why) = spec::check(&spec::root()) {
             panic!("{why}");
         }
+    }
+}
+
+mod describe_Lake_プロジェクトの判定 {
+    //! 設定に環境が無いとき、カレントディレクトリから Lake プロジェクトを探す。
+    use super::*;
+
+    fn libs(dir: &Path, file: &str, text: &str) -> Vec<String> {
+        fs::write(dir.join(file), text).expect("write");
+        config::lake_libs(&path_str(dir))
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_lakefile_を持つ一番近い親ディレクトリを返す() {
+        let dir = tmp();
+        fs::write(dir.path().join("lakefile.toml"), "").expect("write");
+        let sub = dir.path().join("A").join("B");
+        fs::create_dir_all(&sub).expect("mkdir");
+        assert_eq!(
+            config::lake_root(&path_str(&sub)),
+            Some(path_str(dir.path()))
+        );
+    }
+
+    #[story("G3", "G6")]
+    #[test]
+    fn it_lakefile_が無ければ_None_を返す() {
+        let dir = tmp();
+        assert_eq!(config::lake_root(&path_str(dir.path())), None);
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_lakefile_toml_の_lean_lib_を返す() {
+        let dir = tmp();
+        let text = "name = \"p\"\n[[lean_lib]]\nname = \"Foo\"\n[[lean_lib]]\nname = \"Bar\"\n";
+        assert_eq!(libs(dir.path(), "lakefile.toml", text), ["Foo", "Bar"]);
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_lakefile_lean_の_lean_lib_を返す() {
+        let dir = tmp();
+        let text = "import Lake\nopen Lake DSL\n\nlean_lib Foo where\nlean_lib «Bar.Baz»\n";
+        assert_eq!(libs(dir.path(), "lakefile.lean", text), ["Foo", "Bar.Baz"]);
+    }
+
+    #[story("G4", "G6")]
+    #[test]
+    fn it_lakefile_toml_が壊れていたら空を返す() {
+        let dir = tmp();
+        assert!(libs(dir.path(), "lakefile.toml", "[[lean_lib]\n").is_empty());
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_設定が無ければ_Lake_プロジェクトの環境で起動する() {
+        let dir = tmp();
+        let proj = dir.path().join("myproj");
+        fs::create_dir_all(proj.join("sub")).expect("mkdir");
+        fs::write(
+            proj.join("lakefile.toml"),
+            "[[lean_lib]]\nname = \"MyProj\"\n",
+        )
+        .expect("write");
+        let ctx = ctx_at(&path_str(&proj.join("sub")));
+        let got = config::resolve(&ctx, None, None, &[], &table("")).expect("resolve");
+        assert_eq!(
+            (got.name.as_str(), got.project, got.imports),
+            ("myproj", Some(path_str(&proj)), vec!["MyProj".to_string()])
+        );
+    }
+
+    #[story("G3", "G6")]
+    #[test]
+    fn it_Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
+        let dir = tmp();
+        let ctx = ctx_at(&path_str(dir.path()));
+        let got = config::resolve(&ctx, None, None, &[], &table("")).expect("resolve");
+        assert_eq!((got.name.as_str(), got.project), ("plain", None));
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_import_を指定したら_lean_lib_の代わりにそれを使う() {
+        let dir = tmp();
+        fs::write(
+            dir.path().join("lakefile.toml"),
+            "[[lean_lib]]\nname = \"Mine\"\n",
+        )
+        .expect("write");
+        let ctx = ctx_at(&path_str(dir.path()));
+        let imports = ["Std".to_string()];
+        let got = config::resolve(&ctx, None, None, &imports, &table("")).expect("resolve");
+        assert_eq!(got.imports, ["Std"]);
+    }
+}
+
+mod describe_起動オプション {
+    use super::*;
+
+    fn parse(argv: &[&str]) -> Args {
+        parse_args(argv).expect("parse_args")
+    }
+
+    #[story("G6")]
+    #[test]
+    fn it_dash_i_を繰り返すと_import_がすべて残る() {
+        assert_eq!(parse(&["-i", "A", "--import", "B"]).imports, ["A", "B"]);
+    }
+
+    #[story("G5")]
+    #[test]
+    fn it_dash_e_で環境の名前を受け取る() {
+        assert_eq!(parse(&["-e", "m"]).name.as_deref(), Some("m"));
+        assert_eq!(parse(&["--env", "m"]).name.as_deref(), Some("m"));
+    }
+
+    #[story("G5", "G6")]
+    #[test]
+    fn it_値の無いオプションはエラーで終了する() {
+        // 終了コードは bin が決める。ここではメッセージだけを確かめる。
+        for flag in ["-e", "-i", "-p"] {
+            let why = parse_args(&[flag]).expect_err("エラーにならない");
+            assert!(why.contains(&format!("{flag} には")), "{why}");
+        }
+    }
+
+    #[story("H1")]
+    #[test]
+    fn it_不明なオプションはエラーで終了する() {
+        let why = parse_args(&["--nosuch"]).expect_err("エラーにならない");
+        assert!(why.contains("不明なオプション: --nosuch"), "{why}");
+    }
+
+    #[story("B4")]
+    #[test]
+    fn it_ファイル名と_ハイフンは読み込むファイルとして受け取る() {
+        assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
+        assert_eq!(parse(&["-"]).preload.as_deref(), Some("-"));
     }
 }
 

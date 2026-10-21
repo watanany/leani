@@ -905,3 +905,40 @@ pub fn not_evaluable_reason(blob: &str) -> Option<&'static str> {
 pub fn nested_action(blob: &str) -> bool {
     NESTED_ACTION.is_match(blob)
 }
+
+// ------------------------------------------------------------------ パス
+
+/// `~` を展開して絶対パスにする (Python の `os.path.abspath(os.path.expanduser(p))`)。
+/// ファイルは見ないので、シンボリックリンクは解決しない。空なら None。
+pub fn abspath(path: &str, home: &str, cwd: &str) -> Option<String> {
+    let expanded = match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
+        _ => path.to_string(),
+    };
+    match expanded.as_str() {
+        "" => None,
+        p if p.starts_with('/') => Some(normpath(p)),
+        p => Some(normpath(&format!("{cwd}/{p}"))),
+    }
+}
+
+/// `.` と `..` と重なった `/` を取り除く (Python の `posixpath.normpath`)。
+/// 絶対パスだけを受け取る。先頭がちょうど `//` のときは、POSIX の決まりで残す。
+fn normpath(path: &str) -> String {
+    let root = if path.starts_with("//") && !path.starts_with("///") {
+        "//"
+    } else {
+        "/"
+    };
+    let parts = path.split('/').fold(Vec::new(), |mut parts, part| {
+        match part {
+            "" | "." => {}
+            ".." => {
+                parts.pop();
+            }
+            _ => parts.push(part),
+        }
+        parts
+    });
+    format!("{root}{}", parts.join("/"))
+}
