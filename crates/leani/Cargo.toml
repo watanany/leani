@@ -1,0 +1,16 @@
+[package]
+name = "leani"
+description = "Lean 4 の対話 REPL"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+spec = { path = "../spec" }
+story = { path = "../story" }
+
+[lints]
+workspace = true

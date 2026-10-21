@@ -1,0 +1,13 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+repository = "https://github.com/watanany/leani"
+
+# 表示は Output に出す。print を使ってよいモジュールだけ #[allow] を付ける。
+[workspace.lints.clippy]
+print_stdout = "deny"
+print_stderr = "deny"
