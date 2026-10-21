@@ -1,0 +1,37 @@
+# leani-core は純粋な関数と定数だけを持つ。プロセス、ファイル、環境変数、ネットワークを
+# 使う関数と型を禁じる (Python 版の ruff の banned-api と同じ役割)。
+disallowed-methods = [
+    "std::env::args",
+    "std::env::current_dir",
+    "std::env::remove_var",
+    "std::env::set_current_dir",
+    "std::env::set_var",
+    "std::env::var",
+    "std::env::var_os",
+    "std::env::vars",
+    "std::fs::copy",
+    "std::fs::create_dir_all",
+    "std::fs::metadata",
+    "std::fs::read",
+    "std::fs::read_dir",
+    "std::fs::read_to_string",
+    "std::fs::remove_dir_all",
+    "std::fs::remove_file",
+    "std::fs::rename",
+    "std::fs::write",
+    "std::path::Path::exists",
+    "std::process::exit",
+]
+disallowed-types = [
+    "std::fs::File",
+    "std::fs::OpenOptions",
+    "std::net::TcpListener",
+    "std::net::TcpStream",
+    "std::net::UdpSocket",
+    "std::process::Command",
+]
+
+# 関数の複雑さの上限。Python 版の ruff の C901 と PLR0915 の既定値に合わせる。
+cognitive-complexity-threshold = 10
+too-many-lines-threshold = 50
+excessive-nesting-threshold = 4
