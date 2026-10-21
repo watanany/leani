@@ -1,0 +1,19 @@
+[package]
+name = "leani"
+description = "Lean 4 の対話 REPL"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+
+[dev-dependencies]
+portable-pty = "0.9.0"
+reedline = "0.52.1"
+spec = { path = "../spec" }
+story = { path = "../story" }
+vt100 = "0.18.1"
+
+[lints]
+workspace = true

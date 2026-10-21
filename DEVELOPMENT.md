@@ -32,9 +32,23 @@ uv run mypy
 テストの名前やストーリーを変えたら、`uv run python tools/spec.py` を実行して `SPEC.md` を生成し直す。
 `SPEC.md` の内容がテストと一致していないと、テストが失敗する。
 
+### Rust 版 (移植中)
+
+`crates/` に Rust 版を作っている。Rust の toolchain と cargo-nextest が必要。
+
+```
+cargo nextest run                               # すべてのテストを実行する
+cargo clippy --all-targets -- -D warnings
+cargo fmt --check
+cargo run -p spec                               # SPEC.rust.md を生成し直す
+cargo run -p spec -- --missing SPEC.md          # まだ Rust に移していないテストを表示する
+```
+
+`stories.toml` を変えたら、`SPEC.md` と `SPEC.rust.md` の両方を生成し直す。
+
 ## 作業の流れ
 
-- 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `tests/stories.py` に追加し、テストには `@story` でストーリーの ID を付ける。1 つのストーリーに複数のテストを付けてよい
+- 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `stories.toml` に追加し、テストには `@story` でストーリーの ID を付ける。1 つのストーリーに複数のテストを付けてよい
 - コードを変えたら、変えた関数の docstring、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.md` のずれは `tools/spec.py` が検出するが、コメントとドキュメントのずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの名前に書く
 - 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
@@ -57,6 +71,8 @@ uv run mypy
 
 ## 文書の書き方
 
+- 常体 (だ・である) で書く
+- 英数字の前後には半角の空白を入れる。`` ` `` で囲んだコードの前後も同じにする
 - 主語と目的語を省かない。「入る」のように、何がどうなるか分からない書き方をしない
 - 比喩と珍しい語を使わない。指摘されたら、`rg` で同じ書き方を探してまとめて直す
 - 必要なことだけを書き、細かいことを重要なことと同じ重さで並べない。README は入口なので、経緯と手元の環境のパスを書かない
@@ -70,6 +86,7 @@ uv run mypy
 | [guide/config.md](guide/config.md)                 | 設定、環境変数、ファイルの場所                                 |
 | [guide/jupyter.md](guide/jupyter.md)               | Jupyter のカーネルとして使う方法                               |
 | [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`tools/spec.py` がテストから生成する |
+| [SPEC.rust.md](SPEC.rust.md)                       | Rust 版の SPEC.md。`crates/spec` がテストから生成する          |
 | [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                       |
-| `tests/stories.py`                                 | ユーザーストーリーの一覧                                       |
+| `stories.toml`                                     | ユーザーストーリーの一覧                                       |
 | `src/leani/`                                       | leani のコード。設計の理由は docstring とコメントに書いてある  |
