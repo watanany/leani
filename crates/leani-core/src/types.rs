@@ -63,3 +63,8 @@ impl Proof {
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{0}")]
 pub struct EngineError(pub String);
+
+/// 設定が読めない、または指定された環境が無い。
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("{0}")]
+pub struct ConfigError(pub String);

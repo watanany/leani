@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 leani-core = { path = "../leani-core" }
+leani-read = { path = "../leani-read" }
 
 [dev-dependencies]
 portable-pty = "0.9.0"
@@ -16,7 +17,9 @@ reedline = "0.52.1"
 serde_json = "1"
 spec = { path = "../spec" }
 story = { path = "../story" }
+tempfile = "3"
 test-strategy = "0.4"
+toml = "0.9"
 vt100 = "0.18.1"
 
 [lints]
