@@ -7,12 +7,16 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+leani-core = { path = "../leani-core" }
 
 [dev-dependencies]
 portable-pty = "0.9.0"
+proptest = "1"
 reedline = "0.52.1"
+serde_json = "1"
 spec = { path = "../spec" }
 story = { path = "../story" }
+test-strategy = "0.4"
 vt100 = "0.18.1"
 
 [lints]

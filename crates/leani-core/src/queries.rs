@@ -1,0 +1,142 @@
+//! エンジンに送るクエリと、応答を読む正規表現 (定数)。
+//!
+//! Lean のソースコードとしてエンジンに送る文字列。Python 版 (`src/leani/queries.py`) と
+//! 1 文字も変えずに写してある。Lean のコードには `{}` が多いので `format!` は使わず、
+//! `%s` と `%d` を [`fill`] で埋める。
+
+use std::sync::LazyLock;
+
+use regex::Regex;
+
+/// 完結判定。command / term / tacticSeq としてパースできるかを、1 回のリクエストで
+/// 確かめる。
+pub const PARSE_PROBE: &str = r#"open Lean Parser in
+#eval show CoreM Unit from do
+  let src := %s
+  let env ← getEnv
+  let probe : Name → Json := fun cat =>
+    match runParserCategory env cat src with
+    | .ok _ => Json.mkObj [("ok", Json.bool true)]
+    | .error e => Json.mkObj [("ok", Json.bool false), ("err", Json.str e)]
+  IO.println (Json.mkObj [("cmd", probe `command), ("term", probe `term),
+                          ("tac", probe `tacticSeq)]).compress"#;
+
+/// 補完の候補。複数の接頭辞の候補を、定数を 1 回走査するあいだにまとめて取得する
+/// (Mathlib では 1 回の走査に 1 秒かかる)。protected な名前には先頭に ! を付ける。
+/// `open` した名前空間の名前を短い名前で書けるかどうかは、この ! で決まる。
+pub const COMPLETE_QUERY: &str = r#"open Lean in
+#eval show CoreM Unit from do
+  let env ← getEnv
+  let keys : Array String := %s
+  let mut hits : Array (Array (String × Bool)) := keys.map fun _ => #[]
+  for (n, _) in env.constants.toList do
+    if n.isInternalDetail then continue
+    let last := n.getString!
+    if last.startsWith "_" || last.startsWith "eq_" || last.startsWith "match_"
+       || last.startsWith "proof_" || last.startsWith "congr_"
+       || last == "go" || last == "loop" || last == "induct" || last == "fun_cases"
+       || last == "eq_def" || last == "sizeOf_spec" then continue
+    let s := n.toString
+    for i in [0:keys.size] do
+      if keys[i]!.isPrefixOf s then
+        hits := hits.modify i (·.push (s, isProtected env n))
+  let mark := fun ((s, p) : String × Bool) => if p then "!" ++ s else s
+  let out := hits.map fun h => (h.qsort (·.1 < ·.1)).toList.take %d |>.map mark
+  IO.println (toJson out).compress"#;
+
+/// 今の namespace と open。短い名前がどの名前空間の名前かを判断するのに使う。
+/// `open Lean in` を付けるとその open 自体も結果に含まれるので、名前はすべて
+/// 完全修飾名で書く。
+pub const SCOPE_QUERY: &str = r#"#eval show Lean.CoreM Unit from do
+  let mut opens : Array Lean.Json := #[]
+  let mut ns ← Lean.getCurrNamespace
+  while !ns.isAnonymous do
+    opens := opens.push (Lean.toJson (ns.toString, ([] : List String)))
+    ns := ns.getPrefix
+  let mut aliases : Array Lean.Json := #[]
+  for d in ← Lean.getOpenDecls do
+    match d with
+    | .simple n ex =>
+      opens := opens.push (Lean.toJson (n.toString, ex.map (·.toString)))
+    | .explicit id decl =>
+      aliases := aliases.push (Lean.toJson (id.toString, decl.toString))
+  let out := Lean.Json.mkObj [("open", .arr opens), ("alias", .arr aliases)]
+  IO.println out.compress"#;
+
+pub const DOC_QUERY: &str = r#"open Lean in
+#eval show CoreM Unit from do
+  match ← findDocString? (← getEnv) `%s with
+  | some d => IO.println d
+  | none => pure ()"#;
+
+/// クエリの `%s` と `%d` を、前から順に args で置き換える。`%%` は `%` にする。
+///
+/// 1 回の走査で置き換える。`replacen` を順に呼ぶと、先に入れた文字列の中の `%d` も
+/// 置き換えてしまう。
+pub fn fill(template: &str, args: &[&str]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = args.iter();
+    let mut chars = template.chars().peekable();
+    while let Some(ch) = chars.next() {
+        match (ch, chars.peek()) {
+            ('%', Some('s' | 'd')) => {
+                chars.next();
+                out.push_str(rest.next().expect("クエリの引数が足りない"));
+            }
+            ('%', Some('%')) => {
+                chars.next();
+                out.push('%');
+            }
+            _ => out.push(ch),
+        }
+    }
+    assert!(rest.next().is_none(), "クエリの引数が多すぎる");
+    out
+}
+
+fn re(pattern: &str) -> Regex {
+    Regex::new(pattern).expect("正規表現")
+}
+
+/// パーサが「まだ続きがある」と報告しているとみなすメッセージ。
+pub static INCOMPLETE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"unexpected end of input|unterminated (comment|string)"));
+
+/// 複数行の入力の途中でも、: で始まる行でブロックを終わらせられるようにする (ブロックが
+/// 完結していれば送信し、途中なら捨てる)。Lean のソースの行が : で始まることは
+/// 無い (`:=` の続きの行はインデントされる)。
+pub static META_LINE: LazyLock<Regex> = LazyLock::new(|| re(r"^:[A-Za-z!?{}]"));
+
+/// `structure P where` や `induction n with` は Lean の文法ではそれだけで完結する。
+/// パーサは完結していると判定するが、普通は続きのブロックを書きたいので確定を遅らせる。
+/// 完結判定の結果を変えるわけではないので、推測が外れても Enter が 1 回余分に必要に
+/// なるだけ。
+///
+/// Python の `$` は末尾の改行の手前にも一致するので、`\n?\z` で同じにする。
+pub static BLOCK_OPEN: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?:^|[\s)\]}])(where|with|do|by)[ \t]*\n?\z"));
+
+pub static ERR_POS: LazyLock<Regex> = LazyLock::new(|| re(r"<input>:(\d+):(\d+):"));
+
+/// ユーザーが入力し、エラーなく受理された宣言の名前。補完の候補に追加するためだけに
+/// 使うので、取りこぼしても問題はない。
+pub static DECL_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    re(concat!(
+        r"(?m)^\s*(?:@\[[^\]]*\]\s*)*",
+        r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+|unsafe\s+|scoped\s+)*",
+        r"(?:def|abbrev|theorem|lemma|instance|structure|inductive|class|opaque|axiom)",
+        r"\s+([A-Za-z_\x{00c0}-\x{ffff}][^\s:({\[]*)",
+    ))
+});
+
+// #eval できない式。型だけでも表示したほうが親切なので、#check に切り替える。
+// 評価できない理由を表示するため、理由ごとに分ける。
+pub static NONCOMPUTABLE: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?i)noncomputable|failed to compile"));
+pub static NO_REPR: LazyLock<Regex> =
+    LazyLock::new(|| re(r"(?is)could not synthesize.*(Repr|ToString|ToExpr|Eval)"));
+pub static CANNOT_EVAL: LazyLock<Regex> = LazyLock::new(|| re(r"(?i)cannot evaluate"));
+
+/// `(← e)` を do の外に書いたときのエラー。do で包み直して送る。
+pub static NESTED_ACTION: LazyLock<Regex> =
+    LazyLock::new(|| re(r"must be nested inside a `do` expression"));

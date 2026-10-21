@@ -1,0 +1,24 @@
+[package]
+name = "leani-core"
+description = "leani の純粋な関数と定数"
+version.workspace = true
+edition.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+regex = "1"
+serde_json = "1"
+thiserror = "2"
+
+# workspace の lints と同じ設定に、複雑さの上限を足す。上限の値は clippy.toml に書く。
+# Cargo では `workspace = true` とほかの lint を並べて書けないので、workspace の設定も
+# ここに書き写す。
+[lints.clippy]
+print_stdout = "deny"
+print_stderr = "deny"
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+excessive_nesting = "warn"
+disallowed_methods = "deny"
+disallowed_types = "deny"
