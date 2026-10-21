@@ -4,7 +4,7 @@
 leani で「何ができて、どういう性質を持つか」の一覧が必要。手で書くと必ずコードより
 古くなるので、情報源を 2 つだけに絞って生成する。手で書き足す場所は作らない。
 
-    tests/stories.py   誰の何を助けるか。コードからは分からないので、ここが情報源
+    stories.toml       誰の何を助けるか。コードからは分からないので、ここが情報源
     tests/test_*.py    それを確かめているテスト。テスト名がそのまま仕様の文になる
 
     uv run python tools/spec.py            # SPEC.md を書き直す
@@ -34,18 +34,23 @@ import glob
 import os
 import re
 import sys
+import tomllib
 from typing import TypedDict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(ROOT, "tests"))
 
-from stories import GROUPS, STORIES, UNBUILT  # noqa: E402
+with open(os.path.join(ROOT, "stories.toml"), "rb") as _f:
+    _TABLE = tomllib.load(_f)
+
+GROUPS: dict[str, str] = {g["id"]: g["title"] for g in _TABLE["group"]}
+STORIES: dict[str, str] = {s["id"]: s["text"] for s in _TABLE["story"]}
+UNBUILT: set[str] = set(_TABLE["unbuilt"])
 
 HEAD = """<!-- tools/spec.py が tests/ から生成する。手で編集しない。 -->
 
 # leani の性質一覧
 
-leani が誰の何を助けるか (`tests/stories.py`) に、それを確かめているテストの
+leani が誰の何を助けるか (`stories.toml`) に、それを確かめているテストの
 名前を並べたもの。テスト名はすべて `uv run pytest` で実際に確かめられている。
 項目が増えたり減ったりするのは、ストーリーかテストを追加または削除したときだけ。
 
@@ -149,12 +154,12 @@ def complaints(tests: list[Test]) -> list[str]:
         if not t["stories"]:
             out.append(f"@story が無い: {t['where']} / {t['what']}")
         out.extend(
-            f"tests/stories.py に無い番号: {sid} ({t['what']})"
+            f"stories.toml に無い番号: {sid} ({t['what']})"
             for sid in t["stories"]
             if sid not in STORIES
         )
     out.extend(
-        f"UNBUILT にあるのに STORIES に無い: {sid}"
+        f"unbuilt にあるのに story に無い: {sid}"
         for sid in sorted(UNBUILT)
         if sid not in STORIES
     )

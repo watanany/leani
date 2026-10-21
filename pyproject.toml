@@ -45,8 +45,6 @@ dev = [
 python_version = "3.11"
 strict = true
 files = ["src", "tools"]
-# tools/spec.py は tests/stories.py を読む (実行時は sys.path に追加している)。
-mypy_path = "tests"
 # テストは strict の対象にしない。pytest の fixture ごとに型注釈を書くことになり、
 # 効果より手間のほうが大きい。問題があればテストが失敗して分かる。
 

@@ -37,6 +37,7 @@ import tempfile
 import termios
 import textwrap
 import time
+import tomllib
 
 import pyte
 import pytest
@@ -81,8 +82,10 @@ with open(os.environ["LEANI_CONFIG"], "w") as _f:
     )
 
 
-import leani  # noqa: E402, I001  (定数を読み込む前に環境変数を決める)
-from stories import STORIES  # noqa: E402
+import leani  # noqa: E402  (定数を読み込む前に環境変数を決める)
+
+with open(os.path.join(ROOT, "stories.toml"), "rb") as f:
+    STORIES = {s["id"] for s in tomllib.load(f)["story"]}
 
 
 # ---------------------------------------------------------- ストーリーの指定
@@ -90,9 +93,9 @@ from stories import STORIES  # noqa: E402
 
 def story(*ids):
     """
-    このテストが対象にするユーザーストーリー (tests/stories.py) を指定する。
+    このテストが対象にするユーザーストーリー (stories.toml) を指定する。
 
-    テストの中身にも分け方にも影響しない。ID が tests/stories.py にあるかは
+    テストの中身にも分け方にも影響しない。ID が stories.toml にあるかは
     import するときに確認する。tools/spec.py は SPEC.md を生成するとき、この指定を
     AST から読む。1 つのテストが複数のストーリーを対象にしてよく、
     1 つのストーリーを複数のテストが対象にしてよい。ストーリーはテストの目次ではなく、
@@ -100,7 +103,7 @@ def story(*ids):
     """
     unknown = [i for i in ids if i not in STORIES]
     if unknown:
-        raise ValueError(f"tests/stories.py に無いストーリー: {unknown}")
+        raise ValueError(f"stories.toml に無いストーリー: {unknown}")
 
     def mark(fn):
         return fn
