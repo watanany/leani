@@ -79,13 +79,13 @@ fn abbrev_keys() -> impl Strategy<Value = &'static str> {
     prop::sample::select(ABBREV.keys().map(String::as_str).collect::<Vec<_>>())
 }
 
-mod describe_継続行の判定 {
+mod 継続行の判定 {
     //! 単独では入力になりえない行を見分ける。
     use super::*;
 
     #[story("C1")]
     #[test]
-    fn it_インデントした行は前の行の続き() {
+    fn インデントした行は前の行の続き() {
         for line in ["  | 0 => 0", "\tfoo", "  bar"] {
             assert!(pure::continues(line), "継続にならない: {line:?}");
         }
@@ -93,27 +93,27 @@ mod describe_継続行の判定 {
 
     #[story("C1")]
     #[test]
-    fn it_行頭のパイプは前の行の続き() {
+    fn 行頭のパイプは前の行の続き() {
         // `|` で始まる command も tactic も Lean には無い。
         assert!(pure::continues("| zero => rfl"));
     }
 
     #[story("A1", "C1")]
     #[test]
-    fn it_ふつうの行は単独の入力() {
+    fn ふつうの行は単独の入力() {
         for line in ["def f := 1", "#eval 1", "", "x + 1"] {
             assert!(!pure::continues(line), "継続にされた: {line:?}");
         }
     }
 }
 
-mod describe_続きを待つ行 {
+mod 続きを待つ行 {
     //! 完結していても次の行がありうる構文。
     use super::*;
 
     #[story("C1")]
     #[test]
-    fn it_where_with_do_by_で終わる行は空行を待つ() {
+    fn where_with_do_by_で終わる行は空行を待つ() {
         for line in [
             "structure P where",
             "induction n with",
@@ -126,38 +126,38 @@ mod describe_続きを待つ行 {
 
     #[story("C1")]
     #[test]
-    fn it_語の一部として含むだけなら待たない() {
+    fn 語の一部として含むだけなら待たない() {
         for line in ["def where_ := 1", "#eval byte", "def f := 1"] {
             assert!(!BLOCK_OPEN.is_match(line), "余計に待つ: {line:?}");
         }
     }
 }
 
-mod describe_パーサからの応答 {
+mod パーサからの応答 {
     //! 「まだ途中」という応答だけを継続とみなす。
     use super::*;
 
     #[story("C1")]
     #[test]
-    fn it_入力の途中なら次の行を待つ() {
+    fn 入力の途中なら次の行を待つ() {
         assert!(INCOMPLETE.is_match("<input>:1:5: unexpected end of input"));
         assert!(INCOMPLETE.is_match("unterminated comment"));
     }
 
     #[story("C1")]
     #[test]
-    fn it_ただのエラーは待たずに送る() {
+    fn ただのエラーは待たずに送る() {
         assert!(!INCOMPLETE.is_match("unknown identifier 'foo'"));
     }
 }
 
-mod describe_タクティクの提案 {
+mod タクティクの提案 {
     //! exact? や simp? は結果を "Try this:" として返す。
     use super::*;
 
     #[story("E2")]
     #[test]
-    fn it_提案から項だけを取り出す() {
+    fn 提案から項だけを取り出す() {
         let found = pure::try_this(&[
             json!({"severity": "info", "data": "Try this:\n  [apply] exact Nat.le_refl n"}),
         ]);
@@ -166,7 +166,7 @@ mod describe_タクティクの提案 {
 
     #[story("E2")]
     #[test]
-    fn it_折り返した提案をすべて取り出す() {
+    fn 折り返した提案をすべて取り出す() {
         // pretty printer が 100 桁前後で折り返す。1 行目だけ取り出すと
         // `simp only [a, b,` になり、それが完成した証明として表示されてしまう。
         let found = pure::try_this(&[json!({
@@ -178,14 +178,14 @@ mod describe_タクティクの提案 {
 
     #[story("E2")]
     #[test]
-    fn it_Try_this_と同じ行に書かれた提案も取り出す() {
+    fn Try_this_と同じ行に書かれた提案も取り出す() {
         let found = pure::try_this(&[json!({"data": "Try this: exact Nat.le_refl n"})]);
         assert_eq!(found.as_deref(), Some("exact Nat.le_refl n"));
     }
 
     #[story("E2")]
     #[test]
-    fn it_括弧が合わない提案は途中で切れていると判定する() {
+    fn 括弧が合わない提案は途中で切れていると判定する() {
         // スクリプトに追加する前の最後の確認。途中で切ると必ず括弧が合わなくなる。
         assert!(pure::balanced("simp only [aaa, bbb]"));
         assert!(pure::balanced("exact ⟨foo (bar x), rfl⟩"));
@@ -196,7 +196,7 @@ mod describe_タクティクの提案 {
 
     #[story("E2")]
     #[proptest]
-    fn it_閉じた文字列同士を連結しても閉じている(
+    fn 閉じた文字列同士を連結しても閉じている(
         #[strategy(balanced_src())] a: String,
         #[strategy(balanced_src())] b: String,
         #[strategy(closer())] close: char,
@@ -212,14 +212,14 @@ mod describe_タクティクの提案 {
 
     #[story("E2")]
     #[test]
-    fn it_提案でなければ何も返さない() {
+    fn 提案でなければ何も返さない() {
         let done = json!({"severity": "info", "data": "goals accomplished"});
         assert_eq!(pure::try_this(&[done]), None);
         assert_eq!(pure::try_this(&[]), None);
     }
 }
 
-mod describe_宣言の名前の取り出し {
+mod 宣言の名前の取り出し {
     //! ユーザーが実行した宣言を補完の候補に追加するために使う。
     use super::*;
 
@@ -232,7 +232,7 @@ mod describe_宣言の名前の取り出し {
 
     #[story("D1")]
     #[test]
-    fn it_修飾子や属性が付いていても名前を取り出せる() {
+    fn 修飾子や属性が付いていても名前を取り出せる() {
         let cases = [
             ("def foo := 1", "foo"),
             ("theorem bar (n : Nat) : n = n := rfl", "bar"),
@@ -246,29 +246,29 @@ mod describe_宣言の名前の取り出し {
 
     #[story("D1")]
     #[test]
-    fn it_宣言でないものからは名前を取り出さない() {
+    fn 宣言でないものからは名前を取り出さない() {
         assert!(names("#eval 1 + 1").is_empty());
     }
 }
 
-mod describe_補完する名前の切り出し {
+mod 補完する名前の切り出し {
     use super::*;
 
     #[story("D1")]
     #[test]
-    fn it_区切り文字の直後から名前を切り出す() {
+    fn 区切り文字の直後から名前を切り出す() {
         assert_eq!(pure::name_start("#check (Nat.suc"), "#check (".len());
         assert_eq!(pure::name_start("Nat.suc"), 0, "`.` で区切った");
     }
 }
 
-mod describe_補完の候補をまとめて取得する単位 {
+mod 補完の候補をまとめて取得する単位 {
     //! 名前空間があればそこまで、無ければ先頭 2 文字。
     use super::*;
 
     #[story("D1")]
     #[test]
-    fn it_名前空間の区切りで分ける() {
+    fn 名前空間の区切りで分ける() {
         assert_eq!(pure::name_chunk("Nat.suc"), "Nat.");
         assert_eq!(
             pure::name_chunk("MeasureTheory.integral_"),
@@ -278,26 +278,26 @@ mod describe_補完の候補をまとめて取得する単位 {
 
     #[story("D1")]
     #[test]
-    fn it_名前空間が無ければ先頭_2_文字() {
+    fn 名前空間が無ければ先頭_2_文字() {
         // Mathlib では 1 文字だと `C` で 7.5 万件になるので、単位を広げすぎない。
         assert_eq!(pure::name_chunk("Contin"), "Co");
     }
 }
 
-mod describe_エンジンの出力の_JSON {
+mod エンジンの出力の_JSON {
     //! 問い合わせの結果はエンジンの出力の最後の行にある。
     use super::*;
 
     #[story("D1", "C1")]
     #[test]
-    fn it_出力の最後の行を_JSON_として読む() {
+    fn 出力の最後の行を_JSON_として読む() {
         let got = pure::last_json(Some("宣言が出力した行\n{\"a\": [1]}\n"));
         assert_eq!(got, Some(json!({"a": [1]})));
     }
 
     #[story("D1", "C1")]
     #[test]
-    fn it_出力が空か最後の行が_JSON_でなければ_None_を返す() {
+    fn 出力が空か最後の行が_JSON_でなければ_None_を返す() {
         for out in [
             None,
             Some(""),
@@ -309,27 +309,27 @@ mod describe_エンジンの出力の_JSON {
     }
 }
 
-mod describe_入力が完結したかの判定 {
+mod 入力が完結したかの判定 {
     //! パーサの応答 (JSON) だけを見て、送り方と状態を決める。
     use super::*;
 
     #[story("A1", "C1")]
     #[test]
-    fn it_command_として読めたらそのまま送る() {
+    fn command_として読めたらそのまま送る() {
         let probe = json!({"cmd": {"ok": true}, "term": {"ok": false, "err": "x"}});
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Cmd));
     }
 
     #[story("A1")]
     #[test]
-    fn it_term_としてしか読めなければ_eval_に包む() {
+    fn term_としてしか読めなければ_eval_に包む() {
         let probe = json!({"cmd": {"ok": false, "err": "x"}, "term": {"ok": true}});
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Term));
     }
 
     #[story("C1")]
     #[test]
-    fn it_途中なら次の行を待つ() {
+    fn 途中なら次の行を待つ() {
         let probe = json!({
             "cmd": {"ok": false, "err": "<input>:1:9: unexpected end of input"},
             "term": {"ok": false, "err": "<input>:1:3: unexpected token"},
@@ -339,7 +339,7 @@ mod describe_入力が完結したかの判定 {
 
     #[story("C1")]
     #[test]
-    fn it_より先まで解析できたほうをユーザーの意図とみなす() {
+    fn より先まで解析できたほうをユーザーの意図とみなす() {
         let probe = json!({
             "cmd": {"ok": false, "err": "<input>:1:2: unexpected token"},
             "term": {"ok": false, "err": "<input>:1:7: unexpected token"},
@@ -349,14 +349,14 @@ mod describe_入力が完結したかの判定 {
 
     #[story("C1")]
     #[test]
-    fn it_判定できなければ_Lean_に本当のエラーを出させる() {
+    fn 判定できなければ_Lean_に本当のエラーを出させる() {
         // leani の推測でエラーを作らない。command として送る。
         assert_eq!(pure::classify(None), (State::Err, Kind::Cmd));
     }
 
     #[story("E1")]
     #[test]
-    fn it_証明モードでは_tacticSeq_だけを見る() {
+    fn 証明モードでは_tacticSeq_だけを見る() {
         let ok = json!({"tac": {"ok": true}});
         assert_eq!(pure::classify_tac(Some(&ok)), (State::Complete, Kind::Tac));
         let more = json!({"tac": {"ok": false, "err": "unexpected end of input"}});
@@ -366,7 +366,7 @@ mod describe_入力が完結したかの判定 {
 
     #[story("C1")]
     #[test]
-    fn it_インデントで続いたブロックは空行まで待つ() {
+    fn インデントで続いたブロックは空行まで待つ() {
         assert!(pure::block_continues(
             &["def f", "  | 0 => 0"],
             "def f\n  | 0 => 0"
@@ -375,55 +375,55 @@ mod describe_入力が完結したかの判定 {
     }
 }
 
-mod describe_評価できない理由 {
+mod 評価できない理由 {
     //! #eval のエラー文から、評価できない理由を取り出す。
     use super::*;
 
     #[story("A2")]
     #[test]
-    fn it_Repr_が無いという理由を取り出す() {
+    fn Repr_が無いという理由を取り出す() {
         let blob = "Could not synthesize a `ToExpr`, `Repr`, or `ToString` instance";
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("Repr")));
     }
 
     #[story("A2")]
     #[test]
-    fn it_noncomputable_という理由を取り出す() {
+    fn noncomputable_という理由を取り出す() {
         let blob = "failed to compile definition, consider marking it as 'noncomputable'";
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("noncomputable")));
     }
 
     #[story("A2")]
     #[test]
-    fn it_評価できないエラーでなければ_None_を返す() {
+    fn 評価できないエラーでなければ_None_を返す() {
         assert_eq!(pure::not_evaluable_reason("Unknown identifier `x`"), None);
     }
 }
 
-mod describe_do_の外の_action {
+mod do_の外の_action {
     use super::*;
 
     #[story("A1")]
     #[test]
-    fn it_do_の外に書いた_action_のエラーを見分ける() {
+    fn do_の外に書いた_action_のエラーを見分ける() {
         let blob = "Nested action `← f` must be nested inside a `do` expression.";
         assert!(pure::nested_action(blob));
     }
 
     #[story("A1")]
     #[test]
-    fn it_ほかのエラーは_do_の外の_action_と見なさない() {
+    fn ほかのエラーは_do_の外の_action_と見なさない() {
         assert!(!pure::nested_action("Unknown identifier `x`"));
     }
 }
 
-mod describe_エラー位置の範囲 {
+mod エラー位置の範囲 {
     //! メッセージの位置を、送ったソースの座標からその行の中に収める。
     use super::*;
 
     #[story("A5")]
     #[test]
-    fn it_eval_で包んだ分だけ位置を戻す() {
+    fn eval_で包んだ分だけ位置を戻す() {
         let m = json!({"pos": {"line": 2, "column": 6}, "endPos": {"line": 2, "column": 9}});
         // #eval で 1 行 2 桁ずらして送っているので、元のソースでは 1 行 4 桁。
         assert_eq!(pure::span(&m, &["foo bar"], 1, 2), Some((1, 4, 3)));
@@ -431,32 +431,32 @@ mod describe_エラー位置の範囲 {
 
     #[story("A5")]
     #[test]
-    fn it_位置が行の外なら範囲を返さない() {
+    fn 位置が行の外なら範囲を返さない() {
         let m = json!({"pos": {"line": 9, "column": 0}});
         assert_eq!(pure::span(&m, &["foo"], 0, 0), None);
     }
 
     #[story("A5")]
     #[test]
-    fn it_範囲の幅は行の長さに収める() {
+    fn 範囲の幅は行の長さに収める() {
         let m = json!({"pos": {"line": 1, "column": 1}, "endPos": {"line": 1, "column": 99}});
         assert_eq!(pure::span(&m, &["abc"], 0, 0), Some((1, 1, 2)));
     }
 }
 
-mod describe_レスポンスの切り出し {
+mod レスポンスの切り出し {
     //! 空行で区切られた JSON を、受信し終えた分だけ取り出す。
     use super::*;
 
     #[story("F1")]
     #[test]
-    fn it_受信し終えるまでは何も返さない() {
+    fn 受信し終えるまでは何も返さない() {
         assert_eq!(pure::first_response("{\"env\": 1}"), None);
     }
 
     #[story("F1")]
     #[test]
-    fn it_空行を受け取ったら読み込む() {
+    fn 空行を受け取ったら読み込む() {
         assert_eq!(
             pure::first_response("{\"env\": 1}\n\n"),
             Some(json!({"env": 1}))
@@ -465,20 +465,20 @@ mod describe_レスポンスの切り出し {
 
     #[story("F1")]
     #[test]
-    fn it_JSON_の中の空行では区切らない() {
+    fn JSON_の中の空行では区切らない() {
         let buf = "{\"messages\": [{\"data\": \"a\\n\\nb\"}]}\n\n";
         let got = pure::first_response(buf).expect("レスポンスを読めない");
         assert_eq!(got["messages"][0]["data"], "a\n\nb");
     }
 }
 
-mod describe_エンジンの_PANIC {
+mod エンジンの_PANIC {
     //! エンジンが PANIC したかを、レスポンスのメッセージから判定する。
     use super::*;
 
     #[story("F1")]
     #[test]
-    fn it_PANIC_の行を返す() {
+    fn PANIC_の行を返す() {
         let resp = json!({"messages": [
             {"severity": "info", "data": "1"},
             {"severity": "info", "data": PANIC},
@@ -491,7 +491,7 @@ mod describe_エンジンの_PANIC {
 
     #[story("F1")]
     #[test]
-    fn it_PANIC_の前に出力があっても_PANIC_の行を返す() {
+    fn PANIC_の前に出力があっても_PANIC_の行を返す() {
         let resp = json!({"messages": [{"severity": "info", "data": format!("42\n{PANIC}")}]});
         assert_eq!(
             pure::panic_line(&resp).as_deref(),
@@ -501,34 +501,34 @@ mod describe_エンジンの_PANIC {
 
     #[story("F1")]
     #[test]
-    fn it_PANIC_していなければ_None_を返す() {
+    fn PANIC_していなければ_None_を返す() {
         let resp = json!({"messages": [{"severity": "info", "data": "2"}]});
         assert_eq!(pure::panic_line(&resp), None);
         assert_eq!(pure::panic_line(&json!({})), None);
     }
 }
 
-mod describe_起動前の準備 {
+mod 起動前の準備 {
     //! import を追加したり取り除いたりする処理。
     use super::*;
 
     #[story("G2")]
     #[test]
-    fn it_init_ファイルの_import_行は取り除く() {
+    fn init_ファイルの_import_行は取り除く() {
         // init は既存の環境の上に追加するので、import を書けない。
         assert_eq!(pure::strip_imports("import Foo\ndef x := 1"), "def x := 1");
     }
 
     #[story("G2")]
     #[test]
-    fn it_import_を含むファイルには_import_を追加しない() {
+    fn import_を含むファイルには_import_を追加しない() {
         assert!(pure::has_import("\nimport Mathlib\ndef f := 1"));
         assert!(!pure::has_import("def f := 1  -- import ではない"));
     }
 
     #[story("G1")]
     #[test]
-    fn it_lake_env_のキャッシュを読む() {
+    fn lake_env_のキャッシュを読む() {
         let env = pure::parse_env_lines("LEAN_PATH=/a:/b\nLD_LIBRARY_PATH=\n");
         let want = [("LEAN_PATH", "/a:/b"), ("LD_LIBRARY_PATH", "")]
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -537,7 +537,7 @@ mod describe_起動前の準備 {
     }
 }
 
-mod describe_エンジンのバージョン {
+mod エンジンのバージョン {
     //! 使う Lean のバージョンから repl のタグとパスを決める。
     use super::*;
 
@@ -545,7 +545,7 @@ mod describe_エンジンのバージョン {
 
     #[story("G3")]
     #[test]
-    fn it_toolchain_からバージョンだけ取る() {
+    fn toolchain_からバージョンだけ取る() {
         assert_eq!(
             pure::toolchain_version("leanprover/lean4:v4.34.0-rc2"),
             "v4.34.0-rc2"
@@ -555,7 +555,7 @@ mod describe_エンジンのバージョン {
 
     #[story("G4")]
     #[test]
-    fn it_自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す() {
+    fn 自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す() {
         let got = pure::toolchain_warning(true, "v4.33.0", "v4.34.0", "/eng").expect("警告しない");
         assert!(
             got.contains("使うバージョン=v4.34.0 / エンジン=v4.33.0"),
@@ -566,7 +566,7 @@ mod describe_エンジンのバージョン {
 
     #[story("G4")]
     #[test]
-    fn it_toolchain_が同じか_leani_が用意したエンジンなら警告しない() {
+    fn toolchain_が同じか_leani_が用意したエンジンなら警告しない() {
         assert_eq!(
             pure::toolchain_warning(true, "v4.34.0", "v4.34.0", "/e"),
             None
@@ -581,14 +581,14 @@ mod describe_エンジンのバージョン {
 
     #[story("G3")]
     #[test]
-    fn it_rc_は同じバージョンの正式リリースより前() {
+    fn rc_は同じバージョンの正式リリースより前() {
         assert!(pure::version_key("v4.33.0-rc1") < pure::version_key("v4.33.0"));
         assert!(pure::version_key("v4.33.0") < pure::version_key("v4.34.0-rc1"));
     }
 
     #[story("G3")]
     #[test]
-    fn it_解釈できないバージョンは_None() {
+    fn 解釈できないバージョンは_None() {
         for tag in ["v4.33", "nightly-2026-01-01", "4.33.0"] {
             assert_eq!(pure::version_key(tag), None, "解釈できてしまう: {tag:?}");
         }
@@ -596,41 +596,41 @@ mod describe_エンジンのバージョン {
 
     #[story("G3")]
     #[test]
-    fn it_同名のタグがあればそれを使う() {
+    fn 同名のタグがあればそれを使う() {
         assert_eq!(pure::pick_tag("v4.33.0", &TAGS).as_deref(), Some("v4.33.0"));
     }
 
     #[story("G3")]
     #[test]
-    fn it_タグの無い_patch_リリースは直前のタグを使う() {
+    fn タグの無い_patch_リリースは直前のタグを使う() {
         // repl は v4.33.1 にタグを付けない。API は patch で変わらない。
         assert_eq!(pure::pick_tag("v4.33.1", &TAGS).as_deref(), Some("v4.33.0"));
     }
 
     #[story("G3")]
     #[test]
-    fn it_どのタグより古いバージョンなら_None() {
+    fn どのタグより古いバージョンなら_None() {
         assert_eq!(pure::pick_tag("v4.0.0", &["v4.32.0", "v4.33.0"]), None);
         assert_eq!(pure::pick_tag("nightly", &["v4.33.0"]), None);
     }
 
     #[story("G3")]
     #[test]
-    fn it_パスはバージョンごとに分かれる() {
+    fn パスはバージョンごとに分かれる() {
         let got = pure::engine_dir(None, "leanprover/lean4:v4.33.0", "/cache");
         assert_eq!(got.as_deref(), Ok("/cache/v4.33.0"));
     }
 
     #[story("G3")]
     #[test]
-    fn it_明示されたパスはそのまま使う() {
+    fn 明示されたパスはそのまま使う() {
         let got = pure::engine_dir(Some("/opt/repl"), "leanprover/lean4:v4.33.0", "/cache");
         assert_eq!(got.as_deref(), Ok("/opt/repl"));
     }
 
     #[story("G3")]
     #[test]
-    fn it_パスの外を指すバージョン名は受け付けない() {
+    fn パスの外を指すバージョン名は受け付けない() {
         // build_engine はこの場所を消してから作り直す。`..` を含む名前を
         // 受け付けると、関係ないディレクトリを消してしまう。
         for tc in ["leanprover/lean4:..", "..", "."] {
@@ -694,7 +694,7 @@ fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir")
 }
 
-mod describe_設定の値の型 {
+mod 設定の値の型 {
     //! TOML には何でも書ける。型が違う値は panic ではなく ConfigError にする。
     use super::*;
 
@@ -706,7 +706,7 @@ mod describe_設定の値の型 {
 
     #[story("G4")]
     #[test]
-    fn it_import_を文字列で書いたらエラーにする() {
+    fn import_を文字列で書いたらエラーにする() {
         // エラーにせず受け付けると 1 文字ずつの import になり、どれも解決できないので
         // ヘッダがすべて捨てられる (import Lean も消える)。
         let why = resolve_err("default = \"m\"\n[env.m]\nimports = \"Mathlib\"\n");
@@ -715,7 +715,7 @@ mod describe_設定の値の型 {
 
     #[story("G4")]
     #[test]
-    fn it_文字列で書くべき値が別の型ならエラーにする() {
+    fn 文字列で書くべき値が別の型ならエラーにする() {
         for (key, value) in [("project", "3"), ("engine", "true"), ("prompt", "5")] {
             let why = resolve_err(&format!("default = \"m\"\n[env.m]\n{key} = {value}\n"));
             assert!(why.contains(key), "{why}");
@@ -724,7 +724,7 @@ mod describe_設定の値の型 {
 
     #[story("G4")]
     #[test]
-    fn it_表で書くべき値が別の型ならエラーにする() {
+    fn 表で書くべき値が別の型ならエラーにする() {
         let why = resolve_err("default = \"m\"\nenv = 3\n");
         assert!(why.contains("env は表"), "{why}");
         let why = resolve_err("default = \"m\"\n[env]\nm = \"nope\"\n");
@@ -733,14 +733,14 @@ mod describe_設定の値の型 {
 
     #[story("G4")]
     #[test]
-    fn it_default_が文字列でなければエラーにする() {
+    fn default_が文字列でなければエラーにする() {
         let why = resolve_err("default = 3\n[env.m]\n");
         assert!(why.contains("default"), "{why}");
     }
 
     #[story("G4", "G5")]
     #[test]
-    fn it_書き方が正しければ値をそのまま読み込む() {
+    fn 書き方が正しければ値をそのまま読み込む() {
         let cfg = table("default = \"m\"\n[env.m]\nimports = [\"A\", \"B\"]\nprompt = \"> \"\n");
         let got = config::resolve(&ctx_at("/"), None, None, &[], &cfg).expect("resolve");
         assert_eq!(
@@ -750,7 +750,7 @@ mod describe_設定の値の型 {
     }
 }
 
-mod describe_起動する環境の決め方 {
+mod 起動する環境の決め方 {
     //! guide/config.md の「起動する環境の決まり方」と、エンジンの優先順位。
     use super::*;
 
@@ -779,13 +779,13 @@ engine = "/m/engine"
 
     #[story("G5")]
     #[test]
-    fn it_名前を指定したら_default_より優先する() {
+    fn 名前を指定したら_default_より優先する() {
         assert_eq!(resolve(&ctx_at("/"), Some("m"), None, &[]).name, "m");
     }
 
     #[story("G5")]
     #[test]
-    fn it_名前と_import_を指定したら環境の_imports_を置き換える() {
+    fn 名前と_import_を指定したら環境の_imports_を置き換える() {
         let got = resolve(&ctx_at("/"), Some("m"), Some("/p"), &["X"]);
         assert_eq!(
             (got.name.as_str(), got.imports, got.project.as_deref()),
@@ -795,7 +795,7 @@ engine = "/m/engine"
 
     #[story("G5", "G6")]
     #[test]
-    fn it_import_だけを指定したら_default_を使わない() {
+    fn import_だけを指定したら_default_を使わない() {
         let dir = tmp();
         let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
         assert_eq!(
@@ -806,7 +806,7 @@ engine = "/m/engine"
 
     #[story("G3", "G5")]
     #[test]
-    fn it_環境の_engine_は最上位の_engine_より優先する() {
+    fn 環境の_engine_は最上位の_engine_より優先する() {
         let ctx = ctx_at("/");
         let engine = |name| resolve(&ctx, name, None, &[]).engine;
         assert_eq!(engine(Some("m")).as_deref(), Some("/m/engine"));
@@ -815,7 +815,7 @@ engine = "/m/engine"
 
     #[story("G3")]
     #[test]
-    fn it_設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
+    fn 設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
         let ctx = ctx_with(&[("LEANI_ENGINE", "/env/engine")], "/");
         let cfg = table("default = \"d\"\n[env.d]\n");
         let got = config::resolve(&ctx, None, None, &[], &cfg).expect("resolve");
@@ -824,14 +824,14 @@ engine = "/m/engine"
 
     #[story("G3", "G5")]
     #[test]
-    fn it_名前を付けずに起動したら環境の_engine_は使わない() {
+    fn 名前を付けずに起動したら環境の_engine_は使わない() {
         let dir = tmp();
         let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
         assert_eq!(got.engine.as_deref(), Some("/top/engine"));
     }
 }
 
-mod describe_起動を中止する理由 {
+mod 起動を中止する理由 {
     use super::*;
 
     /// elan、lake、git がそろった PATH の Ctx。
@@ -845,7 +845,7 @@ mod describe_起動を中止する理由 {
 
     #[story("G3", "G4")]
     #[test]
-    fn it_エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
+    fn エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.34.0");
@@ -857,7 +857,7 @@ mod describe_起動を中止する理由 {
 
     #[story("G4")]
     #[test]
-    fn it_Lake_プロジェクトが無ければ起動を中止する() {
+    fn Lake_プロジェクトが無ければ起動を中止する() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let no = path_str(&dir.path().join("no"));
@@ -868,7 +868,7 @@ mod describe_起動を中止する理由 {
 
     #[story("G3", "G4")]
     #[test]
-    fn it_指定されたエンジンが無いか未ビルドなら起動を中止する() {
+    fn 指定されたエンジンが無いか未ビルドなら起動を中止する() {
         let dir = tmp();
         let ctx = ctx(dir.path());
         let no = path_str(&dir.path().join("no"));
@@ -881,7 +881,7 @@ mod describe_起動を中止する理由 {
 
     #[story("G4")]
     #[test]
-    fn it_elan_lake_git_が_PATH_に無ければ起動を中止する() {
+    fn elan_lake_git_が_PATH_に無ければ起動を中止する() {
         // git はエンジンを leani が用意するときだけ必要になる。
         for tool in ["elan", "lake", "git"] {
             let dir = tmp();
@@ -897,7 +897,7 @@ mod describe_起動を中止する理由 {
 
     #[story("G4")]
     #[test]
-    fn it_設定がそろっていれば中止しない() {
+    fn 設定がそろっていれば中止しない() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.33.0");
@@ -909,12 +909,12 @@ mod describe_起動を中止する理由 {
     }
 }
 
-mod describe_設定ファイルの読み込み {
+mod 設定ファイルの読み込み {
     use super::*;
 
     #[story("G4")]
     #[test]
-    fn it_設定ファイルが壊れていたら_ConfigError_にする() {
+    fn 設定ファイルが壊れていたら_ConfigError_にする() {
         let dir = tmp();
         let path = dir.path().join("config.toml");
         fs::write(&path, "default = \n").expect("write");
@@ -924,7 +924,7 @@ mod describe_設定ファイルの読み込み {
 
     #[story("G4", "G6")]
     #[test]
-    fn it_設定ファイルが無ければ空の設定として読む() {
+    fn 設定ファイルが無ければ空の設定として読む() {
         let dir = tmp();
         let got = config::load_config(&path_str(&dir.path().join("none.toml")));
         assert_eq!(got, Ok(toml::Table::new()));
@@ -950,7 +950,7 @@ fn mark(src: &str, word: &str, nth: usize) -> Json {
     })
 }
 
-mod describe_証明モードのタクティクの記録 {
+mod 証明モードのタクティクの記録 {
     use super::*;
 
     fn start() -> Proof {
@@ -963,7 +963,7 @@ mod describe_証明モードのタクティクの記録 {
 
     #[story("E1")]
     #[test]
-    fn it_タクティクを進めると前の状態とゴールを積む() {
+    fn タクティクを進めると前の状態とゴールを積む() {
         let got = pure::tactic_step(&start(), 3, &strings(&["⊢ p", "⊢ q"]), "constructor");
         assert_eq!(
             (got.state, &got.goals, got.generation),
@@ -975,14 +975,14 @@ mod describe_証明モードのタクティクの記録 {
 
     #[story("E1")]
     #[test]
-    fn it_取り消すと状態とゴールとスクリプトがそろって戻る() {
+    fn 取り消すと状態とゴールとスクリプトがそろって戻る() {
         let step = pure::tactic_step(&start(), 3, &strings(&["⊢ p", "⊢ q"]), "constructor");
         assert_eq!(pure::tactic_undo(&step), Some(start()));
         assert_eq!(pure::tactic_undo(&start()), None);
     }
 }
 
-mod describe_sorry_の置き換え {
+mod sorry_の置き換え {
     //! repl の pos / endPos で切り出してスクリプトに置き換える。桁はコードポイント
     //! 単位で、`pure::offset` が byte の位置に直す。
     use super::*;
@@ -993,7 +993,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_日本語を含んでも位置で切り出せる() {
+    fn 日本語を含んでも位置で切り出せる() {
         let src = "theorem a : True := by /- あいう -/ sorry";
         assert_eq!(
             splice(src, "sorry", "trivial").as_deref(),
@@ -1003,7 +1003,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_単独の行にある_sorry_のインデントを変えない() {
+    fn 単独の行にある_sorry_のインデントを変えない() {
         // 空白を詰めるとインデントが浅くなり、内側の by ブロックの外に出てしまう。
         let src = "example : True := by\n  have h : True := by\n    sorry\n  exact h";
         assert_eq!(
@@ -1014,7 +1014,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_複数行のスクリプトは_sorry_の桁にそろえる() {
+    fn 複数行のスクリプトは_sorry_の桁にそろえる() {
         let src = "example : True := by\n  have h : True := by\n    sorry\n  exact h";
         assert_eq!(
             splice(src, "sorry", "constructor\n-- おわり").as_deref(),
@@ -1030,7 +1030,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_行の途中の_sorry_を複数行のスクリプトにするときは_by_の次の行に下げる() {
+    fn 行の途中の_sorry_を複数行のスクリプトにするときは_by_の次の行に下げる() {
         let src = "theorem t (n : Nat) : n + 0 = n := by sorry";
         assert_eq!(
             splice(src, "sorry", "induction n with\n| zero => rfl").as_deref(),
@@ -1040,7 +1040,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_匿名コンストラクタの中の_sorry_に空白を足さない() {
+    fn 匿名コンストラクタの中の_sorry_に空白を足さない() {
         let src = "example : True ∧ True := ⟨by sorry, by trivial⟩";
         assert_eq!(
             splice(src, "sorry", "trivial").as_deref(),
@@ -1050,7 +1050,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[test]
-    fn it_位置が_sorry_を指していなければ置き換えない() {
+    fn 位置が_sorry_を指していなければ置き換えない() {
         let src = "example : True := by trivial";
         // 位置は合っているが指しているのは sorry ではない / 行が無い。
         assert_eq!(splice(src, "trivial", "rfl"), None);
@@ -1062,7 +1062,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[proptest]
-    fn it_行と桁を文字のインデックスに変換できる(
+    fn 行と桁を文字のインデックスに変換できる(
         #[strategy(prop::collection::vec("[ab \tあ]{0,4}", 1..=5))] lines: Vec<String>,
         #[strategy(0..100usize)] n: usize,
         #[strategy(0..100usize)] col: usize,
@@ -1081,7 +1081,7 @@ mod describe_sorry_の置き換え {
 
     #[story("E3")]
     #[proptest]
-    fn it_sorry_の前後は書き換えない(
+    fn sorry_の前後は書き換えない(
         #[strategy(decoys())] before: Vec<&'static str>,
         #[strategy(prop::sample::select(vec!["", "  ", "    ", "  exact ⟨"]))] pad: &'static str,
         #[strategy(decoys())] after: Vec<&'static str>,
@@ -1114,26 +1114,26 @@ mod describe_sorry_の置き換え {
     }
 }
 
-mod describe_ファイルの_import {
+mod ファイルの_import {
     //! :save のヘッダに書き戻すため、読み込んだファイルの import を記録する。
     use super::*;
 
     #[story("B3", "B4")]
     #[test]
-    fn it_import_の行だけを取り出す() {
+    fn import_の行だけを取り出す() {
         let src = "import Lean.Elab\nimport  Std\n\ndef a := 1\n-- import Nope\n";
         assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std"]);
     }
 
     #[story("B3")]
     #[test]
-    fn it_import_が無ければ空() {
+    fn import_が無ければ空() {
         assert!(pure::import_lines("def a := 1\nimport\n").is_empty());
     }
 
     #[story("B3", "B4")]
     #[test]
-    fn it_コメントの中の_import_は数えない() {
+    fn コメントの中の_import_は数えない() {
         // ヘッダに書くと repl はヘッダ全体を捨てて起動するので、書き出したファイルは
         // :l でも lean でもエラーになる。import 行を取り除く処理も doc コメントの
         // 中身を変える。
@@ -1145,21 +1145,21 @@ mod describe_ファイルの_import {
 
     #[story("B3")]
     #[test]
-    fn it_宣言のあとの_import_は数えない() {
+    fn 宣言のあとの_import_は数えない() {
         // Lean も先頭以外の import を認めない。数えると :save のヘッダが増える。
         assert!(pure::import_lines("def a := 1\nimport Std\n").is_empty());
     }
 
     #[story("B4")]
     #[test]
-    fn it_入れ子のコメントの終わりを正しく判定する() {
+    fn 入れ子のコメントの終わりを正しく判定する() {
         let src = "/- /- import In.Nest -/ import Still.In -/\nimport Real\n";
         assert_eq!(pure::import_lines(src), ["Real"]);
     }
 
     #[story("B3", "B4")]
     #[proptest]
-    fn it_取り除くのは本物の_import_行だけ(
+    fn 取り除くのは本物の_import_行だけ(
         #[strategy(prop::collection::vec(prop::sample::select(HEADERS.to_vec()), 0..=12))]
         lines: Vec<&'static str>,
     ) {
@@ -1180,21 +1180,21 @@ mod describe_ファイルの_import {
     }
 }
 
-mod describe_略記の展開 {
+mod 略記の展開 {
     //! `\name` を Lean の記号に変換する。変換は space か Tab で確定し、キー入力の
     //! たびには確認しない。
     use super::*;
 
     #[story("C5")]
     #[test]
-    fn it_名前を記号に変換する() {
+    fn 名前を記号に変換する() {
         assert_eq!(expand_abbrev("a \\to"), Some(("→", 3)));
         assert_eq!(expand_abbrev("x\\dot"), Some(("·", 4)));
     }
 
     #[story("C5")]
     #[test]
-    fn it_長い略記が短い略記として変換されない() {
+    fn 長い略記が短い略記として変換されない() {
         // `\a` も `\all` も `\alpha` も表にある。キー入力のたびに確定すると `\a` の
         // 時点で変換されてしまい、長いほうを入力できなくなる。
         assert_eq!(expand_abbrev("\\a"), Some(("α", 2)));
@@ -1204,7 +1204,7 @@ mod describe_略記の展開 {
 
     #[story("C5")]
     #[test]
-    fn it_めったに使わない略記も変換できる() {
+    fn めったに使わない略記も変換できる() {
         // 表には VS Code の Lean 拡張の略記をほぼすべて (1829 件) 含めている。
         assert_eq!(expand_abbrev("\\frown"), Some(("⌢", 6)));
         assert_eq!(expand_abbrev("\\Gangia"), Some(("Ϫ", 7)));
@@ -1212,14 +1212,14 @@ mod describe_略記の展開 {
 
     #[story("C5")]
     #[test]
-    fn it_表に無い名前は変えない() {
+    fn 表に無い名前は変えない() {
         assert_eq!(expand_abbrev("\\nosuch"), None);
         assert_eq!(expand_abbrev("1 + 1"), None);
     }
 
     #[story("C5")]
     #[test]
-    fn it_略記のあとに記号が続く場合は変換しない() {
+    fn 略記のあとに記号が続く場合は変換しない() {
         // `\to)` 全体で表を検索する。`"\t"` のような文字列を ▸ に変換しない。
         assert_eq!(expand_abbrev("(\\to)"), None);
         assert_eq!(expand_abbrev("\"\\t\""), None);
@@ -1227,7 +1227,7 @@ mod describe_略記の展開 {
 
     #[story("C5")]
     #[proptest]
-    fn it_表のどの略記も変換できる(
+    fn 表のどの略記も変換できる(
         #[strategy(abbrev_keys())] key: &'static str,
         #[strategy("[^\\\\]{0,8}")] head: String,
     ) {
@@ -1238,13 +1238,13 @@ mod describe_略記の展開 {
     }
 }
 
-mod describe_略記の候補 {
+mod 略記の候補 {
     //! Tab で略記を補完するときに、カーソルの手前の `\name` から記号の候補を作る。
     use super::*;
 
     #[story("C8", "J2")]
     #[test]
-    fn it_カーソルの手前の略記の名前を取り出す() {
+    fn カーソルの手前の略記の名前を取り出す() {
         assert_eq!(abbrev_head("theorem x : p \\to"), Some("to"));
         assert_eq!(abbrev_head("(\\."), Some("."));
         assert_eq!(abbrev_head("\\"), Some(""));
@@ -1252,14 +1252,14 @@ mod describe_略記の候補 {
 
     #[story("C8", "J2")]
     #[test]
-    fn it_略記の途中でなければ名前を取り出さない() {
+    fn 略記の途中でなければ名前を取り出さない() {
         assert_eq!(abbrev_head("Nat.suc"), None);
         assert_eq!(abbrev_head("\\to x"), None, "空白のあとは略記ではない");
     }
 
     #[story("C8", "J2")]
     #[test]
-    fn it_一致する略記の記号を先頭に置く() {
+    fn 一致する略記の記号を先頭に置く() {
         // `\a` は α になる。`\all` の ∀ などはそのあとに続く。
         let got = abbrev_candidates("a");
         assert_eq!(got.first(), Some(&"α"), "{got:?}");
@@ -1267,7 +1267,7 @@ mod describe_略記の候補 {
     }
 }
 
-mod describe_定理検索 {
+mod 定理検索 {
     //! loogle に問い合わせた結果を表示用の形に整形する。
     //! 外部と通信する部分だけが副作用を持ち、整形は純粋関数で行う。
     use super::*;
@@ -1294,7 +1294,7 @@ mod describe_定理検索 {
 
     #[story("D4")]
     #[test]
-    fn it_名前と型と定義されている_module_を表示する() {
+    fn 名前と型と定義されている_module_を表示する() {
         let out = text(&json!({"count": 2, "hits": hits()}));
         let out: Vec<&str> = out.split('\n').collect();
         assert_eq!(out[0], "2 件");
@@ -1307,7 +1307,7 @@ mod describe_定理検索 {
 
     #[story("D4")]
     #[test]
-    fn it_件数を絞ったときは全体の件数も表示する() {
+    fn 件数を絞ったときは全体の件数も表示する() {
         // loogle は結果を 200 件で打ち切って返すので、count は hits より多いことがある。
         let got = json!({"count": 360, "hits": hits()});
         let head = pure::loogle_text(&got, 1, 100, Style::PLAIN);
@@ -1318,7 +1318,7 @@ mod describe_定理検索 {
 
     #[story("D4")]
     #[test]
-    fn it_長い行は端末の幅で切り詰める() {
+    fn 長い行は端末の幅で切り詰める() {
         // 折り返すと 1 件 2 行の並びが崩れて、どの型がどの名前のものか分からない。
         let got = json!({
             "count": 1,
@@ -1332,13 +1332,13 @@ mod describe_定理検索 {
 
     #[story("D4")]
     #[test]
-    fn it_見つからなければその旨を表示する() {
+    fn 見つからなければその旨を表示する() {
         assert_eq!(text(&json!({"count": 0, "hits": []})), "見つからなかった");
     }
 
     #[story("D4")]
     #[test]
-    fn it_エラーは翻訳せずに候補を添える() {
+    fn エラーは翻訳せずに候補を添える() {
         // loogle の文言は Lean のパーサのもの。日本語にすると元の位置情報が消える。
         let got = json!({"error": "unknown identifier 'Nope'", "suggestions": ["\"Nope\""]});
         let out = text(&got);
@@ -1349,21 +1349,21 @@ mod describe_定理検索 {
     }
 }
 
-mod describe_性質一覧 {
+mod 性質一覧 {
     //! SPEC.rust.md はテスト名から生成する (crates/spec)。手で書き足す場所を
     //! 作らない代わりに、生成し忘れをこのテストで検出する。
     use super::*;
 
     #[story("X1")]
     #[test]
-    fn it_SPEC_md_がテストとそろっている() {
+    fn SPEC_md_がテストとそろっている() {
         if let Err(why) = spec::check(&spec::root()) {
             panic!("{why}");
         }
     }
 }
 
-mod describe_Lake_プロジェクトの判定 {
+mod Lake_プロジェクトの判定 {
     //! 設定に環境が無いとき、カレントディレクトリから Lake プロジェクトを探す。
     use super::*;
 
@@ -1374,7 +1374,7 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G6")]
     #[test]
-    fn it_lakefile_を持つ一番近い親ディレクトリを返す() {
+    fn lakefile_を持つ一番近い親ディレクトリを返す() {
         let dir = tmp();
         fs::write(dir.path().join("lakefile.toml"), "").expect("write");
         let sub = dir.path().join("A").join("B");
@@ -1387,14 +1387,14 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G3", "G6")]
     #[test]
-    fn it_lakefile_が無ければ_None_を返す() {
+    fn lakefile_が無ければ_None_を返す() {
         let dir = tmp();
         assert_eq!(config::lake_root(&path_str(dir.path())), None);
     }
 
     #[story("G6")]
     #[test]
-    fn it_lakefile_toml_の_lean_lib_を返す() {
+    fn lakefile_toml_の_lean_lib_を返す() {
         let dir = tmp();
         let text = "name = \"p\"\n[[lean_lib]]\nname = \"Foo\"\n[[lean_lib]]\nname = \"Bar\"\n";
         assert_eq!(libs(dir.path(), "lakefile.toml", text), ["Foo", "Bar"]);
@@ -1402,7 +1402,7 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G6")]
     #[test]
-    fn it_lakefile_lean_の_lean_lib_を返す() {
+    fn lakefile_lean_の_lean_lib_を返す() {
         let dir = tmp();
         let text = "import Lake\nopen Lake DSL\n\nlean_lib Foo where\nlean_lib «Bar.Baz»\n";
         assert_eq!(libs(dir.path(), "lakefile.lean", text), ["Foo", "Bar.Baz"]);
@@ -1410,14 +1410,14 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G4", "G6")]
     #[test]
-    fn it_lakefile_toml_が壊れていたら空を返す() {
+    fn lakefile_toml_が壊れていたら空を返す() {
         let dir = tmp();
         assert!(libs(dir.path(), "lakefile.toml", "[[lean_lib]\n").is_empty());
     }
 
     #[story("G6")]
     #[test]
-    fn it_設定が無ければ_Lake_プロジェクトの環境で起動する() {
+    fn 設定が無ければ_Lake_プロジェクトの環境で起動する() {
         let dir = tmp();
         let proj = dir.path().join("myproj");
         fs::create_dir_all(proj.join("sub")).expect("mkdir");
@@ -1436,7 +1436,7 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G3", "G6")]
     #[test]
-    fn it_Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
+    fn Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
         let dir = tmp();
         let ctx = ctx_at(&path_str(dir.path()));
         let got = config::resolve(&ctx, None, None, &[], &table("")).expect("resolve");
@@ -1445,7 +1445,7 @@ mod describe_Lake_プロジェクトの判定 {
 
     #[story("G6")]
     #[test]
-    fn it_import_を指定したら_lean_lib_の代わりにそれを使う() {
+    fn import_を指定したら_lean_lib_の代わりにそれを使う() {
         let dir = tmp();
         fs::write(
             dir.path().join("lakefile.toml"),
@@ -1459,7 +1459,7 @@ mod describe_Lake_プロジェクトの判定 {
     }
 }
 
-mod describe_起動オプション {
+mod 起動オプション {
     use super::*;
 
     fn parse(argv: &[&str]) -> Args {
@@ -1468,20 +1468,20 @@ mod describe_起動オプション {
 
     #[story("G6")]
     #[test]
-    fn it_dash_i_を繰り返すと_import_がすべて残る() {
+    fn dash_i_を繰り返すと_import_がすべて残る() {
         assert_eq!(parse(&["-i", "A", "--import", "B"]).imports, ["A", "B"]);
     }
 
     #[story("G5")]
     #[test]
-    fn it_dash_e_で環境の名前を受け取る() {
+    fn dash_e_で環境の名前を受け取る() {
         assert_eq!(parse(&["-e", "m"]).name.as_deref(), Some("m"));
         assert_eq!(parse(&["--env", "m"]).name.as_deref(), Some("m"));
     }
 
     #[story("G5", "G6")]
     #[test]
-    fn it_値の無いオプションはエラーで終了する() {
+    fn 値の無いオプションはエラーで終了する() {
         // 終了コードは bin が決める。ここではメッセージだけを確かめる。
         for flag in ["-e", "-i", "-p"] {
             let why = parse_args(&[flag]).expect_err("エラーにならない");
@@ -1491,26 +1491,26 @@ mod describe_起動オプション {
 
     #[story("H1")]
     #[test]
-    fn it_不明なオプションはエラーで終了する() {
+    fn 不明なオプションはエラーで終了する() {
         let why = parse_args(&["--nosuch"]).expect_err("エラーにならない");
         assert!(why.contains("不明なオプション: --nosuch"), "{why}");
     }
 
     #[story("B4")]
     #[test]
-    fn it_ファイル名と_ハイフンは読み込むファイルとして受け取る() {
+    fn ファイル名と_ハイフンは読み込むファイルとして受け取る() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
         assert_eq!(parse(&["-"]).preload.as_deref(), Some("-"));
     }
 }
 
-mod describe_略記の一覧 {
+mod 略記の一覧 {
     //! `:abbrev` の表示。`man ascii` のように、キーと記号の組を複数の列に並べる。
     use super::*;
 
     #[story("C7")]
     #[test]
-    fn it_キーの先頭で絞り込む() {
+    fn キーの先頭で絞り込む() {
         let got = abbrev_lookup("le");
         assert!(got.contains(&("le", "≤")), "{got:?}");
         assert!(got.iter().all(|(k, _)| k.starts_with("le")), "{got:?}");
@@ -1519,14 +1519,14 @@ mod describe_略記の一覧 {
 
     #[story("C7")]
     #[test]
-    fn it_記号からその記号を入力する略記を調べる() {
+    fn 記号からその記号を入力する略記を調べる() {
         let keys: Vec<&str> = abbrev_lookup("→").into_iter().map(|(k, _)| k).collect();
         assert_eq!(keys, ["->", "imp", "r", "r-", "rightarrow", "to"]);
     }
 
     #[story("C7")]
     #[test]
-    fn it_列の下まで並べたら右の列に続ける() {
+    fn 列の下まで並べたら右の列に続ける() {
         let pairs = [("a", "α"), ("b", "β"), ("c", "γ")];
         let got = abbrev_table(&pairs, 13);
         assert_eq!(
@@ -1537,7 +1537,7 @@ mod describe_略記の一覧 {
 
     #[story("C7")]
     #[test]
-    fn it_全角の文字は_2_文字分の幅で列を揃える() {
+    fn 全角の文字は_2_文字分の幅で列を揃える() {
         let pairs = [("x", "あ"), ("y", "b"), ("z", "c"), ("w", "d")];
         let got = abbrev_table(&pairs, 12);
         assert_eq!(
@@ -1548,7 +1548,7 @@ mod describe_略記の一覧 {
 
     #[story("C7")]
     #[test]
-    fn it_幅に収まる範囲で列を増やす() {
+    fn 幅に収まる範囲で列を増やす() {
         let pairs = abbrev_lookup("");
         let rows: Vec<usize> = [40, 80, 120]
             .into_iter()
