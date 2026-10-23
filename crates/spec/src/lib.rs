@@ -25,6 +25,9 @@
 //! (`unbuilt` にあるストーリーには「まだ作っていない。」と表示する)。
 //! それが分かることがこの表の目的。
 //!
+//! Rust のテストには、Python 版の `it_` と `describe_` を付けない。`#[test]` か `#[proptest]`
+//! の付いた関数をテストと見なし、テストを含む `mod` を describe と見なす。
+//!
 //! テスト名を文に戻す規則は 5 つだけ。
 //!
 //! ```text
@@ -154,7 +157,7 @@ fn symbols(part: &str) -> String {
     at_word_start(&at_word_start(part, "colon_", ":"), "dash_", "-")
 }
 
-/// 関数名 (`it_` や `describe_` を除いたもの) を仕様の 1 文に戻す。
+/// テストの関数名か describe の `mod` の名前を、仕様の 1 文に戻す。
 pub fn label(name: &str) -> String {
     let name: String = name.nfkc().collect();
     name.split("__")
@@ -165,7 +168,7 @@ pub fn label(name: &str) -> String {
 
 // ------------------------------------------------------------ テストを集める
 
-/// テスト 1 件。`what` は it_ の名前、`place` は「層 / describe」。
+/// テスト 1 件。`what` は関数名を文に戻したもの、`place` は「層 / describe」。
 pub struct Test {
     pub what: String,
     pub place: String,
@@ -185,23 +188,31 @@ fn marked(attrs: &[Attribute]) -> Vec<String> {
         .collect()
 }
 
-/// describe を再帰的にたどって it を集める。describe は入れ子にできる。
+/// `#[test]` か `#[proptest]` が付いているか。テストはこの 2 つの属性で見分ける。
+fn is_test(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path()
+            .segments
+            .last()
+            .is_some_and(|s| s.ident == "test" || s.ident == "proptest")
+    })
+}
+
+/// `mod` を再帰的にたどってテストを集める。テストを含む `mod` が describe になる。
+/// `mod` は入れ子にできる。
 fn descend(items: &[Item], layer: &str, place: &str) -> Vec<Test> {
     items
         .iter()
         .flat_map(|item| match item {
-            Item::Mod(m) => match (&m.content, m.ident.to_string().strip_prefix("describe_")) {
-                (Some((_, inner)), Some(rest)) => descend(inner, layer, &label(rest)),
-                _ => Vec::new(),
-            },
-            Item::Fn(f) => match f.sig.ident.to_string().strip_prefix("it_") {
-                Some(rest) => vec![Test {
-                    what: label(rest),
-                    place: format!("{layer} / {place}"),
-                    stories: marked(&f.attrs),
-                }],
+            Item::Mod(m) => match &m.content {
+                Some((_, inner)) => descend(inner, layer, &label(&m.ident.to_string())),
                 None => Vec::new(),
             },
+            Item::Fn(f) if is_test(&f.attrs) => vec![Test {
+                what: label(&f.sig.ident.to_string()),
+                place: format!("{layer} / {place}"),
+                stories: marked(&f.attrs),
+            }],
             _ => Vec::new(),
         })
         .collect()
@@ -365,5 +376,45 @@ mod tests {
         ] {
             assert_eq!(label(name), want, "{name}");
         }
+    }
+
+    #[test]
+    fn テストの属性が付いた関数だけを集める() {
+        let file = syn::parse_file(
+            r#"
+            mod 式の評価 {
+                fn helper() {}
+                #[story("A1")]
+                #[test]
+                fn 単独の式は評価される() {}
+                #[story("E2")]
+                #[proptest]
+                fn 連結しても閉じている(a: String) {}
+            }
+            mod common {
+                pub fn drive() {}
+            }
+            "#,
+        )
+        .unwrap();
+        let got: Vec<(String, String, Vec<String>)> = descend(&file.items, "parsing", "parsing")
+            .into_iter()
+            .map(|t| (t.place, t.what, t.stories))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (
+                    "parsing / 式の評価".to_string(),
+                    "単独の式は評価される".to_string(),
+                    vec!["A1".to_string()],
+                ),
+                (
+                    "parsing / 式の評価".to_string(),
+                    "連結しても閉じている".to_string(),
+                    vec!["E2".to_string()],
+                ),
+            ]
+        );
     }
 }
