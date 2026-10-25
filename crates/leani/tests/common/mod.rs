@@ -10,10 +10,13 @@
 
 use std::fs;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 use std::sync::{Arc, LazyLock, Mutex};
 
+use leani::engine::{Hooked, Stage};
 use leani::repl::Repl;
-use leani_core::types::Output;
+use leani_core::pure::text;
+use leani_core::types::{Json, Output};
 use leani_read::config::{load_config, resolve};
 use leani_read::places::Ctx;
 use regex::Regex;
@@ -114,9 +117,15 @@ pub const INVARIANTS: &[Invariant] = &[
                 .is_none_or(|p| p.generation == r.eng().generation())
         },
     ),
-    ("エンジンのプロセスが実行中である", |r| {
-        r.eng_mut().alive()
-    }),
+    // Python 版は「プロセスが実行中である」だけを確かめていた。Python 版の kill は
+    // 終了を待たないので、中断で止めた直後も poll はまだ None を返し、成り立って
+    // いるように見えていた。Rust 版の kill は終了を待つので、止まったままでよい
+    // 状態を書く。再起動に失敗して環境が無いときと、replay が中断されて保留が
+    // 残っているとき。どちらも次の入力で再起動する。
+    (
+        "エンジンのプロセスが実行中である (止まっているなら環境が無いか、保留がある)",
+        |r| r.eng_mut().alive() || r.eng().env().is_none() || !r.eng().unplayed().is_empty(),
+    ),
     (
         "送り方が決まっているならバッファに入力がある",
         |r| r.ready().is_none() || !r.buf().is_empty(),
@@ -200,6 +209,65 @@ impl Driver {
     pub fn declarations(&self) -> Vec<String> {
         self.repl.eng().log().to_vec()
     }
+
+    /// エンジンとのやりとりに差し込み口を入れる (Python 版の `mocker.patch.object`)。
+    /// 再起動しても同じ `Engine` なので、差し込み口は残る。
+    pub fn hook(&mut self, f: impl FnMut(Stage<'_>) -> Hooked + Send + 'static) {
+        self.repl.eng_mut().set_hook(Some(Box::new(f)));
+    }
+
+    /// 差し込み口を外す (Python 版の `mocker.stopall`)。
+    pub fn unhook(&mut self) {
+        self.repl.eng_mut().set_hook(None);
+    }
+}
+
+// ------------------------------------------------------------------ 差し込み口の部品
+
+/// エンジンが PANIC したときのメッセージ。2 行目以降はバックトレース。
+pub const PANIC: &str = "PANIC at Foo.bar Foo:1:2: oops\nbacktrace:\n  ...";
+
+/// リクエストの `cmd`。無ければ空文字列。
+pub fn cmd(obj: &Json) -> &str {
+    text(obj, "cmd").unwrap_or("")
+}
+
+/// 環境を付けずに送るリクエストか。boot と `:l` だけが env を付けない。
+pub fn fresh(obj: &Json) -> bool {
+    obj.get("cmd").is_some() && obj.get("env").is_none()
+}
+
+/// 応答の messages に PANIC を足す。
+pub fn with_panic(resp: &Json) -> Json {
+    let mut r = resp.clone();
+    let extra = serde_json::json!({ "severity": "info", "data": PANIC });
+    match r.get_mut("messages").and_then(Json::as_array_mut) {
+        Some(ms) => ms.push(extra),
+        None => r["messages"] = serde_json::json!([extra]),
+    }
+    r
+}
+
+/// when(リクエスト) が真になった最初のリクエストで Ctrl-C を再現する。
+///
+/// リクエストを書いたあと、レスポンスを読む前に中断する。実際の Ctrl-C も、
+/// たいていエンジンが計算している途中、つまりこの位置で起きる。`Before` で
+/// 中断すると、`Engine::send` がプロセスを止める処理も、読んでいないレスポンスが
+/// パイプに残る状態もテストできない。中断したかを返す。
+pub fn interrupt_after_write(
+    d: &mut Driver,
+    when: impl Fn(&Json) -> bool + Send + 'static,
+) -> Arc<AtomicBool> {
+    let hit = Arc::new(AtomicBool::new(false));
+    let seen = hit.clone();
+    d.hook(move |stage| match stage {
+        Stage::Written(obj) if !seen.load(SeqCst) && when(obj) => {
+            seen.store(true, SeqCst);
+            Hooked::Interrupt
+        }
+        _ => Hooked::Pass,
+    });
+    hit
 }
 
 impl Drop for Driver {

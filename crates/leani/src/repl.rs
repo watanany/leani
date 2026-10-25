@@ -8,7 +8,9 @@
 //! `feed` で 1 行ずつ受け取るだけなので、端末、パイプ、Jupyter、テストのどれからでも
 //! 同じように呼べる。
 
+use std::any::Any;
 use std::io;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::time::Instant;
 
@@ -523,7 +525,29 @@ impl Repl {
 
     /// 端末から受け取った 1 件を処理する。履歴から呼び出した入力は改行を含む。
     /// true を返したらループを抜ける。
+    ///
+    /// 想定外の panic でも、その 1 件のエラーとして扱ってセッションを続ける。
+    /// セッションを終了するとそれまでの宣言をすべて失うので、それが一番大きな
+    /// 損失になる。リクエストを書いてから応答を読むまでのあいだに panic すると、
+    /// 読んでいない応答が残って次の応答とずれるので、エンジンを再起動して宣言を
+    /// replay する。Python 版はここで再起動しなかったが、Python 版の例外は
+    /// パイプから読む途中では起きにくかった。
     pub fn feed_line(&mut self, line: &str) -> bool {
+        match catch_unwind(AssertUnwindSafe(|| self.feed_lines(line))) {
+            Ok(quit) => quit,
+            Err(payload) => {
+                let why = panic_text(payload.as_ref());
+                self.out
+                    .fail(&self.style.red(&format!("内部エラー: {why}")));
+                self.discard();
+                self.out.write(&self.style.dim("エンジンを再起動する…"));
+                self.revive();
+                false
+            }
+        }
+    }
+
+    fn feed_lines(&mut self, line: &str) -> bool {
         // 1 件にまとめた履歴を呼び出すと改行を含む 1 行として返ってくるので、
         // 行に分けて、入力したときと同じ順に feed へ渡す。
         let lines: Vec<&str> = line.split('\n').collect();
@@ -979,6 +1003,18 @@ impl Repl {
 
 /// 報告に使う宣言の先頭行の幅 (Python 版の `head_line` の既定値)。
 const HEAD_WIDTH: usize = 60;
+
+/// panic のメッセージ。`panic!` の引数は `&str` か `String` で届く。
+fn panic_text(payload: &(dyn Any + Send)) -> String {
+    match (
+        payload.downcast_ref::<&str>(),
+        payload.downcast_ref::<String>(),
+    ) {
+        (Some(s), _) => (*s).to_string(),
+        (_, Some(s)) => s.clone(),
+        _ => "panic".to_string(),
+    }
+}
 
 /// `env {n}` の表示。環境が無ければ Python 版と同じく `None`。
 fn env_text(env: Option<i64>) -> String {
