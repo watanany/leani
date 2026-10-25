@@ -68,3 +68,38 @@ pub struct EngineError(pub String);
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{0}")]
 pub struct ConfigError(pub String);
+
+/// エンジンとのやりとりが失敗した理由。
+///
+/// Python 版では例外ごとに型が分かれていた (`EngineDied`、`Interrupted`、
+/// `NoEnvironment`、`OSError`)。Rust では 1 つの enum にして、呼び出し側が `match` で
+/// 分ける。raise する箇所と except する箇所が別のモジュールなので、どちらでもない
+/// ここに置く。
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum EngineFault {
+    /// エンジンを用意できない。起動時なら起動を中止する。起動後なら REPL は続ける。
+    #[error("{0}")]
+    Setup(String),
+    /// repl のプロセスが応答しなくなった。呼び出し側は repl を再起動する。
+    #[error("{0}")]
+    Died(String),
+    /// 評価中に Ctrl-C が押された。repl とのやりとりがずれているので、呼び出し側は
+    /// repl を再起動する。
+    #[error("^C")]
+    Interrupted,
+    /// 環境が無いのに、環境の上で入力を実行しようとした。呼び出し側のバグ。
+    ///
+    /// 環境を指定せずに送ると、repl は Init だけの環境を作って答える (型が正しくない、
+    /// 宣言が消える)。エラーを出さずに進むよりは、ここで止める。
+    #[error("{0}")]
+    NoEnvironment(String),
+    /// ファイルやプロセスの操作が失敗した (Python 版の `OSError`)。
+    #[error("{0}")]
+    Io(String),
+}
+
+impl From<EngineError> for EngineFault {
+    fn from(e: EngineError) -> Self {
+        EngineFault::Setup(e.0)
+    }
+}

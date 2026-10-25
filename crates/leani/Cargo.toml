@@ -6,14 +6,22 @@ edition.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# テストが Engine の内部を差し替えるためのメソッドを有効にする。
+# `[dev-dependencies]` で自分自身に付けるので、テストでは常に有効になる。
+testing = []
+
 [dependencies]
 leani-core = { path = "../leani-core" }
 leani-read = { path = "../leani-read" }
+nix = { version = "0.28", features = ["poll", "process", "signal"] }
 regex = "1"
+serde_json = "1"
 sha1_smol = "1"
 tempfile = "3"
 
 [dev-dependencies]
+leani = { path = ".", features = ["testing"] }
 portable-pty = "0.9.0"
 proptest = "1"
 reedline = "0.52.1"
