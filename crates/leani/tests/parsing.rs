@@ -8,6 +8,7 @@
     mixed_script_confusables
 )]
 
+use leani::boot;
 use leani_core::abbrev::{
     ABBREV, abbrev_candidates, abbrev_head, abbrev_lookup, abbrev_table, cell_width, expand_abbrev,
 };
@@ -22,6 +23,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::time::Duration;
 use story::story;
 use test_strategy::proptest;
 
@@ -535,6 +537,32 @@ mod 起動前の準備 {
             .into();
         assert_eq!(env, want);
     }
+
+    #[story("G4", "G6")]
+    #[test]
+    fn toolchain_が変わったらキャッシュを作り直す() {
+        // LEAN_PATH は core の .olean も指す。前のバージョンのキャッシュを再利用すると、
+        // repl は起動するのに import がすべて失敗して、原因が分からなくなる。
+        let dir = tmp();
+        let project = dir.path().join("proj");
+        fs::create_dir(&project).expect("mkdir");
+        let manifest = project.join("lake-manifest.json");
+        fs::write(&manifest, "{}").expect("write");
+        let cache = dir.path().join("cache");
+        fs::write(&cache, "LEAN_PATH=old\n").expect("write");
+
+        touch(&manifest, 1);
+        touch(&cache, 2);
+        assert!(!boot::lake_env_stale(
+            &path_str(&cache),
+            &path_str(&project)
+        ));
+
+        let tc = project.join("lean-toolchain");
+        fs::write(&tc, "leanprover/lean4:v4.33.1\n").expect("write");
+        touch(&tc, 3);
+        assert!(boot::lake_env_stale(&path_str(&cache), &path_str(&project)));
+    }
 }
 
 mod エンジンのバージョン {
@@ -692,6 +720,35 @@ fn tools_path(dir: &Path, names: &[&str]) -> String {
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir")
+}
+
+/// ファイルの更新時刻を、1970 年から secs 秒の時刻にする。
+fn touch(path: &Path, secs: u64) {
+    fs::File::options()
+        .write(true)
+        .open(path)
+        .and_then(|f| f.set_modified(std::time::UNIX_EPOCH + Duration::from_secs(secs)))
+        .expect("set_modified");
+}
+
+/// 名前と中身を決めたシェルスクリプトを dir/bin に置き、PATH として返す。
+///
+/// boot は子プロセスに Ctx の PATH しか渡さないので、スクリプトが mkdir や sleep を
+/// 使えるように、スクリプトの先頭で PATH を標準のものにする。
+fn fake_tools(dir: &Path, tools: &[(&str, &str)]) -> String {
+    let bin = dir.join("bin");
+    fs::create_dir_all(&bin).expect("mkdir");
+    for (name, body) in tools {
+        let tool = bin.join(name);
+        fs::write(&tool, format!("#!/bin/sh\nPATH=/bin:/usr/bin\n{body}\n")).expect("write");
+        fs::set_permissions(&tool, fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    path_str(&bin)
+}
+
+/// 表示を受け取るだけの出口。boot の表示はテストでは確かめない。
+fn sink() -> Vec<u8> {
+    Vec::new()
 }
 
 mod 設定の値の型 {
@@ -928,6 +985,382 @@ mod 設定ファイルの読み込み {
         let dir = tmp();
         let got = config::load_config(&path_str(&dir.path().join("none.toml")));
         assert_eq!(got, Ok(toml::Table::new()));
+    }
+}
+
+mod 使うバージョンの決め方 {
+    //! elan run に渡すバージョン。
+    //!
+    //! エンジンをビルドしたバージョンと合わないと .olean を読み込めない。
+    use super::*;
+
+    #[story("G3")]
+    #[test]
+    fn プロジェクトのバージョンが最優先() {
+        let dir = tmp();
+        let ctx = ctx_at("/");
+        let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.34.0-rc2");
+        let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
+        let cfg = EnvConfig::make(&ctx, "t", Some(&proj), &[], None, Some(&eng));
+        assert_eq!(
+            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            Some("leanprover/lean4:v4.34.0-rc2")
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn 明示したエンジンのバージョンを使う() {
+        // 自分でビルドしたエンジンは leani がビルドし直さないので、そのバージョンに
+        // 合わせるしかない。
+        // elan のデフォルトのバージョンを使うと、4.34 の .olean を 4.33 で
+        // 読み込むことになる。
+        let dir = tmp();
+        let ctx = ctx_at("/");
+        let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&eng));
+        assert_eq!(
+            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            Some("leanprover/lean4:v4.33.0")
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn どちらも無ければ_elan_のデフォルト() {
+        let dir = tmp();
+        let lean = "echo 'Lean (version 4.9.0, x86_64-apple-darwin, commit abc, Release)'";
+        let path = fake_tools(dir.path(), &[("lean", lean)]);
+        let ctx = ctx_with(&[("PATH", &path)], "/");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
+        assert_eq!(
+            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            Some("leanprover/lean4:v4.9.0")
+        );
+    }
+}
+
+mod 手動でエンジンを用意する手順 {
+    //! leani が自動で用意できなかったときに表示する。書いてあるとおりに実行すると、
+    //! 自動で用意したものと同じものができる。
+    use super::*;
+
+    #[story("G3")]
+    #[test]
+    fn タグとバージョンの書き換えまで含む() {
+        let out = boot::manual_setup("/x/e", "leanprover/lean4:v4.33.1", Some("v4.33.0"));
+        assert!(out.contains("--branch v4.33.0"), "{out}");
+        assert!(
+            out.contains("leanprover/lean4:v4.33.1 > /x/e/lean-toolchain"),
+            "{out}"
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn タグが分からなければ選び方を書く() {
+        let out = boot::manual_setup("/x/e", "leanprover/lean4:v4.33.1", None);
+        assert!(out.contains("v4.33.1 以下で一番新しいタグ"), "{out}");
+    }
+}
+
+// ----------------------------------------------- エンジンを用意するテストのデータ
+
+const TC: &str = "leanprover/lean4:v4.33.0";
+
+/// clone と build の代わりをする git と lake。
+///
+/// git は呼ばれた引数を log に追記し、`ls-remote` なら tags を表示し、`clone` なら
+/// clone 先のディレクトリを作る。lake は `build` なら repl を作り、`env` なら
+/// LEAN_PATH を表示して count に 1 行追記する。
+fn fake_git(log: &Path, tags: &[&str]) -> String {
+    let lines = tags
+        .iter()
+        .map(|t| format!("printf 'a1\\trefs/tags/{t}\\n'"))
+        .collect::<Vec<_>>()
+        .join("; ");
+    format!(
+        "echo \"$*\" >> {}\ncase \"$1\" in\n  ls-remote) {lines} ;;\n  clone) for a; do d=$a; done; mkdir -p \"$d\" ;;\nesac",
+        log.display()
+    )
+}
+
+fn fake_lake(count: &Path) -> String {
+    format!(
+        "case \"$1\" in\n  build) mkdir -p .lake/build/bin && : > .lake/build/bin/repl ;;\n  env) echo run >> {}; printf 'LEAN_PATH=/a\\n' ;;\nesac",
+        count.display()
+    )
+}
+
+/// git と lake の偽物を置き、エンジンの置き場所を dir の下にした Ctx。
+fn setup_ctx(dir: &Path, tags: &[&str], vars: &[(&str, &str)]) -> Ctx {
+    let path = fake_tools(
+        dir,
+        &[
+            ("git", &fake_git(&dir.join("git.log"), tags)),
+            ("lake", &fake_lake(&dir.join("lake.count"))),
+        ],
+    );
+    let state = path_str(&dir.join("state"));
+    let mut all = vec![("PATH", path.as_str()), ("XDG_STATE_HOME", state.as_str())];
+    all.extend_from_slice(vars);
+    ctx_with(&all, "/")
+}
+
+fn git_log(dir: &Path) -> String {
+    fs::read_to_string(dir.join("git.log")).unwrap_or_default()
+}
+
+mod エンジンを用意するときの安全対策 {
+    //! leani が削除してよいのは、leani 自身が作ったディレクトリだけ。
+    //! leani を 2 つ同時に実行してもよい。
+    use super::*;
+
+    #[story("G3")]
+    #[test]
+    fn 明示されたエンジンは作り直さない() {
+        // build_engine は置き場所を作り直すので、ユーザーが指定した場所に対して
+        // 実行してはならない。git も lake も無い PATH なので、作ろうとすれば失敗する。
+        let dir = tmp();
+        let ctx = ctx_with(&[("PATH", &path_str(dir.path()))], "/");
+        let eng = toolchain_dir(dir.path(), "eng", TC);
+        let got = boot::ensure_engine(&ctx, &mut sink(), Some(&eng), TC, false);
+        let why = got.expect_err("用意してしまった").0;
+        assert!(why.contains("未ビルド"), "{why}");
+        assert!(Path::new(&eng).join("lean-toolchain").is_file());
+    }
+
+    #[story("G3", "G4")]
+    #[test]
+    fn 明示されたエンジンにバージョンが無ければ起動を中止する() {
+        // 合わせられるバージョンはこのエンジンのものしかない。何も表示せずに elan の
+        // デフォルトを使うと .olean を読み込めない。
+        let dir = tmp();
+        let ctx = ctx_with(
+            &[("PATH", &tools_path(dir.path(), &["elan", "lake", "git"]))],
+            "/",
+        );
+        let eng = dir.path().join("eng");
+        fs::create_dir_all(eng.join(".lake/build/bin")).expect("mkdir");
+        fs::write(eng.join(".lake/build/bin/repl"), "").expect("write");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&path_str(&eng)));
+        let why = config::problem(&ctx, &cfg).unwrap_or_default();
+        assert!(why.contains("lean-toolchain"), "{why}");
+    }
+
+    #[story("G3")]
+    #[test]
+    fn 作業中の置き場所はプロセスごとに分かれる() {
+        // leani を 2 つ同時に起動したとき、同じ作業用のディレクトリを使うと片方が
+        // 起動できない。置き場所とは別の名前で作業して、終わったら消す。
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        let path = path_str(&dir.path().join("engine/v4.33.0"));
+        boot::build_engine(&ctx, &mut sink(), &path, TC, "v4.33.0").expect("build");
+
+        let log = git_log(dir.path());
+        let work = log.trim().rsplit(' ').next().unwrap_or_default();
+        assert!(
+            work.starts_with(&format!("{path}.")) && work.ends_with(".tmp"),
+            "{log}"
+        );
+        assert!(Path::new(&path).join(".lake/build/bin/repl").is_file());
+        assert!(!Path::new(work).exists(), "作業中の置き場所が残っている");
+    }
+
+    #[story("G3")]
+    #[test]
+    fn 待っているあいだに別の_leani_が置いたエンジンは消さない() {
+        // 消すと、そのエンジンを使っている別の leani がエンジンを起動できなくなる。
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        let path = dir.path().join("engine/v4.33.0");
+        fs::create_dir_all(path.join(".lake/build/bin")).expect("mkdir");
+        fs::write(path.join(".lake/build/bin/repl"), "先にあったもの").expect("write");
+
+        boot::build_engine(&ctx, &mut sink(), &path_str(&path), TC, "v4.33.0").expect("build");
+
+        let repl = fs::read_to_string(path.join(".lake/build/bin/repl")).expect("read");
+        assert_eq!(repl, "先にあったもの");
+        let log = git_log(dir.path());
+        let work = log.trim().rsplit(' ').next().unwrap_or_default();
+        assert!(!Path::new(work).exists(), "作業中の置き場所が残っている");
+    }
+}
+
+mod エンジンを自動で用意できないとき {
+    //! 初回の起動で通る処理。失敗しても、手動で用意する手順を表示する。
+    use super::*;
+
+    #[story("G3")]
+    #[test]
+    fn タグを取得できなければ手動の手順を表示する() {
+        // 終わらない、git が無い、失敗する、の 3 つ。exec で sh ごと sleep にするのは、
+        // kill したあとに sleep だけが残ってパイプを閉じないため。
+        let dir = tmp();
+        let fails = [Some("exec sleep 5"), None, Some("echo fatal >&2; exit 1")];
+        for fail in fails {
+            let git = fail.map(|body| ("git", body));
+            let path = fake_tools(dir.path(), &git.into_iter().collect::<Vec<_>>());
+            let mut ctx = ctx_with(&[("PATH", &path)], "/");
+            ctx.setup_timeout = Duration::from_millis(200);
+            let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+            let why = got.expect_err("用意できてしまった").0;
+            assert!(why.contains("手動で用意する場合"), "{why}");
+            assert!(why.contains("git clone --branch"), "{why}");
+            let _ = fs::remove_file(dir.path().join("bin/git"));
+        }
+    }
+
+    #[story("G3")]
+    #[test]
+    fn タグの一覧から_refs_tags_の名前だけを取り出す() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &["v4.33.0", "v4.34.0-rc1"], &[]);
+        assert_eq!(
+            boot::fetch_tags(&ctx).expect("fetch"),
+            ["v4.33.0", "v4.34.0-rc1"]
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn バージョンとして解釈できなければ_master_で試す() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &["v4.33.0"], &[]);
+        boot::ensure_engine(&ctx, &mut sink(), None, "leanprover/lean4:nightly", false)
+            .expect("ensure");
+        let log = git_log(dir.path());
+        assert!(log.contains("--branch master"), "{log}");
+    }
+
+    #[story("G3", "G4")]
+    #[test]
+    fn 対応するタグが無ければ起動を中止する() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &["v4.40.0"], &[]);
+        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+        let why = got.expect_err("用意できてしまった").0;
+        assert!(why.contains("repl に v4.33.0 用のタグが無い"), "{why}");
+        assert!(why.contains("以下で一番新しいタグ"), "{why}");
+        assert!(!git_log(dir.path()).contains("clone"), "ビルドしてしまった");
+    }
+
+    #[story("G3")]
+    #[test]
+    fn LEANI_NO_SETUP_のときはエンジンを用意しない() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &["v4.33.0"], &[("LEANI_NO_SETUP", "1")]);
+        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+        let why = got.expect_err("用意できてしまった").0;
+        assert!(why.contains("LEANI_NO_SETUP"), "{why}");
+        assert_eq!(git_log(dir.path()), "", "git を呼んでしまった");
+
+        // --setup で明示的に頼まれたときは用意する。
+        let path = boot::ensure_engine(&ctx, &mut sink(), None, TC, true).expect("ensure");
+        assert!(Path::new(&path).join(".lake/build/bin/repl").is_file());
+    }
+
+    #[story("G3")]
+    #[test]
+    fn ビルドに失敗したら手動の手順にタグを含める() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &["v4.32.0"], &[]);
+        let git = fake_git(&dir.path().join("git.log"), &["v4.32.0"]);
+        fake_tools(dir.path(), &[("git", &git), ("lake", "exit 1")]);
+        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+        let why = got.expect_err("用意できてしまった").0;
+        assert!(why.contains("--branch v4.32.0"), "{why}");
+    }
+}
+
+mod lake_env_の取得 {
+    //! lake env の結果はキャッシュして、起動のたびに実行しない。
+    use super::*;
+
+    fn project(dir: &Path) -> String {
+        let proj = dir.join("proj");
+        fs::create_dir(&proj).expect("mkdir");
+        path_str(&proj)
+    }
+
+    fn lake_count(dir: &Path) -> usize {
+        fs::read_to_string(dir.join("lake.count"))
+            .unwrap_or_default()
+            .lines()
+            .count()
+    }
+
+    #[story("G1")]
+    #[test]
+    fn プロジェクトが無ければ_lake_env_を実行しない() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        assert_eq!(boot::lake_env(&ctx, None, TC), Ok(Default::default()));
+        assert_eq!(lake_count(dir.path()), 0);
+    }
+
+    #[story("G1", "G6")]
+    #[test]
+    fn キャッシュが新しければ_lake_env_を実行しない() {
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        let proj = project(dir.path());
+        let want: std::collections::BTreeMap<_, _> =
+            [("LEAN_PATH".to_string(), "/a".to_string())].into();
+        assert_eq!(boot::lake_env(&ctx, Some(&proj), TC), Ok(want.clone()));
+        assert_eq!(boot::lake_env(&ctx, Some(&proj), TC), Ok(want));
+        assert_eq!(lake_count(dir.path()), 1);
+    }
+
+    #[story("G4", "G6")]
+    #[test]
+    fn lake_env_を実行できなければ理由を知らせる() {
+        let dir = tmp();
+        let proj = project(dir.path());
+        let fails = [
+            (Some("exec sleep 5"), "秒で終わらなかった"),
+            (None, "実行できなかった"),
+            (Some("echo boom >&2; exit 1"), "失敗した"),
+        ];
+        for (fail, why) in fails {
+            let lake = fail.map(|body| ("lake", body));
+            let path = fake_tools(dir.path(), &lake.into_iter().collect::<Vec<_>>());
+            let state = path_str(&dir.path().join("state"));
+            let mut ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
+            ctx.setup_timeout = Duration::from_millis(200);
+            let got = boot::lake_env(&ctx, Some(&proj), TC)
+                .expect_err("取得できてしまった")
+                .0;
+            assert!(got.starts_with("lake env "), "{got}");
+            assert!(got.contains(why), "{got}");
+            let _ = fs::remove_file(dir.path().join("bin/lake"));
+        }
+    }
+
+    #[story("G6")]
+    #[test]
+    fn lake_env_の結果を保存できなければ知らせる() {
+        // キャッシュの置き場所にディレクトリがあると rename できない。
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        let proj = project(dir.path());
+        let key = sha1_smol::Sha1::from(format!("{proj}\n{TC}"))
+            .digest()
+            .to_string();
+        let cache = format!("{}/lake-env/proj-{}", ctx.state, &key[..12]);
+        fs::create_dir_all(&cache).expect("mkdir");
+
+        let got = boot::lake_env(&ctx, Some(&proj), TC)
+            .expect_err("取得できてしまった")
+            .0;
+        assert!(got.contains("保存できなかった"), "{got}");
+        let left = fs::read_dir(format!("{}/lake-env", ctx.state))
+            .expect("read_dir")
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_name().to_string_lossy().ends_with(".tmp"))
+            .count();
+        assert_eq!(left, 0, "一時ファイルが残っている");
     }
 }
 

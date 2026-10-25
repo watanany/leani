@@ -9,6 +9,9 @@ publish = false
 [dependencies]
 leani-core = { path = "../leani-core" }
 leani-read = { path = "../leani-read" }
+regex = "1"
+sha1_smol = "1"
+tempfile = "3"
 
 [dev-dependencies]
 portable-pty = "0.9.0"

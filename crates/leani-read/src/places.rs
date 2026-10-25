@@ -54,11 +54,15 @@ pub struct Ctx {
     pub config: String,
     pub hist: String,
     pub init: String,
+    /// leani が書き込むファイルの置き場所 (`XDG_STATE_HOME/leani`)。
+    pub state: String,
     pub engine_cache: String,
     /// LEANI_ENGINE が指定されたときは、leani は何も管理せず、そのディレクトリを
     /// そのまま使う。
     pub engine: Option<String>,
     pub no_setup: bool,
+    /// エンジンを用意するときの外部コマンドのタイムアウト。テストでは短くする。
+    pub setup_timeout: Duration,
     pub loogle: String,
     pub tty: bool,
     /// 色を付けるかどうかは起動時に決める。パイプに出力するときは色を付けない。
@@ -89,8 +93,10 @@ impl Ctx {
             hist: var("LEANI_HISTORY").unwrap_or_else(|| format!("{state}/history")),
             init: var("LEANI_INIT").unwrap_or_else(|| format!("{config_home}/leani/init.lean")),
             engine_cache: format!("{state}/engine"),
+            state,
             engine: var("LEANI_ENGINE"),
             no_setup: set("LEANI_NO_SETUP"),
+            setup_timeout: SETUP_TIMEOUT,
             loogle: var("LEANI_LOOGLE").unwrap_or_else(|| LOOGLE.to_string()),
             tty,
             color: tty || set("FORCE_COLOR"),
