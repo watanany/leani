@@ -377,6 +377,20 @@ pub fn put_script(src: &str, a: usize, b: usize, script: &str) -> String {
     }
 }
 
+/// 空白だけの行を除くすべての行の先頭に pad を付ける (Python の `textwrap.indent`)。
+pub fn indent(text: &str, pad: &str) -> String {
+    text.split('\n')
+        .map(|l| {
+            if l.trim().is_empty() {
+                l.to_string()
+            } else {
+                format!("{pad}{l}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// スクリプトの 2 行目以降を pad の桁にそろえる。1 行目は呼び出し側が置く。
 pub fn hang(script: &str, pad: &str) -> String {
     script

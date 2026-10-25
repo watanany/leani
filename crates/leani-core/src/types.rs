@@ -59,6 +59,27 @@ impl Proof {
     }
 }
 
+/// Repl が表示を出す先。端末と Jupyter で実装を差し替える。
+pub trait Output: Send {
+    /// 改行を付けずに表示を出す。
+    fn put(&mut self, text: &str);
+
+    /// 普通の表示を 1 行出す。
+    fn write(&mut self, text: &str) {
+        self.put(text);
+        self.put("\n");
+    }
+
+    /// エラーを出す。Jupyter ではセルの結果をエラーにする。
+    fn fail(&mut self, text: &str);
+
+    /// `:!` で shell のコマンドを実行し、その出力を表示する。
+    fn shell(&mut self, cmd: &str);
+
+    /// 長くなることがある表示 (`:abbrev` の一覧)。端末では pager で表示する。
+    fn page(&mut self, text: &str);
+}
+
 /// エンジンを用意できない。起動時なら起動を中止する。起動後なら REPL は続ける。
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{0}")]

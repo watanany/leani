@@ -11,8 +11,8 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use leani_core::pure::{
-    error_text, first_response, has_error, has_import, head_line, import_lines, info_text, int,
-    signal_name, sorries, strip_imports, toolchain_warning,
+    error_text, first_response, has_error, has_import, head_line, import_lines, indent, info_text,
+    int, signal_name, sorries, strip_imports, toolchain_warning,
 };
 use leani_core::types::{EngineFault, Json};
 use leani_read::config::{EnvConfig, read_text, which};
@@ -633,7 +633,7 @@ impl Engine {
             return Err(EngineFault::Died(if why.is_empty() {
                 head
             } else {
-                format!("{head}\n{}", indent(&why))
+                format!("{head}\n{}", indent(&why, "  "))
             }));
         }
         self.env = int(&resp, "env");
@@ -929,16 +929,9 @@ fn reap(p: &mut Child, limit: Duration) -> Option<std::process::ExitStatus> {
 }
 
 /// OS のエラーを、Python 版の `strerror` と同じく理由だけにする。
-fn strerror(e: &io::Error) -> String {
+pub(crate) fn strerror(e: &io::Error) -> String {
     match e.raw_os_error() {
         Some(code) => nix::errno::Errno::from_raw(code).desc().to_string(),
         None => e.to_string(),
     }
-}
-
-fn indent(text: &str) -> String {
-    text.lines()
-        .map(|l| format!("  {l}"))
-        .collect::<Vec<_>>()
-        .join("\n")
 }
