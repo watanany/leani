@@ -431,12 +431,16 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 name = "leani"
 version = "0.1.0"
 dependencies = [
+ "leani",
  "leani-core",
  "leani-read",
+ "nix",
  "portable-pty",
  "proptest",
  "reedline",
+ "regex",
  "serde_json",
+ "sha1_smol",
  "spec",
  "story",
  "tempfile",
@@ -853,6 +857,12 @@ dependencies = [
  "libc",
  "windows-sys 0.61.2",
 ]
+
+[[package]]
+name = "sha1_smol"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbfa15b3dddfee50a0fff136974b3e1bde555604ba463834a7eb7deb6417705d"
 
 [[package]]
 name = "shared_library"
