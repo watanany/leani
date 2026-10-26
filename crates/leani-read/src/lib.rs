@@ -6,9 +6,11 @@
 //! ```text
 //! places    パスと、環境変数で決まる値 (Ctx)
 //! config    起動する環境を決める。設定ファイルと lakefile を読む
+//! complete  Tab 補完のうち、ファイルと PATH を読む候補 (パスとコマンド)
 //! args      コマンドラインの引数を読む
 //! ```
 
 pub mod args;
+pub mod complete;
 pub mod config;
 pub mod places;

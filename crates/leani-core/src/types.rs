@@ -90,6 +90,54 @@ pub struct EngineError(pub String);
 #[error("{0}")]
 pub struct ConfigError(pub String);
 
+/// loogle への問い合わせが失敗した (ネットワーク、HTTP のエラー、応答の形)。
+/// 呼び出し側は 1 行で報告してセッションを続ける。
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("{0}")]
+pub struct SearchError(pub String);
+
+/// 今の namespace と open の一覧 (`queries::SCOPE_QUERY` の応答)。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Scope {
+    /// open した名前空間と、`hiding` した名前。namespace の中なら、その名前空間と
+    /// 親の名前空間も含む。
+    pub opens: Vec<(String, Vec<String>)>,
+    /// `open Nat (succ)` や `open Lean renaming Json → J` で短い名前になったもの。
+    pub aliases: Vec<String>,
+}
+
+/// Tab で何を補完するか。`pure::completion_target` がカーソルの前の文字列から決める。
+///
+/// `start` はカーソルの前の文字列のうち、候補で置き換える範囲の先頭 (byte)。候補まで
+/// ここで決まるのは略記と `:` コマンドの名前だけで、それ以外は呼び出し側が集める
+/// (名前はエンジンに問い合わせ、パスとコマンドはファイルを読み、環境の名前は設定から)。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Target {
+    /// `\name` の途中。記号の候補まで決まる。
+    Abbrev { start: usize, symbols: Vec<String> },
+    /// `:!` のあと。`command` なら PATH にある実行できるコマンド、でなければパス。
+    Shell {
+        start: usize,
+        word: String,
+        command: bool,
+    },
+    /// `:` コマンドの名前。
+    Meta { start: usize, prefix: String },
+    /// `:l` `:load` `:save` のあとのパス。`.lean` ファイルとディレクトリだけにする。
+    Path { start: usize, word: String },
+    /// `:env` のあとの環境の名前。
+    Env { start: usize, prefix: String },
+    /// 定数の名前。
+    Name { start: usize, prefix: String },
+}
+
+/// 補完の候補 1 つ。カーソルの前の文字列の `start` (byte) から後ろを `text` で置き換える。
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Candidate {
+    pub start: usize,
+    pub text: String,
+}
+
 /// エンジンとのやりとりが失敗した理由。
 ///
 /// Python 版では例外ごとに型が分かれていた (`EngineDied`、`Interrupted`、

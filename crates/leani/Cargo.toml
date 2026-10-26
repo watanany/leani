@@ -20,6 +20,8 @@ regex = "1"
 serde_json = "1"
 sha1_smol = "1"
 tempfile = "3"
+terminal_size = "0.4"
+ureq = "3"
 
 [dev-dependencies]
 leani = { path = ".", features = ["testing"] }

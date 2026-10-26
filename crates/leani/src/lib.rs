@@ -14,11 +14,13 @@
 //! | `boot`     | Lean のバージョンの決定、エンジンの clone とビルド、lake env |
 //! | `engine`   | repl のプロセスとのやりとり、環境と宣言の管理、再起動と replay  |
 //! | `history`  | 確定した入力を 1 件として保存する履歴                       |
-//! | `show`     | 表示を出す (`Output` の端末の実装、メッセージの整形)             |
-//! | `repl`     | 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する          |
+//! | `search`   | 外部サービス (loogle) への問い合わせ                        |
+//! | `show`     | 表示を出す (`Output` の端末の実装、メッセージの整形、pager)      |
+//! | `repl`     | 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する。Tab 補完 |
 
 pub mod boot;
 pub mod engine;
 pub mod history;
 pub mod repl;
+pub mod search;
 pub mod show;

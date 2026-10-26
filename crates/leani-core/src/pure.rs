@@ -11,10 +11,11 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use crate::abbrev::{abbrev_candidates, abbrev_head};
 use crate::queries::{
-    BLOCK_OPEN, CANNOT_EVAL, ERR_POS, INCOMPLETE, NESTED_ACTION, NO_REPR, NONCOMPUTABLE,
+    BLOCK_OPEN, CANNOT_EVAL, DECL_NAME, ERR_POS, INCOMPLETE, NESTED_ACTION, NO_REPR, NONCOMPUTABLE,
 };
-use crate::types::{EngineError, Json, Kind, Proof, State};
+use crate::types::{EngineError, Json, Kind, Proof, Scope, State, Target};
 
 // ------------------------------------------------------------------ 応答の読み取り
 
@@ -167,6 +168,181 @@ pub fn shorten<S: AsRef<str>>(chunk: &[S], prefix: &str, ns: &str, hidden: &[S])
             !unwritable && !shadowed
         })
         .map(|(_, short)| short.to_string())
+        .collect()
+}
+
+/// カーソルの前の文字列 `text` から、Tab で何を補完するかを決める。
+///
+/// ふだんは定数名。`:` で始まる行ではコマンド名を補完し、そのあとはコマンドに
+/// 合わせる。`:l` と `:save` の後はファイルのパス、`:env` の後は環境の名前、`:!` の後は
+/// shell のコマンドかパス。カーソルの手前が `\name` の途中なら、行のどこでも略記の
+/// 記号を補完する。space キーがどこでも略記を変換するので、Tab キーも同じ範囲で
+/// 変換する。
+pub fn completion_target(text: &str) -> Target {
+    let (head, arg) = match text.find(' ') {
+        Some(i) => (&text[..i], Some(&text[i + 1..])),
+        None => (text, None),
+    };
+    match (abbrev_head(text), head, arg) {
+        (Some(name), _, _) => Target::Abbrev {
+            start: text.len() - name.len() - 1,
+            symbols: abbrev_candidates(name)
+                .into_iter()
+                .map(String::from)
+                .collect(),
+        },
+        (None, h, _) if h.starts_with(":!") => shell_target(text, 2),
+        (None, h, None) if h.starts_with(':') => Target::Meta {
+            start: 1,
+            prefix: h[1..].to_string(),
+        },
+        (None, ":l" | ":load" | ":save", Some(a)) => Target::Path {
+            start: text.len() - a.trim_start().len(),
+            word: a.trim_start().to_string(),
+        },
+        (None, ":env", Some(a)) => Target::Env {
+            start: text.len() - a.trim_start().len(),
+            prefix: a.trim_start().to_string(),
+        },
+        _ => {
+            let start = name_start(text);
+            Target::Name {
+                start,
+                prefix: text[start..].to_string(),
+            }
+        }
+    }
+}
+
+/// `:!` のあと (`text[from..]`) の補完。1 語目は PATH にあるコマンド、2 語目からは
+/// ファイルのパス。1 語目でも `/` を含んでいれば `./run.sh` のようなパスとして扱う。
+fn shell_target(text: &str, from: usize) -> Target {
+    let rest = &text[from..];
+    let (before, word) = match rest.rfind(' ') {
+        Some(i) => (&rest[..i], &rest[i + 1..]),
+        None => ("", rest),
+    };
+    Target::Shell {
+        start: text.len() - word.len(),
+        word: word.to_string(),
+        command: before.trim().is_empty() && !word.contains('/'),
+    }
+}
+
+/// words のうち prefix で始まるものを、順を変えずに返す。
+pub fn pick<S: AsRef<str>>(words: &[S], prefix: &str) -> Vec<String> {
+    words
+        .iter()
+        .map(AsRef::as_ref)
+        .filter(|w| w.starts_with(prefix))
+        .map(String::from)
+        .collect()
+}
+
+/// `SCOPE_QUERY` の応答を読む。応答がオブジェクトでなければ空の `Scope`。
+pub fn scope_of(got: Option<&Json>) -> Scope {
+    let pair = |v: &Json| -> Option<(String, Vec<String>)> {
+        let name = v.get(0)?.as_str()?.to_string();
+        let rest = v
+            .get(1)
+            .and_then(Json::as_array)
+            .map_or_else(Vec::new, |xs| {
+                xs.iter()
+                    .filter_map(Json::as_str)
+                    .map(String::from)
+                    .collect()
+            });
+        Some((name, rest))
+    };
+    match got {
+        Some(v) if v.is_object() => Scope {
+            opens: list(v, "open").iter().filter_map(pair).collect(),
+            aliases: list(v, "alias")
+                .iter()
+                .filter_map(pair)
+                .map(|(alias, _)| alias)
+                .collect(),
+        },
+        _ => Scope::default(),
+    }
+}
+
+/// REPL で実行した宣言の名前。キャッシュに無い名前も候補に出すため。
+pub fn own_names<S: AsRef<str>>(log: &[S]) -> Vec<String> {
+    log.iter()
+        .flat_map(|src| {
+            DECL_NAME
+                .captures_iter(src.as_ref())
+                .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+                .collect::<Vec<_>>()
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+/// root と open した名前空間それぞれで、prefix を完全な名前にしたもの。
+/// `open Lean` のあとの `Json.pa` は `Lean.Json.pa` としても探す。
+pub fn full_names(prefix: &str, opens: &[(String, Vec<String>)]) -> Vec<(String, String)> {
+    std::iter::once(String::new())
+        .chain(opens.iter().map(|(ns, _)| ns.clone()))
+        .map(|ns| {
+            let full = if ns.is_empty() {
+                prefix.to_string()
+            } else {
+                format!("{ns}.{prefix}")
+            };
+            (ns, full)
+        })
+        .collect()
+}
+
+/// 今の環境で短い名前で書ける定数のうち、prefix で始まるもの。
+///
+/// chunks は `name_chunk` ごとの定数名 (COMPLETE_QUERY の応答)。root と open した
+/// 名前空間からそれぞれ探して短くし、alias と REPL で実行した宣言の名前を足す。
+pub fn complete_hits<S: AsRef<str>>(
+    prefix: &str,
+    scope: &Scope,
+    chunks: &BTreeMap<String, Vec<String>>,
+    own: &[S],
+) -> Vec<String> {
+    let hidden = |ns: &str| -> &[String] {
+        scope
+            .opens
+            .iter()
+            .find(|(n, _)| n == ns)
+            .map_or(&[], |(_, h)| h.as_slice())
+    };
+    let opened = full_names(prefix, &scope.opens)
+        .into_iter()
+        .filter_map(|(ns, full)| chunks.get(name_chunk(&full)).map(|got| (ns, got)))
+        .flat_map(|(ns, got)| shorten(got, prefix, &ns, hidden(&ns)));
+    let aliased = scope.aliases.iter().cloned();
+    let mine = own.iter().map(|x| x.as_ref().to_string());
+    opened
+        .chain(aliased)
+        .chain(mine)
+        .filter(|name| name.starts_with(prefix))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
+// ------------------------------------------------------------------ URL
+
+/// URL のクエリに入れる形にする (Python 版の `urllib.parse.quote`)。
+///
+/// 英数字と `_.-~/` 以外を `%XX` にする。`?a + ?b` の `+` をそのまま入れると、
+/// loogle 側では空白として解釈される。
+pub fn url_quote(s: &str) -> String {
+    s.bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'_' | b'.' | b'-' | b'~' | b'/' => {
+                char::from(b).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
         .collect()
 }
 
