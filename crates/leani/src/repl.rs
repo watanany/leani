@@ -18,6 +18,7 @@ use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::sync::LazyLock;
+use std::sync::atomic::Ordering::SeqCst;
 use std::time::Instant;
 
 use leani_core::abbrev::{abbrev_lookup, abbrev_table};
@@ -327,12 +328,35 @@ impl Repl {
         self.undone = Some((undone, None));
     }
 
-    /// 次の入力のプロンプト。証明モードでは `⊢> `。
+    /// 次の入力のプロンプト。ブロックの途中なら ` | `、証明モードでは `⊢> `。
     pub fn prompt(&self) -> String {
         match self.proof {
+            _ if self.pending() => self.style.dim(" | "),
             Some(_) => self.style.c("35", "⊢> "),
             None => self.style.c("36", &self.eng.cfg().prompt),
         }
+    }
+
+    /// 入力の途中か (ブロックの続きの行か、`:{ ... :}` の中)。
+    pub fn pending(&self) -> bool {
+        !self.buf.is_empty() || self.explicit
+    }
+
+    /// 表示の出口。ループが改行や、行を読めなかったことを表示するのに使う。
+    pub fn out(&mut self) -> &mut dyn Output {
+        self.out.as_mut()
+    }
+
+    /// Ctrl-C のフラグを読んで消す。消さないと、そのあとの再起動まで中断される。
+    pub fn take_interrupt(&self) -> bool {
+        self.ctx.interrupted.swap(false, SeqCst)
+    }
+
+    /// Ctrl-C で入力中のブロックを捨てる。直前の入力の続きとしても読み直さない。
+    pub fn cancel(&mut self) {
+        self.discard();
+        self.last = None;
+        self.out.write("^C");
     }
 
     // -- 補完 -------------------------------------------------------------
@@ -1517,6 +1541,12 @@ impl Repl {
     fn meta(&mut self, line: &str) -> bool {
         if let Some(rest) = line.strip_prefix(":!") {
             self.out.shell(rest.trim());
+            // 子プロセスは同じプロセスグループにいるので、Ctrl-C の SIGINT は leani にも
+            // 届く。止めたいのは子プロセスだけ。フラグをここで消して、ループが入力中の
+            // ブロックを捨てないようにする。
+            if self.take_interrupt() {
+                self.out.write("^C");
+            }
             return false;
         }
 

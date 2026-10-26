@@ -17,8 +17,12 @@
 //! | `search`   | 外部サービス (loogle) への問い合わせ                        |
 //! | `show`     | 表示を出す (`Output` の端末の実装、メッセージの整形、pager)      |
 //! | `repl`     | 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する。Tab 補完 |
+//! | `cli`      | 引数を読んで `Repl` を起動する。入力を読むループ。終了コード      |
+//!
+//! `main.rs` が `leani` コマンドで、環境変数と stdin を `cli` に渡す。
 
 pub mod boot;
+pub mod cli;
 pub mod engine;
 pub mod history;
 pub mod repl;

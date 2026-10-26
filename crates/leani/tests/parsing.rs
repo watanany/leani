@@ -2007,6 +2007,196 @@ mod 起動オプション {
     }
 }
 
+mod 起動 {
+    //! cli::main。`leani` コマンドを起動して、終了コードと表示を確かめる。Python 版は
+    //! Repl とエンジンの用意を差し替えていたが、Rust 版は偽の elan、lake、git を
+    //! PATH に置く。
+    use super::*;
+    use std::process::{Command, Stdio};
+
+    /// コマンドの終了コードと、stdout と stderr の表示。
+    struct Ran {
+        code: i32,
+        out: String,
+        err: String,
+    }
+
+    /// input を stdin に渡してコマンドを動かし、終わるまで待つ。
+    fn run(cmd: &mut Command, input: &str) -> Ran {
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        let mut stdin = child.stdin.take().expect("stdin");
+        stdin.write_all(input.as_bytes()).expect("write stdin");
+        drop(stdin);
+        let got = child.wait_with_output().expect("wait");
+        Ran {
+            code: got.status.code().unwrap_or(-1),
+            out: String::from_utf8_lossy(&got.stdout).into_owned(),
+            err: String::from_utf8_lossy(&got.stderr).into_owned(),
+        }
+    }
+
+    /// 環境変数を vars だけにした `leani`。設定、履歴、init、state は dir の下に向ける。
+    fn isolated(dir: &Path, vars: &[(&str, &str)]) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_leani"));
+        cmd.env_clear()
+            .env("HOME", dir)
+            .env("XDG_STATE_HOME", dir.join("state"))
+            .env("LEANI_CONFIG", dir.join("config.toml"))
+            .env("LEANI_HISTORY", dir.join("history"))
+            .env("LEANI_INIT", dir.join("no-such-init.lean"))
+            .envs(vars.iter().copied())
+            .current_dir(dir);
+        cmd
+    }
+
+    /// 本物のエンジンを使う `leani`。PATH と HOME はプロセスのものを使い、設定、
+    /// 履歴、init だけを dir の下に向ける (engine.rs の sandbox と同じ)。
+    fn real(dir: &Path) -> Command {
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_leani"));
+        cmd.env("LEANI_CONFIG", dir.join("config.toml"))
+            .env("LEANI_HISTORY", dir.join("history"))
+            .env("LEANI_INIT", dir.join("no-such-init.lean"))
+            .env_remove("LEANI_ENGINE")
+            .env_remove("LEANI_NO_SETUP")
+            .current_dir(dir);
+        cmd
+    }
+
+    /// 設定ファイルを dir に書き、そのパスを返す。
+    fn config(dir: &Path, text: &str) -> String {
+        let path = dir.join("config.toml");
+        fs::write(&path, text).expect("write config");
+        path_str(&path)
+    }
+
+    fn with_engine(eng: &str) -> String {
+        format!("default = \"t\"\n[env.t]\nimports = []\nengine = \"{eng}\"\n")
+    }
+
+    const NO_ENGINE: &str = "default = \"t\"\n[env.t]\nimports = []\n";
+
+    #[story("G3")]
+    #[test]
+    fn dash_dash_setup_は用意済みならエンジンを用意しない() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v1");
+        config(dir.path(), &with_engine(&eng));
+        let git = fake_git(&dir.path().join("git.log"), &[]);
+        let path = fake_tools(dir.path(), &[("elan", ""), ("lake", ""), ("git", &git)]);
+
+        let got = run(isolated(dir.path(), &[("PATH", &path)]).arg("--setup"), "");
+
+        assert_eq!(got.code, 0, "{}", got.err);
+        assert!(got.out.contains("用意済み"), "{}", got.out);
+        assert_eq!(git_log(dir.path()), "", "エンジンを用意してしまった");
+    }
+
+    #[story("G3")]
+    #[test]
+    fn dash_dash_setup_は未用意ならエンジンを用意する() {
+        let dir = tmp();
+        config(dir.path(), NO_ENGINE);
+        let git = fake_git(&dir.path().join("git.log"), &["v4.1.0"]);
+        let lake = fake_lake(&dir.path().join("lake.count"));
+        let lean = "echo 'Lean (version 4.1.0, arm64-apple-darwin, commit 0, Release)'";
+        let path = fake_tools(
+            dir.path(),
+            &[("elan", ""), ("git", &git), ("lake", &lake), ("lean", lean)],
+        );
+
+        // --setup で明示的に頼まれたときは、LEANI_NO_SETUP があっても用意する。
+        let vars = [("PATH", path.as_str()), ("LEANI_NO_SETUP", "1")];
+        let got = run(isolated(dir.path(), &vars).arg("--setup"), "");
+
+        assert_eq!(got.code, 0, "{}", got.err);
+        assert!(
+            git_log(dir.path()).contains("clone"),
+            "エンジンを用意していない"
+        );
+        let repl = dir
+            .path()
+            .join("state/leani/engine/v4.1.0/.lake/build/bin/repl");
+        assert!(repl.is_file(), "repl が無い: {}", repl.display());
+    }
+
+    #[story("G4")]
+    #[test]
+    fn エンジンが起動しなければメッセージを表示して_exit_1_で終わる() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v1");
+        config(dir.path(), &with_engine(&eng));
+        // elan がすぐ終了するので、エンジンは最初の応答を返さずに終了する。
+        let path = fake_tools(dir.path(), &[("elan", "exit 1"), ("lake", "")]);
+
+        let got = run(&mut isolated(dir.path(), &[("PATH", &path)]), "");
+
+        assert_eq!(got.code, 1, "{}", got.out);
+        assert!(got.err.contains("エンジンが起動しなかった"), "{}", got.err);
+    }
+
+    #[story("G4")]
+    #[test]
+    fn 設定のエラーでは起動せずに知らせる() {
+        let dir = tmp();
+        config(dir.path(), "default = \n");
+        let got = run(&mut isolated(dir.path(), &[]), "");
+        assert_eq!(got.code, 1, "{}", got.out);
+        assert!(got.err.contains("設定ファイルを読めない"), "{}", got.err);
+
+        // 設定が読めても、起動できない理由があれば同じく知らせる。
+        config(dir.path(), NO_ENGINE);
+        let path = tools_path(dir.path(), &[]);
+        let got = run(&mut isolated(dir.path(), &[("PATH", &path)]), "");
+        assert_eq!(got.code, 1, "{}", got.out);
+        assert!(got.err.contains("elan が PATH に無い"), "{}", got.err);
+        assert!(
+            !got.out.contains("import Lean"),
+            "起動してしまった: {}",
+            got.out
+        );
+    }
+
+    #[story("B4")]
+    #[test]
+    fn 指定したファイルを_Repl_に渡す() {
+        let dir = tmp();
+        config(dir.path(), NO_ENGINE);
+        let file = dir.path().join("given.lean");
+        fs::write(&file, "def given := 12\n").expect("write");
+
+        let got = run(real(dir.path()).arg(&file), "given + 1\n");
+
+        assert_eq!(got.code, 0, "{}", got.err);
+        // パイプの入力は表示されないので、プロンプトと結果が同じ行に並ぶ。
+        let answered = got.out.lines().any(|l| l.trim_start_matches("λ> ") == "13");
+        assert!(answered, "{}", got.out);
+    }
+
+    #[story("G7")]
+    #[test]
+    fn dash_V_は環境とバージョンと設定ファイルの場所を表示して終わる() {
+        let dir = tmp();
+        let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v1");
+        let conf = config(dir.path(), &with_engine(&eng));
+
+        let got = run(isolated(dir.path(), &[]).arg("-V"), "");
+
+        assert_eq!(got.code, 0, "{}", got.err);
+        assert!(got.out.contains("環境:     t (import Lean)"), "{}", got.out);
+        assert!(
+            got.out.contains("Lean:     leanprover/lean4:v1"),
+            "{}",
+            got.out
+        );
+        assert!(got.out.contains(&conf), "{}", got.out);
+    }
+}
+
 mod 略記の一覧 {
     //! `:abbrev` の表示。`man ascii` のように、キーと記号の組を複数の列に並べる。
     use super::*;
