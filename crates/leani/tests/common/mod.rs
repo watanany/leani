@@ -248,13 +248,38 @@ pub fn fresh(obj: &Json) -> bool {
 
 /// 応答の messages に PANIC を足す。
 pub fn with_panic(resp: &Json) -> Json {
+    with_info(resp, PANIC)
+}
+
+/// 応答の messages に info のメッセージを 1 つ足す。
+pub fn with_info(resp: &Json, data: &str) -> Json {
     let mut r = resp.clone();
-    let extra = serde_json::json!({ "severity": "info", "data": PANIC });
+    let extra = serde_json::json!({ "severity": "info", "data": data });
     match r.get_mut("messages").and_then(Json::as_array_mut) {
         Some(ms) => ms.push(extra),
         None => r["messages"] = serde_json::json!([extra]),
     }
     r
+}
+
+/// リクエストがタクティクか (`{"tactic": ..., "proofState": ...}`)。
+pub fn is_tactic(obj: &Json) -> bool {
+    obj.get("tactic").is_some()
+}
+
+/// when(リクエスト) が真になった最初のリクエストでエンジンを止める (Python 版の
+/// `query` や `send_tactic` を 1 回だけ `EngineDied` にする差し込み)。
+///
+/// 差し込み口は再起動しても残るので、2 回目からは通す。
+pub fn die_once(d: &mut Driver, when: impl Fn(&Json) -> bool + Send + 'static) {
+    let mut dead = false;
+    d.hook(move |stage| match stage {
+        Stage::Before(obj) if !dead && when(obj) => {
+            dead = true;
+            Hooked::Kill
+        }
+        _ => Hooked::Pass,
+    });
 }
 
 /// when(リクエスト) が真になった最初のリクエストで Ctrl-C を再現する。
