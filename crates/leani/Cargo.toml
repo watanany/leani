@@ -13,6 +13,7 @@ testing = []
 
 [dependencies]
 leani-core = { path = "../leani-core" }
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 leani-read = { path = "../leani-read" }
 nix = { version = "0.28", features = ["poll", "process", "signal"] }
 regex = "1"

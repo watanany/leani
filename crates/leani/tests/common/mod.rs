@@ -151,11 +151,20 @@ pub struct Driver {
 impl Driver {
     /// 既定の環境 (core) で起動する。起動時の表示は捨てる。
     pub fn new() -> Driver {
+        Driver::with(None)
+    }
+
+    /// 起動時にファイルを `:l` する (`leani file.lean`)。
+    pub fn preload(path: &str) -> Driver {
+        Driver::with(Some(path))
+    }
+
+    fn with(preload: Option<&str>) -> Driver {
         let sb = sandbox();
         let table = load_config(&sb.ctx.config).expect("config");
         let cfg = resolve(&sb.ctx, None, None, &[], &table).expect("resolve");
         let out = Sink::default();
-        let repl = Repl::new(&sb.ctx, cfg, Box::new(out.clone())).expect("起動できない");
+        let repl = Repl::new(&sb.ctx, cfg, preload, Box::new(out.clone())).expect("起動できない");
         let mut d = Driver { repl, out, sb };
         d.check("起動直後");
         d.take();
