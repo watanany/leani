@@ -148,6 +148,11 @@ pub fn as_table(value: Option<&Value>, place: &str, config: &str) -> Result<Tabl
     }
 }
 
+/// 設定に書いてある環境の名前を、名前の順に返す (`:env` の切り替え先の一覧)。
+pub fn env_names(conf: &Table, config: &str) -> Result<Vec<String>, ConfigError> {
+    as_table(conf.get("env"), "env", config).map(|t| t.keys().cloned().collect())
+}
+
 // ------------------------------------------------------------------ ファイル
 
 /// 設定ファイルを読む。無ければ空の設定。
