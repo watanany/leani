@@ -12,10 +12,14 @@ mod common;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
 
-use common::{Driver, PANIC, cmd, fresh, interrupt_after_write, sandbox, with_panic};
+use common::{
+    Driver, PANIC, cmd, die_once, fresh, interrupt_after_write, is_tactic, sandbox, with_info,
+    with_panic,
+};
 use leani::engine::{Engine, Hooked, Stage};
 use leani::repl::Repl;
-use leani_core::types::EngineFault;
+use leani_core::pure::balanced;
+use leani_core::types::{EngineFault, Json};
 use leani_read::config::EnvConfig;
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
@@ -688,6 +692,14 @@ mod コマンドの一覧 {
         assert!(out.contains(":env"), "{out}");
     }
 
+    #[story("H1")]
+    #[test]
+    fn 証明モードの_colon_help_では証明用のコマンドを表示する() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem t5 : 1 = 1 := by sorry", ":prove"]);
+        assert!(repl.feed(&[":help"]).contains("1 回の入力が 1 タクティク"));
+    }
+
     #[story("H1", "F4")]
     #[test]
     fn 無いコマンドを入力したら知らせてセッションを続ける() {
@@ -934,6 +946,22 @@ mod 書き直しをやめたとき {
         );
         assert_eq!(repl.declarations().len(), 1);
     }
+
+    #[story("C2", "E1")]
+    #[test]
+    fn sorry_を含む宣言の続きを捨てたら_prove_も戻る() {
+        let mut repl = Driver::new();
+        repl.feed(&["def withSorry : Nat := sorry"]);
+        // 続きを書いているあいだは宣言が取り消されているので、保留した sorry も
+        // 今の環境のものではない (Driver が 1 行ごとに確かめる)。
+        repl.feed(&["  + 1"]);
+        repl.feed_with("discard", Repl::discard); // Ctrl-C
+
+        assert!(
+            repl.feed(&[":prove"]).contains('⊢'),
+            "取り消した宣言の sorry が戻っていない"
+        );
+    }
 }
 
 mod 読み込みの中断 {
@@ -1154,6 +1182,26 @@ mod 保留した宣言とエンジンの世代 {
         assert!(repl.feed(&["#eval held + 1"]).contains('2'));
     }
 
+    #[story("C2", "E1", "F1", "A4")]
+    #[test]
+    fn 再起動のあとで書き直しをやめたら前の宣言の_sorry_を残さない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem s1 : True := by sorry", "def other := 1"]);
+
+        // other の続きを書き始めると other は取り消され、完結判定の途中で
+        // エンジンが終了する。再起動の replay で s1 の sorry を保留し直す。
+        die_once(&mut repl, |o| o.get("cmd").is_some());
+        repl.feed(&["  + 1"]);
+        repl.unhook();
+        // Ctrl-C で other をテキストから再実行する。直前の宣言は other なので、
+        // s1 の sorry を保留したままにすると、:prove が other の環境で s1 の
+        // 証明を始める。
+        repl.feed_with("discard", Repl::discard);
+
+        assert!(repl.feed(&[":prove"]).contains("sorry が無い"));
+        assert!(repl.feed(&["other"]).contains('1'));
+    }
+
     #[story("F1")]
     #[test]
     fn 無効な_env_id_を持っていたらそのことを報告する() {
@@ -1346,6 +1394,32 @@ mod 元になる環境を失ったとき {
         assert!(repl.repl.eng().log().is_empty());
     }
 
+    #[story("F1", "E1")]
+    #[test]
+    fn sorry_の持ち越しも捨てる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem ghostSorry : True := by sorry"]);
+        assert!(repl.repl.held().is_some());
+
+        // 完結判定でエンジンが終了し、再起動の boot も失敗する。
+        let mut dead = false;
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) => Hooked::Kill,
+            Stage::Before(obj) if !dead && obj.get("cmd").is_some() => {
+                dead = true;
+                Hooked::Kill
+            }
+            _ => Hooked::Pass,
+        });
+        repl.feed(&["def afterGhost := 1"]);
+
+        // 残すと :goals が環境に無い宣言のゴールを表示し、:prove がその無効な
+        // proofState で証明モードを始める。
+        assert!(repl.repl.held().is_none());
+        assert!(repl.feed(&[":prove"]).contains("sorry")); // 「sorry が無い」と表示するだけ
+        assert!(repl.repl.proof().is_none());
+    }
+
     #[story("F1")]
     #[test]
     fn 送る前にエラーにする() {
@@ -1426,5 +1500,701 @@ mod 送る前の確認 {
         let out = repl.feed(&["def x := 1"]);
         assert!(out.contains("使えない"), "{out}");
         assert!(repl.declarations().is_empty());
+    }
+}
+
+mod 証明モード {
+    use super::*;
+
+    #[story("E2")]
+    #[test]
+    fn exact_の提案をスクリプトに追加する() {
+        // `exact?` のままだと :save したファイルで毎回検索が実行され、
+        // 結果も環境によって変わる。
+        let mut repl = Driver::new();
+        repl.feed(&["theorem t1 (n : Nat) : n + 0 = n := by sorry", ":prove"]);
+        // 1 つのタクティクで証明が終わるので、そのまま証明モードを終了する。
+        let out = repl.feed(&["exact?"]);
+        assert!(out.contains("スクリプトには"), "{out}");
+        let done = out.find("証明完了").expect(&out);
+        assert!(!out[done..].contains("exact?"), "置き換えた宣言に残った");
+    }
+
+    #[story("E1")]
+    #[test]
+    fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "theorem t2 : 1 = 1 ∧ 2 = 2 := by sorry",
+            ":prove",
+            "constructor",
+        ]);
+        assert!(repl.feed(&[":goals"]).contains("1 = 1"));
+        assert!(repl.feed(&[":script"]).contains("constructor"));
+        repl.feed(&["rfl"]);
+        assert!(repl.feed(&["rfl"]).contains("証明完了"));
+    }
+
+    #[story("E1")]
+    #[test]
+    fn 証明モードの外で証明用のコマンドを入力すると証明モードではないと伝える() {
+        // 証明が完成すると leani は自動で証明モードを終了するので、その直後に
+        // ユーザーが入力することがある。
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":done"]).contains("証明モードではない"));
+        assert!(repl.feed(&[":goals"]).contains("証明モードではない"));
+        assert!(repl.feed(&[":script"]).contains("証明モードではない"));
+    }
+
+    #[story("E1", "F2")]
+    #[test]
+    fn colon_undo_のあとの_colon_prove_が手前の宣言を消さない() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "def keepme := 42",
+            "theorem t0 : 1 = 1 := by sorry",
+            ":undo",
+            ":prove",
+        ]);
+        assert!(
+            repl.feed(&["keepme"]).contains("42"),
+            "手前の宣言が巻き戻された"
+        );
+        assert_eq!(repl.declarations().len(), 1);
+    }
+
+    #[story("E1")]
+    #[test]
+    fn colon_undo_でタクティクを_1_つ取り消す() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "theorem t3 : 1 = 1 ∧ 2 = 2 := by sorry",
+            ":prove",
+            "constructor",
+            ":undo",
+        ]);
+        assert!(
+            repl.feed(&[":goals"]).contains('∧'),
+            "constructor の前のゴールに戻っていない"
+        );
+        assert!(!repl.feed(&[":script"]).contains("constructor"));
+        assert!(repl.feed(&[":undo"]).contains("取り消せるタクティクが無い"));
+    }
+
+    #[story("E1", "C2")]
+    #[test]
+    fn タクティクの直後にインデントした行を書くと前のタクティクの続きとして読み直す() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "theorem t7 : 1 = 1 ∧ 2 = 2 := by sorry",
+            ":prove",
+            "constructor",
+        ]);
+        // constructor の前のゴールに戻ってから、2 行を 1 つのタクティクとして送る。
+        let out = repl.block(&["  <;> rfl"]);
+        assert!(out.contains("証明完了"), "{out}");
+        assert!(!repl.feed(&["#print axioms t7"]).contains("sorryAx"));
+    }
+
+    #[story("E1")]
+    #[test]
+    fn 証明モードの_colon_q_は証明モードだけを終了する() {
+        for quit in [":q", ":quit"] {
+            let mut repl = Driver::new();
+            repl.feed(&["theorem t6 : 1 = 1 := by sorry", ":prove"]);
+            assert!(repl.feed(&[quit]).contains("証明モードを終了した"));
+            assert!(repl.repl.proof().is_none());
+            assert!(repl.feed(&["1 + 1"]).contains('2'), "REPL まで終了した");
+        }
+    }
+
+    #[story("E1")]
+    #[test]
+    fn エラーになったタクティクはスクリプトに記録しない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem bad : 1 = 1 := by sorry", ":prove"]);
+        assert!(repl.feed(&["exact nosuchLemma"]).contains("nosuchLemma"));
+        assert!(repl.feed(&[":script"]).contains("(空)"));
+        assert!(repl.feed(&[":goals"]).contains("1 = 1"));
+    }
+
+    #[story("E1")]
+    #[test]
+    fn エンジンが返したエラーを表示してゴールを変えない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem lost : 1 = 1 := by sorry", ":prove"]);
+        let state = repl.repl.proof().expect("proof").state;
+        repl.hook(|stage| match stage {
+            Stage::Before(obj) if is_tactic(obj) => {
+                Hooked::Reply(json!({ "message": "Unknown proof state." }))
+            }
+            _ => Hooked::Pass,
+        });
+        assert!(repl.feed(&["rfl"]).contains("Unknown proof state."));
+        assert_eq!(repl.repl.proof().expect("proof").state, state);
+        repl.unhook();
+        assert!(repl.feed(&[":goals"]).contains("1 = 1"));
+    }
+
+    #[story("E1", "F1")]
+    #[test]
+    fn タクティクで_PANIC_したら警告して_proofState_を進めない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem panicT : 1 = 1 := by sorry", ":prove"]);
+        let state = repl.repl.proof().expect("proof").state;
+        repl.hook(|stage| match stage {
+            Stage::Read(obj, resp) if is_tactic(obj) => Hooked::Reply(with_panic(resp)),
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["rfl"]);
+        assert!(out.contains("PANIC した"), "{out}");
+        assert!(!out.contains("証明完了"), "{out}");
+        let proof = repl.repl.proof().expect("proof");
+        assert_eq!(proof.state, state);
+        assert!(proof.script.is_empty());
+    }
+
+    #[story("E2")]
+    #[test]
+    fn 提案を読み取れなければ入力したタクティクを記録する() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem cut : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        repl.hook(|stage| match stage {
+            Stage::Read(obj, resp) if is_tactic(obj) => {
+                Hooked::Reply(with_info(resp, "Try this: exact (foo"))
+            }
+            _ => Hooked::Pass,
+        });
+        assert!(
+            repl.feed(&["constructor"])
+                .contains("提案を読み取れなかった")
+        );
+        assert!(repl.feed(&[":script"]).contains("constructor"));
+    }
+
+    #[story("E3")]
+    #[test]
+    fn sorry_の位置が分からなければ宣言は_sorry_のままだと知らせる() {
+        // Python 版は splice_sorry を None を返す関数に差し替えていた。ここでは
+        // 宣言の応答から sorry の位置を消して、同じ状態を作る。
+        let mut repl = Driver::new();
+        repl.hook(|stage| match stage {
+            Stage::Read(obj, resp) if cmd(obj).starts_with("theorem lostPos") => {
+                Hooked::Reply(without_pos(resp))
+            }
+            _ => Hooked::Pass,
+        });
+        repl.feed(&["theorem lostPos : 1 = 1 := by sorry", ":prove"]);
+        assert!(
+            repl.feed(&["rfl"])
+                .contains("sorry の位置を読み取れなかった")
+        );
+        assert_eq!(repl.declarations(), ["theorem lostPos : 1 = 1 := by sorry"]);
+    }
+
+    /// 応答の sorries から位置を消す。
+    fn without_pos(resp: &Json) -> Json {
+        let mut r = resp.clone();
+        if let Some(ss) = r.get_mut("sorries").and_then(Json::as_array_mut) {
+            for sy in ss {
+                if let Some(o) = sy.as_object_mut() {
+                    o.remove("pos");
+                    o.remove("endPos");
+                }
+            }
+        }
+        r
+    }
+
+    #[story("E1")]
+    #[test]
+    fn 証明モードの外の_colon_goals_で残っている_sorry_を表示する() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem t4 : 3 = 3 := by sorry"]);
+        let out = repl.feed(&[":goals"]);
+        assert!(out.contains("sorry 1"), "{out}");
+        assert!(out.contains("3 = 3"), "{out}");
+    }
+}
+
+/// `:= sorry` の位置にはタクティクを書けないので、置き換えに失敗する。
+mod 項の位置の_sorry {
+    use super::*;
+
+    #[story("E3")]
+    #[test]
+    fn 置き換えられなければ_sorry_のまま残す() {
+        let mut repl = Driver::new();
+        repl.feed(&["def termSorry : Nat := sorry", ":prove"]);
+        let out = repl.feed(&["exact 0"]);
+        assert!(out.contains("sorry のまま"), "{out}");
+        // sorry のままの宣言が残っているので、名前としては引き続き参照できる。
+        // 値では確かめない。sorry に依存する項は、Lean が評価を拒むため。
+        assert_eq!(repl.declarations(), ["def termSorry : Nat := sorry"]);
+        assert!(repl.feed(&["#print termSorry"]).contains("termSorry"));
+    }
+}
+
+mod 環境全体が置き換わるとき {
+    use super::*;
+
+    #[story("B4", "E1")]
+    #[test]
+    fn 読み込んだら証明モードを終了する() {
+        // 前の環境の proofState を持ったままだと、送っても新しい環境と合わない。
+        let mut repl = Driver::new();
+        let path = file(&repl, "other.lean", "def other := 1\n");
+        repl.feed(&["theorem t5 : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        repl.feed(&[&format!(":l {path}")]);
+        assert!(
+            repl.feed(&[":goals"]).contains("証明モードではない"),
+            "proofState が残った"
+        );
+    }
+}
+
+/// simp? の結果は 100 桁前後で折り返される。2 行目以降を取り出さないと、閉じていない
+/// スクリプトを「証明完了」として表示したまま何も知らせない (項の位置の sorry は
+/// 置き換えても再実行がエラーになるので、問題に気付く場所が無い)。
+mod 折り返した提案 {
+    use super::*;
+
+    const HYPS: &str = "(hypothesisNumberOne : a = 1) (hypothesisNumberTwo : b = 2) \
+        (hypothesisNumberThree : c = 3) (hypothesisNumberFour : d = 4) \
+        (hypothesisNumberFive : e = 5) (hypothesisNumberSix : f = 6)";
+    const SIMP: &str = "simp? [hypothesisNumberOne, hypothesisNumberTwo, hypothesisNumberThree, \
+        hypothesisNumberFour, hypothesisNumberFive, hypothesisNumberSix]";
+
+    #[story("E2", "E3")]
+    #[test]
+    fn 折り返した提案でも_sorry_を置き換えられる() {
+        // 途中で切れたスクリプトでは置き換えが失敗し、成功したはずの証明が捨てられる。
+        let mut repl = Driver::new();
+        repl.feed(&[&format!(
+            "theorem folded (a b c d e f : Nat) {HYPS} : a + b + c + d + e + f = 21 := by sorry"
+        )]);
+        repl.feed(&[":prove", SIMP]);
+
+        let decls = repl.declarations();
+        let decl = decls.last().expect("宣言");
+        assert!(!decl.contains("sorry"), "{decl}");
+        assert!(decl.contains("hypothesisNumberSix"), "{decl}");
+        assert!(balanced(decl), "{decl}");
+    }
+
+    #[story("E2")]
+    #[test]
+    fn 項の位置の_sorry_でもスクリプトを切り詰めない() {
+        // 表示したスクリプトは、置き換えが成功したかどうかに関係なく画面に残る。
+        // 途中で切れていると、「証明完了」と表示したまま誰も気付けない。
+        let mut repl = Driver::new();
+        repl.feed(&[&format!(
+            "theorem twoHoles (a b c d e f : Nat) {HYPS} : (a + b + c + d + e + f = 21) ∧ True := ⟨sorry, sorry⟩"
+        )]);
+        repl.feed(&[":prove 1"]);
+        let out = repl.feed(&[SIMP]);
+
+        assert!(out.contains("証明完了"), "{out}");
+        assert!(
+            out.contains("hypothesisNumberSix"),
+            "スクリプトを途中で切った: {out}"
+        );
+    }
+}
+
+/// repl は sorry ごとに位置を返すので、leani はその位置で 1 個だけを置き換える。
+/// テキストの "sorry" を数えて位置を決めると、2 個以上あるときに置き換えられず、
+/// 宣言が sorry のままなのに「証明完了」と表示することになる。
+mod sorry_が複数あるとき {
+    use super::*;
+
+    #[story("E1", "E3")]
+    #[test]
+    fn 選んだ_sorry_だけを置き換える() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "theorem two : 1 = 1 ∧ 2 = 2 := ⟨by sorry, by sorry⟩",
+            ":prove 1",
+        ]);
+        let out = repl.feed(&["rfl"]);
+
+        assert!(out.contains("証明完了"), "{out}");
+        let decls = repl.declarations();
+        let decl = decls.last().expect("宣言");
+        assert!(decl.contains("by rfl"), "{decl}");
+        assert_eq!(
+            decl.matches("sorry").count(),
+            1,
+            "もう 1 つの sorry まで置き換えた: {decl}"
+        );
+    }
+
+    #[story("E1", "E3")]
+    #[test]
+    fn 残った_sorry_を続けて証明できる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem both : 1 = 1 ∧ 2 = 2 := ⟨by sorry, by sorry⟩"]);
+        repl.feed(&[":prove 1", "rfl", ":prove", "rfl"]);
+
+        let decls = repl.declarations();
+        let decl = decls.last().expect("宣言");
+        assert!(!decl.contains("sorry"), "{decl}");
+    }
+
+    #[story("E1", "E3")]
+    #[test]
+    fn 単独の行にある_sorry_のインデントを崩さない() {
+        // 前後の空白まで変えると "    sorry" が " trivial" になり、インデントが
+        // 浅くなって by ブロックの外に出る (unexpected identifier)。
+        let mut repl = Driver::new();
+        repl.block(&[
+            "example : True := by",
+            "  have h : True := by",
+            "    sorry",
+            "  exact h",
+        ]);
+        repl.feed(&[":prove"]);
+        let out = repl.feed(&["trivial"]);
+
+        assert!(out.contains("証明完了"), "{out}");
+        assert!(
+            !out.contains('^'),
+            "置き換えた宣言がエラーになっている: {out}"
+        );
+        let decls = repl.declarations();
+        assert_eq!(
+            decls.last().map(String::as_str),
+            Some("example : True := by\n  have h : True := by\n    trivial\n  exact h"),
+            "{decls:?}"
+        );
+    }
+
+    #[story("E1", "E3")]
+    #[test]
+    fn インデントのある宣言でも順に置き換えられる() {
+        let mut repl = Driver::new();
+        repl.block(&[
+            "theorem tidy : True ∧ True := by",
+            "  constructor",
+            "  · sorry",
+            "  · sorry",
+        ]);
+        for _ in 0..2 {
+            repl.feed(&[":prove", "trivial"]);
+        }
+
+        assert!(
+            repl.feed(&["#print axioms tidy"])
+                .contains("does not depend on any axioms")
+        );
+        let decls = repl.declarations();
+        assert_eq!(
+            decls.first().map(String::as_str),
+            Some("theorem tidy : True ∧ True := by\n  constructor\n  · trivial\n  · trivial"),
+            "{decls:?}"
+        );
+    }
+
+    #[story("E3")]
+    #[test]
+    fn 置き換えられなくても残りの_sorry_の証明を続けられる() {
+        // 項の位置の sorry にはタクティクを書けない。元に戻すときに持ち越した sorry まで
+        // 捨てると、残っている sorry の証明を :prove で続けられなくなる。
+        let mut repl = Driver::new();
+        repl.feed(&["def two : Nat × Nat := (sorry, sorry)", ":prove 1"]);
+        let out = repl.feed(&["exact 0"]);
+
+        assert!(out.contains("sorry のまま"), "{out}");
+        assert_eq!(
+            repl.declarations(),
+            ["def two : Nat × Nat := (sorry, sorry)"]
+        );
+        assert!(
+            repl.feed(&[":prove 2"]).contains("Nat"),
+            "残りの sorry の証明を始められない"
+        );
+    }
+}
+
+/// proofState は前のプロセスのもの。新しいエンジンは番号を 0 から付け直す
+/// ので、そのまま送ると別の証明の状態に対する応答が返ってくる。
+mod タクティクの途中でエンジンが変わる {
+    use super::*;
+
+    #[story("F1", "E1")]
+    #[test]
+    fn エンジンが異常終了したら証明モードを終了して宣言を残す() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "def keep := 7",
+            "theorem twoGoals : 1 = 1 ∧ 2 = 2 := by sorry",
+            ":prove",
+        ]);
+
+        die_once(&mut repl, is_tactic);
+        let out = repl.feed(&["constructor"]);
+
+        assert!(
+            !out.contains("証明完了"),
+            "再起動したエンジンの応答をそのまま使った: {out}"
+        );
+        assert!(out.contains("証明モードを終了した"), "{out}");
+        assert!(repl.repl.proof().is_none());
+
+        // 証明モードを終了したのに last.proof が立っていると、続きのインデントした行で
+        // 実際の宣言が pop される (取り消した中身も消えるので元に戻せない)。
+        repl.unhook();
+        repl.feed(&["  exact rfl"]);
+        assert!(
+            repl.declarations()
+                .contains(&"theorem twoGoals : 1 = 1 ∧ 2 = 2 := by sorry".to_string())
+        );
+    }
+
+    #[story("A4", "F1", "E1")]
+    #[test]
+    fn 中断しても証明モードを再開できる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem again : 1 = 1 := by sorry", ":prove"]);
+
+        interrupt_after_write(&mut repl, is_tactic);
+        let out = repl.feed(&["rfl"]);
+        assert!(out.contains("再開できる"), "{out}");
+
+        // replay で戻った宣言の sorry を取得し直していないと、宣言はあるのに
+        // :prove が「sorry が無い」と表示するだけになる。
+        repl.unhook();
+        repl.feed(&[":prove", "rfl"]);
+        let decls = repl.declarations();
+        assert!(!decls.last().expect("宣言").contains("sorry"), "{decls:?}");
+    }
+}
+
+/// 環境に含まれていない宣言の sorry は置き換えられない。持ち越すと、置き換えに
+/// 失敗した直後に「sorry 1 個」と表示してから「sorry 2 個」と表示し直す。
+mod エラーになった宣言の_sorry {
+    use super::*;
+
+    #[story("E1", "E3")]
+    #[test]
+    fn ゴールも証明モードの案内も表示しない() {
+        let mut repl = Driver::new();
+        let out = repl.feed(&["theorem ng : True := ⟨by sorry, nonsense⟩"]);
+
+        assert!(!out.contains("proofState"), "{out}");
+        assert!(!out.contains(":prove"), "{out}");
+        assert!(repl.repl.held().is_none());
+        assert!(repl.feed(&[":prove"]).contains("sorry が無い"));
+    }
+
+    #[story("E1", "E3")]
+    #[test]
+    fn 置き換えに失敗しても件数を報告し直さない() {
+        let mut repl = Driver::new();
+        repl.feed(&["def nums : Nat × Nat := (sorry, sorry)", ":prove 1"]);
+        let out = repl.feed(&["exact 0"]); // 項の位置なのでタクティクは書けない
+
+        assert!(out.contains("sorry のまま"), "{out}");
+        assert!(!out.contains("sorry 1 [proofState"), "{out}");
+        assert!(out.contains("sorry 2 個"), "{out}");
+        assert_eq!(
+            repl.declarations(),
+            ["def nums : Nat × Nat := (sorry, sorry)"]
+        );
+    }
+}
+
+mod 依存している公理 {
+    use super::*;
+
+    #[story("E4")]
+    #[test]
+    fn print_axioms_を実行できる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem ax1 : 1 = 1 := rfl"]);
+        assert!(
+            repl.feed(&["#print axioms ax1"])
+                .contains("does not depend on any axioms")
+        );
+    }
+
+    #[story("E4")]
+    #[test]
+    fn sorry_のままなら_sorryAx_に依存する() {
+        let mut repl = Driver::new();
+        repl.feed(&["def ax2 : Nat := sorry"]);
+        assert!(repl.feed(&["#print axioms ax2"]).contains("sorryAx"));
+    }
+
+    #[story("E4", "E1", "E3")]
+    #[test]
+    fn 置き換えたら_sorryAx_が消える() {
+        // 置き換えられたかを公理の側から確認できる。あいだに環境を進める入力を
+        // 挟むと持ち越した proofState を捨てるので、続けて入力する。
+        let mut repl = Driver::new();
+        repl.feed(&["theorem ax3 : 1 = 1 := by sorry", ":prove", "rfl"]);
+        assert!(
+            repl.feed(&["#print axioms ax3"])
+                .contains("does not depend on any axioms")
+        );
+    }
+}
+
+/// 完結判定もエンジンとの通信なので、そこでエンジンが異常終了することがある。guard が
+/// エンジンを再起動すると証明モードは終了するが、その行の処理はまだ続いている。
+mod 入力の判定の途中でエンジンが異常終了する {
+    use super::*;
+
+    #[story("F1", "E1")]
+    #[test]
+    fn タクティクの行を宣言として送らない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem probeDied : 1 = 1 := by sorry", ":prove"]);
+
+        die_once(&mut repl, |o| o.get("cmd").is_some());
+        let out = repl.feed(&["rfl"]);
+        repl.unhook();
+
+        // 証明モードが終了したあとに command として処理すると、タクティクが
+        // 宣言として送られて "expected command" になる。
+        assert!(!out.contains("expected command"), "{out}");
+        assert!(out.contains("実行しなかった"), "{out}");
+        // そのうえ submit_cmd の clear_pending が取得し直した sorry を消すので、
+        // 直前に表示した「:prove で再開できる」が正しくなくなる。
+        assert!(out.contains("再開できる"), "{out}");
+        let decls = repl.declarations();
+        assert!(decls.last().expect("宣言").contains("sorry"), "{decls:?}");
+        assert!(
+            repl.feed(&[":prove"]).contains('⊢'),
+            "案内どおりに再開できない"
+        );
+    }
+}
+
+/// replay でエラーになった宣言は保留 (`Engine::unplayed`) に残る。環境を作り
+/// 直す操作で何も表示せずに消すと、「保留にした」と表示した直後に
+/// 消えることになる。
+mod 保留と環境の切り替え {
+    use super::*;
+
+    /// 保留を 1 件作る。読み込んだファイルから依存先を消す。
+    fn strand(repl: &mut Driver, name: &str) -> String {
+        let lib = file(
+            repl,
+            &format!("{name}.lean"),
+            &format!("def {name}Dep := 1\n"),
+        );
+        repl.feed(&[&format!(":l {lib}")]);
+        repl.feed(&[&format!("def {name}Use := {name}Dep + 1")]);
+        std::fs::write(&lib, "def other := 9\n").expect("write");
+        repl.feed(&[":restart"]);
+        assert_eq!(
+            repl.repl.eng().unplayed(),
+            [format!("def {name}Use := {name}Dep + 1")]
+        );
+        lib
+    }
+
+    #[story("B4", "F2")]
+    #[test]
+    fn colon_l_が保留を捨てるなら件数を表示する() {
+        let mut repl = Driver::new();
+        strand(&mut repl, "loadDrop");
+
+        let other = file(&repl, "other2.lean", "def zz := 1\n");
+        let out = repl.feed(&[&format!(":l {other}")]);
+
+        assert!(out.contains("捨てた"), "{out}");
+        assert!(repl.repl.eng().unplayed().is_empty());
+    }
+}
+
+mod sorry_の置き換えの途中でエンジンが異常終了する {
+    use super::*;
+
+    #[story("E3", "F1")]
+    #[test]
+    fn 置き換えが成功したのに_sorry_のままと報告しない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem died : True := by sorry", ":prove"]);
+
+        die_once(&mut repl, |o| cmd(o).contains("by trivial"));
+        let out = repl.feed(&["trivial"]);
+        repl.unhook();
+
+        // guard がエンジンを再起動して再送し、置き換えた宣言は成功している。世代だけを
+        // 見て「sorry のまま」と報告すると、sorry のままのテキストを再実行して
+        // 重複エラーになった宣言が保留にずっと残る (:restart のたびに
+        // 「再実行に失敗した宣言」と表示される)。
+        assert_eq!(repl.declarations(), ["theorem died : True := by trivial"]);
+        assert!(!out.contains("sorry のままにしておく"), "{out}");
+        assert!(
+            repl.repl.eng().unplayed().is_empty(),
+            "{:?}",
+            repl.repl.eng().unplayed()
+        );
+    }
+
+    #[story("E3", "F1")]
+    #[test]
+    fn 再起動したあとの再実行も失敗したら_sorry_のままと知らせる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem died2 : True := by sorry", ":prove"]);
+
+        let mut hit = 0;
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if cmd(obj).contains("by trivial") => {
+                hit += 1;
+                if hit == 1 {
+                    Hooked::Kill
+                } else {
+                    let error = json!({
+                        "severity": "error", "data": "boom", "pos": { "line": 1, "column": 0 }
+                    });
+                    Hooked::Reply(json!({ "env": 0, "messages": [error] }))
+                }
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["trivial"]);
+        repl.unhook();
+
+        assert!(
+            out.contains("エンジンを再起動したので、sorry のままにしておく"),
+            "{out}"
+        );
+        assert_eq!(repl.declarations(), ["theorem died2 : True := by sorry"]);
+    }
+}
+
+mod 再起動に失敗したときの証明モード {
+    use super::*;
+
+    #[story("F1", "E1")]
+    #[test]
+    fn 無効になった_proofState_を使い続けない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem ghost : True := by sorry", ":prove"]);
+
+        // 完結判定でエンジンが終了し、再起動の boot も失敗する。
+        let mut dead = false;
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) => Hooked::Kill,
+            Stage::Before(obj) if !dead && obj.get("cmd").is_some() => {
+                dead = true;
+                Hooked::Kill
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["trivial"]);
+
+        // 証明モードを終了しないと、以降どの行にも赤い "Unknown proof state." だけを返す
+        // 使えない証明モードのままになる (終了する方法の案内も表示されない)。
+        assert!(out.contains("再起動できなかった"), "{out}");
+        assert!(out.contains("証明モードを終了した"), "{out}");
+        assert!(repl.repl.proof().is_none());
+
+        repl.unhook();
+        assert!(repl.feed(&[":restart"]).contains("1 件"));
     }
 }

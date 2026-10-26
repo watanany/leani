@@ -2,7 +2,7 @@
 //!
 //! Python 版の `repl.py` から移している途中。この段階では、式と宣言の評価、
 //! `:{ ... :}`、エンジンの再起動、init、`:l` `:r` `:reset` `:undo` `:save`、履歴、
-//! `:help` `:time` `:restart` `:quit` `:!` がある。証明モード、`:env`、補完は
+//! `:help` `:time` `:restart` `:quit` `:!`、証明モードがある。`:env`、補完は
 //! あとの段階で足す。
 //!
 //! 入力を読むループは `Repl` の外に置く (計画の「テスト用の差し込み口」)。`Repl` は
@@ -17,9 +17,10 @@ use std::path::Path;
 use std::time::Instant;
 
 use leani_core::pure::{
-    Style, abspath, block_continues, classify, classify_tac, continues, errors, has_error,
-    head_line, indent, last_json, lean_str, nested_action, not_evaluable_reason, save_body,
-    sorries, strip_imports, text,
+    Style, abspath, balanced, block_continues, classify, classify_tac, continues, errors,
+    has_error, head_line, indent, int, last_json, lean_str, list, messages, nested_action,
+    not_evaluable_reason, save_body, sorries, splice_sorry, strip_imports, tactic_step,
+    tactic_undo, text, try_this,
 };
 use leani_core::queries::{META_LINE, PARSE_PROBE, fill};
 use leani_core::types::{EngineFault, Json, Kind, Output, Proof, State};
@@ -366,7 +367,9 @@ impl Repl {
     /// "Unknown proof state." だけを返す証明モードのままになる。
     fn fold_proof(&mut self) {
         self.last = None;
-        // 証明モードの終了の表示 (drop_proof) は段階 5c で足す。
+        if self.proof.is_some() {
+            self.drop_proof();
+        }
         self.proof = None;
         // 保留している proofState も終了したプロセスのもの。残すと :goals が
         // 環境に無い宣言のゴールを表示し、:prove がその無効な proofState で証明モードを
@@ -803,7 +806,9 @@ impl Repl {
         if last.proof {
             // 証明モードのタクティクは環境を進めていない。証明モードが終了していても、
             // ここで宣言を pop してはいけない (直前の実際の宣言が消える)。
-            // タクティクの取り消しは段階 5c で足す。
+            if let Some(proof) = &self.proof {
+                self.proof = tactic_undo(proof).or_else(|| Some(proof.clone()));
+            }
             return;
         }
         // 書き直しをやめたときに戻せるよう保存しておく
@@ -850,7 +855,10 @@ impl Repl {
         }
 
         self.undone = None; // 書き直しが確定した。もう戻さない
-        // 証明モードのタクティク (tactic) は段階 5c で足す。
+        if self.proof.is_some() {
+            self.tactic(src);
+            return;
+        }
 
         let kind = match kind {
             Some(kind) => kind,
@@ -1007,12 +1015,339 @@ impl Repl {
         }
     }
 
+    // -- 証明モード -------------------------------------------------------
+
+    /// 1 行 = 1 タクティク。proofState を進める。
+    fn tactic(&mut self, src: &str) {
+        let Some(proof) = self.proof.clone() else {
+            return;
+        };
+
+        let state = proof.state;
+        let resp = self.guard(|eng| eng.send_tactic(src, state));
+        if self.proof.as_ref() != Some(&proof) || proof.generation != self.eng.generation() {
+            // guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
+            // ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
+            // 0 から振り直すので、別の証明の状態と番号が一致して「証明完了」と
+            // 表示されることもある (宣言は sorry のまま残る)。
+            self.drop_proof();
+            return;
+        }
+        let Some(resp) = resp else {
+            return;
+        };
+        if panic_check(self.out.as_mut(), self.style, &resp) {
+            return;
+        }
+
+        self.last = Some(last_tactic(src, false));
+
+        if let Some(message) = text(&resp, "message").filter(|m| !m.is_empty()) {
+            // エンジンが直接返すエラー
+            self.out.fail(&self.style.red(message.trim_end()));
+            return;
+        }
+        if has_error(&resp) {
+            render(self.out.as_mut(), self.style, &resp, src, 0, 0);
+            return;
+        }
+
+        for m in messages(&resp) {
+            if let Some(data) = text(m, "data").filter(|d| !d.is_empty()) {
+                self.out.write(data.trim_end());
+            }
+        }
+
+        let Some(next) = int(&resp, "proofState") else {
+            render(self.out.as_mut(), self.style, &resp, src, 0, 0);
+            return;
+        };
+
+        let found = self.suggestion(src, &resp);
+        let goals: Vec<String> = list(&resp, "goals")
+            .iter()
+            .filter_map(Json::as_str)
+            .map(String::from)
+            .collect();
+        let proof = tactic_step(&proof, next, &goals, found.as_deref().unwrap_or(src));
+        self.proof = Some(proof.clone());
+        self.last = Some(last_tactic(src, true));
+
+        if !goals.is_empty() {
+            self.show_goals(Some(&goals));
+            return;
+        }
+
+        let script = proof.script.join("\n");
+        self.out.write(&self.style.green("証明完了。"));
+        self.out.write(&self.style.dim("-- スクリプト:"));
+        self.out.write(&indent(&script, "  "));
+        self.proof = None;
+        self.last = None;
+        self.close_sorry(&script);
+    }
+
+    /// `exact?` などの提案 (Try this) をスクリプトに記録する値として取り出す。
+    /// 提案が無いか読み取れなければ None (入力したタクティクをそのまま記録する)。
+    fn suggestion(&mut self, src: &str, resp: &Json) -> Option<String> {
+        let found = try_this(messages(resp))?;
+        if !balanced(&found) {
+            // 提案を最後まで解析できていない (メッセージの形式が変わった場合など)。
+            // 正しくないスクリプトを完成した証明として表示するより、入力したタクティクを
+            // そのまま残す。
+            self.out.write(&self.style.dim(
+                "-- 提案を読み取れなかったので、入力したタクティクをそのままスクリプトに記録した",
+            ));
+            return None;
+        }
+        if found != src {
+            let shown = found.replace('\n', " ");
+            self.out.write(
+                &self
+                    .style
+                    .dim(&format!("-- スクリプトには {shown} を記録した")),
+            );
+        }
+        Some(found)
+    }
+
+    /// エンジンが再起動されたか、再起動に失敗したので、証明モードを終了する。
+    /// 何が起きたかはユーザーに表示する。
+    fn drop_proof(&mut self) {
+        self.proof = None;
+        self.last = None;
+        self.out.write(
+            &self
+                .style
+                .yellow("証明していたエンジンが終了したので、証明モードを終了した"),
+        );
+        self.out.write(
+            &self
+                .style
+                .dim("  入力したタクティクは証明に反映されていない (宣言は sorry のまま)"),
+        );
+        match (&self.held, self.eng.env()) {
+            (Some(held), Some(_)) => {
+                // revive が replay で sorry を取得し直していれば、そのまま証明モードを
+                // 再開できる。
+                let left = held.sorries.len();
+                self.out.write(
+                    &self
+                        .style
+                        .dim(&format!("  :prove で再開できる (sorry {left} 個)")),
+                );
+            }
+            _ => {
+                // 再起動に失敗したときの proofState は前のプロセスのもの。
+                self.clear_pending();
+                self.out
+                    .write(&self.style.dim("  :restart で再起動してから入力し直す"));
+            }
+        }
+    }
+
+    /// `:prove` で選んだ sorry をスクリプトで置き換えて、宣言を再実行する。
+    fn close_sorry(&mut self, script: &str) {
+        let Some(held) = self.held.clone() else {
+            return;
+        };
+        let Some(at) = &held.at else {
+            return;
+        };
+
+        let Some(new_src) = splice_sorry(&held.src, at, script) else {
+            // sorry の位置が分からなかった。証明自体は成功しているので、スクリプトは
+            // すでに表示してある。何も表示せずに戻ると「証明完了」という表示だけが残る。
+            self.out.write(
+                &self
+                    .style
+                    .dim("-- sorry の位置を読み取れなかったので、宣言は sorry のままにする"),
+            );
+            return;
+        };
+
+        // sorry を含む宣言と名前が同じになるので、先にそれを取り消してから再実行する。
+        let undone = if held.env.is_some() && self.eng.env() == held.env {
+            Some(self.eng.pop_decl())
+        } else {
+            None
+        };
+
+        // 再実行に失敗したときに戻せるよう保存しておく。sorry が 2 個以上あるときに
+        // 保留中の状態を捨てると、残りの sorry を :prove で続けられなくなる。
+        self.held = None;
+
+        self.out
+            .write(&self.style.dim("-- sorry をスクリプトで置き換えて実行する:"));
+        self.out.write(&indent(new_src.trim(), "  "));
+
+        let generation = self.eng.generation();
+        self.submit(&new_src, Some(Kind::Cmd));
+        let landed = self.eng.log().last() == Some(&new_src);
+        let Some(undone) = undone else {
+            return;
+        };
+        if landed {
+            // 宣言が環境に追加されたかは log の末尾で判断する。世代だけを見ると、
+            // 異常終了したエンジンを guard が再起動して再送し、**成功した**ときにも
+            // 「sorry のまま」と誤って表示し、sorry を含むテキストを再実行して、
+            // 重複エラーになった宣言がずっと保留に残る。
+            return;
+        }
+        if self.eng.generation() != generation {
+            // エンジンが再起動され、さらに再実行も失敗した。保存した env id は無効に
+            // なっているので設定せず、sorry を含むテキストを再実行する。保留中の状態は
+            // 戻さない (replay_into が設定し直した値を無効な proofState で上書きすると、
+            // 次の :prove が今の環境に無い状態を指す)。
+            self.out.write(
+                &self
+                    .style
+                    .dim("-- エンジンを再起動したので、sorry のままにしておく"),
+            );
+            if let Some(src) = undone.src {
+                self.replay_into(&[src]);
+            }
+            return;
+        }
+
+        // 再実行が失敗した。項の位置にある sorry にはタクティクを差し込めない。
+        self.eng.push_decl(undone);
+        let left = held.sorries.len();
+        self.held = Some(held);
+        self.out.write(
+            &self
+                .style
+                .dim("-- エラーになったので、sorry のままにしておく"),
+        );
+        if left > 1 {
+            self.out.write(&self.style.dim(&format!(
+                "  残りは :prove <n> で続けられる (sorry {left} 個)"
+            )));
+        }
+    }
+
+    /// ゴールを表示する。None なら証明モードの今のゴール。
+    fn show_goals(&mut self, goals: Option<&[String]>) {
+        let goals: Vec<String> = match goals {
+            Some(gs) => gs.to_vec(),
+            None => self
+                .proof
+                .as_ref()
+                .map(|p| p.goals.clone())
+                .unwrap_or_default(),
+        };
+
+        let total = goals.len();
+        for (n, g) in goals.iter().enumerate() {
+            let head = if total > 1 {
+                format!("goal {}/{total}", n + 1)
+            } else {
+                "goal".to_string()
+            };
+            self.out.write(&self.style.green(&head));
+            self.out.write(&indent(g, "  "));
+        }
+    }
+
+    /// 証明モードの外での `:goals`。残っている sorry を出す。
+    fn show_pending(&mut self) {
+        let Some(held) = &self.held else {
+            self.out
+                .write(&self.style.dim("証明モードではない (sorry も残っていない)"));
+            return;
+        };
+
+        let shown: Vec<(String, String)> = held
+            .sorries
+            .iter()
+            .enumerate()
+            .map(|(n, sy)| {
+                let state = int(sy, "proofState").map_or("None".to_string(), |s| s.to_string());
+                let goal = text(sy, "goal").unwrap_or("").trim_end().to_string();
+                (format!("sorry {} [proofState {state}]", n + 1), goal)
+            })
+            .collect();
+        for (head, goal) in shown {
+            self.out.write(&self.style.green(&head));
+            self.out.write(&indent(&goal, "  "));
+        }
+    }
+
+    /// 直前の入力に出た sorry を 1 つ選んで証明モードを始める。
+    fn prove(&mut self, arg: &str) {
+        let Some(held) = self.held.clone() else {
+            self.out.fail(&self.style.red("直前の入力に sorry が無い"));
+            return;
+        };
+        let found = &held.sorries;
+
+        // 数でなければ 1 番目。0 は 1..n の外になる。
+        let n = arg.parse::<usize>().map_or(0, |n| n.wrapping_sub(1));
+        let Some(sy) = found.get(n) else {
+            let total = found.len();
+            self.out.fail(
+                &self
+                    .style
+                    .red(&format!("sorry は {total} 個。1..{total} で指定する")),
+            );
+            return;
+        };
+
+        let goal = text(sy, "goal").unwrap_or("").to_string();
+        let state = int(sy, "proofState").unwrap_or(0);
+        self.proof = Some(Proof::new(state, vec![goal.clone()], self.eng.generation()));
+        // 置き換えるのはこの sorry。位置で特定する
+        self.held = Some(Held {
+            at: Some(sy.clone()),
+            ..held.clone()
+        });
+        self.out.write(&self.style.dim(PROOF_HELP));
+        self.show_goals(Some(&[goal]));
+    }
+
+    /// 証明モード専用のコマンド。扱ったら true。
+    fn proof_meta(&mut self, cmd: &str) -> bool {
+        let Some(proof) = self.proof.clone() else {
+            return false;
+        };
+        match cmd {
+            "goals" | "g" => self.show_goals(None),
+            "script" => {
+                let script = proof.script.join("\n");
+                let shown = if script.is_empty() { "(空)" } else { &script };
+                self.out.write(&indent(shown, "  "));
+            }
+            "undo" => self.proof_undo(&proof),
+            "done" | "q" | "quit" => {
+                self.proof = None;
+                self.buf.clear();
+                self.ready = None;
+                self.out.write(&self.style.dim("証明モードを終了した"));
+            }
+            "?" | "h" | "help" => self.out.write(PROOF_HELP),
+            _ => return false,
+        }
+        true
+    }
+
+    fn proof_undo(&mut self, proof: &Proof) {
+        let Some(back) = tactic_undo(proof) else {
+            self.out
+                .write(&self.style.dim("取り消せるタクティクが無い"));
+            return;
+        };
+
+        self.out
+            .write(&self.style.dim(&format!("proofState {}", back.state)));
+        self.proof = Some(back);
+    }
+
     // -- コマンド ---------------------------------------------------------
 
     /// `:` で始まる行を処理する。true を返したらループを抜ける。
     ///
-    /// 証明モードのコマンド、`:env`、`:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で
-    /// 足す。それまでは「不明なコマンド」になる。
+    /// `:env`、`:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で足す。それまでは
+    /// 「不明なコマンド」になる。
     fn meta(&mut self, line: &str) -> bool {
         if let Some(rest) = line.strip_prefix(":!") {
             self.out.shell(rest.trim());
@@ -1023,10 +1358,18 @@ impl Repl {
         let cmd = parts.next().unwrap_or("").get(1..).unwrap_or("");
         let arg = parts.next().unwrap_or("").trim().to_string();
 
+        // 証明モード専用のコマンドを先に確認する。該当しなければ通常のコマンドとして
+        // 処理する (:t などは証明中でも使える)。
+        if self.proof_meta(cmd) {
+            return false;
+        }
+
         match cmd {
             "q" | "quit" => return true,
             "?" | "h" | "help" => self.out.put(HELP),
+            "goals" | "g" => self.show_pending(),
             "script" | "done" => self.out.write(&self.style.dim("証明モードではない")),
+            "prove" => self.prove(&arg),
             "time" => {
                 self.show_time = !self.show_time;
                 let state = if self.show_time { "on" } else { "off" };
@@ -1263,6 +1606,16 @@ fn last_term(src: &str) -> Last {
         src: src.to_string(),
         advanced: false,
         proof: false,
+        env_before: None,
+    }
+}
+
+/// 証明モードのタクティク。`advanced` は proofState を進めたか (取り消すべきか)。
+fn last_tactic(src: &str, advanced: bool) -> Last {
+    Last {
+        src: src.to_string(),
+        advanced,
+        proof: true,
         env_before: None,
     }
 }
