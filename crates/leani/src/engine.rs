@@ -247,11 +247,21 @@ impl Engine {
 
     // -- テスト用 ---------------------------------------------------------------
 
-    /// やりとりの差し込み口を入れる。テストだけが使う。
-    #[cfg(feature = "testing")]
+    /// やりとりの差し込み口を入れる。テストと、`:env` で `Engine` を作り直す `Repl`
+    /// が使う。
     #[doc(hidden)]
     pub fn set_hook(&mut self, hook: Option<ExchangeHook>) {
         self.hook = hook;
+    }
+
+    /// 差し込み口を外して返す。`:env` が新しい `Engine` に引き継ぐ。
+    ///
+    /// Python 版はクラスのメソッドを差し替えるので、あとから作る `Engine` にも
+    /// 差し込みが効いた。Rust 版の差し込み口は `Engine` の値が持つので、`Repl` が
+    /// `Engine` を作り直すときに持ち越す。テストでなければ常に None。
+    #[doc(hidden)]
+    pub fn take_hook(&mut self) -> Option<ExchangeHook> {
+        self.hook.take()
     }
 
     /// 環境を捨てて、boot に失敗した状態にする。テストだけが使う。

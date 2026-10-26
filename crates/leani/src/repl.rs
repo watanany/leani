@@ -2,7 +2,7 @@
 //!
 //! Python 版の `repl.py` から移している途中。この段階では、式と宣言の評価、
 //! `:{ ... :}`、エンジンの再起動、init、`:l` `:r` `:reset` `:undo` `:save`、履歴、
-//! `:help` `:time` `:restart` `:quit` `:!`、証明モードがある。`:env`、補完は
+//! `:help` `:time` `:restart` `:quit` `:!`、証明モード、`:env` がある。補完は
 //! あとの段階で足す。
 //!
 //! 入力を読むループは `Repl` の外に置く (計画の「テスト用の差し込み口」)。`Repl` は
@@ -24,10 +24,11 @@ use leani_core::pure::{
 };
 use leani_core::queries::{META_LINE, PARSE_PROBE, fill};
 use leani_core::types::{EngineFault, Json, Kind, Output, Proof, State};
-use leani_read::config::EnvConfig;
+use leani_read::config::{EnvConfig, env_names, load_config, problem, resolve};
 use leani_read::places::Ctx;
 
-use crate::engine::{Engine, Replay, Undone, strerror};
+use crate::boot::prepare;
+use crate::engine::{Engine, ExchangeHook, Replay, Undone, strerror};
 use crate::history::BlockHistory;
 use crate::show::{panic_check, render};
 
@@ -150,6 +151,15 @@ pub struct Repl {
     // 証明モード
     proof: Option<Proof>,
     held: Option<Held>,
+
+    /// `:env` で元の環境にも戻れなくなった理由。環境が無いまま続けても、どの入力も
+    /// エラーになるだけなので、`feed` はループを抜けるよう true を返す。端末はこの
+    /// 理由を表示して終了する (Python 版の `EnvLost`)。
+    lost: Option<String>,
+    /// `:env` の切り替えで boot に失敗して終了させたエンジン。プロセスを残して
+    /// いないことをテストが確かめる。
+    #[cfg(feature = "testing")]
+    failed: Vec<Engine>,
 }
 
 impl Repl {
@@ -162,24 +172,7 @@ impl Repl {
         mut out: Box<dyn Output>,
     ) -> Result<Repl, EngineFault> {
         let style = Style { color: ctx.color };
-        let mut eng = Engine::new(ctx, cfg, &mut ToOutput(out.as_mut()))?;
-        if let Some(warning) = eng.warning() {
-            out.write(&style.yellow(warning));
-        }
-        let t0 = Instant::now();
-        if let Err(e) = eng.boot() {
-            // Engine を作った時点で repl のプロセスは起動している。ここで返すと呼び出し元が
-            // Engine を捨てるので、そのプロセスを終了させておく (Drop も kill するが、
-            // 意図を書いておく)。
-            eng.kill();
-            return Err(e);
-        }
-        out.write(&style.dim(&format!(
-            "leani: {} / {} / {:.1}s",
-            eng.toolchain(),
-            eng.cfg(),
-            t0.elapsed().as_secs_f64()
-        )));
+        let eng = boot_engine(ctx, cfg, &mut None, out.as_mut(), style).map_err(|(e, _)| e)?;
 
         let mut repl = Repl {
             ctx: ctx.clone(),
@@ -196,14 +189,42 @@ impl Repl {
             history: history_for(ctx),
             proof: None,
             held: None,
+            lost: None,
+            #[cfg(feature = "testing")]
+            failed: Vec::new(),
         };
-        if Path::new(&repl.ctx.init).is_file() {
-            repl.apply_init();
+        repl.begin(preload);
+        Ok(repl)
+    }
+
+    /// 起動した直後にすることを行う。init を実行し、`preload` があれば `:l` する。
+    fn begin(&mut self, preload: Option<&str>) {
+        if Path::new(&self.ctx.init).is_file() {
+            self.apply_init();
         }
         if let Some(path) = preload {
-            repl.load(path, true);
+            self.load(path, true);
         }
-        Ok(repl)
+    }
+
+    /// 新しいエンジンに入れ替えて、セッションの状態を起動した直後に戻す
+    /// (Python 版の `_start` の後半)。
+    fn install(&mut self, eng: Engine, preload: Option<&str>) {
+        self.eng = eng;
+        self.forget();
+        self.begin(preload);
+    }
+
+    /// セッションの状態を起動した直後に戻す。
+    fn forget(&mut self) {
+        self.buf.clear();
+        self.ready = None;
+        self.last = None;
+        self.explicit = false;
+        self.undone = None;
+        self.show_time = false;
+        self.proof = None;
+        self.held = None;
     }
 
     // -- 読むためのメソッド -------------------------------------------------
@@ -241,6 +262,23 @@ impl Repl {
 
     pub fn explicit(&self) -> bool {
         self.explicit
+    }
+
+    pub fn show_time(&self) -> bool {
+        self.show_time
+    }
+
+    /// `:env` で元の環境にも戻れなくなった理由。`feed` が true を返したあとに
+    /// 呼び出し元が確かめ、あれば表示して終了する。
+    pub fn env_lost(&self) -> Option<&str> {
+        self.lost.as_deref()
+    }
+
+    /// `:env` の切り替えで boot に失敗したエンジン。テストだけが使う。
+    #[cfg(feature = "testing")]
+    #[doc(hidden)]
+    pub fn failed_engines_mut(&mut self) -> &mut [Engine] {
+        &mut self.failed
     }
 
     /// init ファイルのパスを差し替える。テストだけが使う (Python 版の `INIT` の
@@ -331,10 +369,7 @@ impl Repl {
                 return None;
             }
             Err(e) => {
-                let why = match e.to_string() {
-                    s if s.is_empty() => "理由は分からない".to_string(),
-                    s => s,
-                };
+                let why = reason(&e);
                 self.out.fail(
                     &self
                         .style
@@ -1346,7 +1381,7 @@ impl Repl {
 
     /// `:` で始まる行を処理する。true を返したらループを抜ける。
     ///
-    /// `:env`、`:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で足す。それまでは
+    /// `:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で足す。それまでは
     /// 「不明なコマンド」になる。
     fn meta(&mut self, line: &str) -> bool {
         if let Some(rest) = line.strip_prefix(":!") {
@@ -1387,11 +1422,132 @@ impl Repl {
             "reset" => self.reset(),
             "undo" => self.cmd_undo(&arg),
             "save" => self.cmd_save(&arg),
+            "env" => self.cmd_env(&arg),
             _ => self
                 .out
                 .fail(&self.style.red(&format!("不明なコマンド: :{cmd}  (:help)"))),
         }
-        false
+        // :env で元の環境にも戻れなければ、環境が無いので続けない。
+        self.lost.is_some()
+    }
+
+    /// 引数が無ければ今の環境を表示し、名前を渡すとその環境で再起動する。
+    fn cmd_env(&mut self, arg: &str) {
+        if arg.is_empty() {
+            self.show_env();
+            return;
+        }
+        if arg == self.eng.cfg().name {
+            self.out.write(&self.style.dim(&format!("すでに {arg}")));
+            return;
+        }
+
+        let found = load_config(&self.ctx.config)
+            .and_then(|conf| resolve(&self.ctx, Some(arg), None, &[], &conf));
+        let target = match found {
+            Ok(target) => target,
+            Err(e) => {
+                self.out.fail(&self.style.red(&e.to_string()));
+                return;
+            }
+        };
+
+        // 今のエンジンを終了させる前に準備を済ませる。
+        let why = match problem(&self.ctx, &target) {
+            Some(why) => Some(why),
+            None => prepare(&self.ctx, &mut ToOutput(self.out.as_mut()), &target)
+                .err()
+                .map(|e| e.to_string()),
+        };
+        if let Some(why) = why {
+            self.out.fail(&self.style.red(&why)); // 今のエンジンは終了させない
+            return;
+        }
+
+        let keep = self.show_time;
+        let prev = self.eng.loaded().map(str::to_string);
+        let back = self.eng.cfg().clone();
+        // 入力した宣言も新しいエンジンに引き継ぐ。:l したファイルの内容は preload で
+        // 戻るが、対話で入力した宣言は新しい Engine には含まれていない。起動後に
+        // 再実行する。
+        // 保留中の宣言も引き継ぐ。捨てると、直前に「保留にした」と表示した宣言が
+        // :env で何も表示されずに消える。新しい環境ならエラーなく実行
+        // できることもある (import が増える方向の切り替え)。失敗したらまた保留に戻る。
+        let mut log = self.eng.log().to_vec();
+        log.extend_from_slice(self.eng.unplayed());
+        let mut hook = self.eng.take_hook();
+        self.eng.kill();
+
+        let eng = match boot_engine(&self.ctx, target, &mut hook, self.out.as_mut(), self.style) {
+            Ok(eng) => eng,
+            Err((e, dead)) => {
+                // import が成功するかは boot するまで分からない。元の環境に戻す。
+                self.keep_failed(dead);
+                self.out.fail(
+                    &self
+                        .style
+                        .red(&format!("{arg} で起動できなかった: {}", reason(&e))),
+                );
+                self.out
+                    .write(&self.style.dim(&format!("  {} に戻る", back.name)));
+                let name = back.name.clone();
+                match boot_engine(&self.ctx, back, &mut hook, self.out.as_mut(), self.style) {
+                    Ok(eng) => eng,
+                    Err((e, dead)) => {
+                        // 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
+                        // 終了し、カーネルは次のセルでエンジンを起動し直す。
+                        // 終了させた古いエンジンは宣言の記録を持ったままなので、環境の
+                        // 無いエンジンに入れ替えて、状態のつじつまを合わせる。
+                        self.lost = Some(format!("{name} にも戻れなくなった: {e}"));
+                        if let Some(dead) = dead {
+                            self.eng = *dead;
+                        }
+                        self.forget();
+                        return;
+                    }
+                }
+            }
+        };
+        self.install(eng, prev.as_deref());
+
+        // 切り替えが成功しても元の環境に戻っても、対話で入力した宣言は新しい
+        // エンジンには無い。どちらの場合も、ここで 1 回だけ再実行する。
+        self.replay_into(&log);
+        self.show_time = keep;
+    }
+
+    /// boot に失敗して終了させたエンジンを、テストが確かめられるように残す。
+    #[cfg(feature = "testing")]
+    fn keep_failed(&mut self, dead: Option<Box<Engine>>) {
+        self.failed.extend(dead.map(|b| *b));
+    }
+
+    #[cfg(not(feature = "testing"))]
+    fn keep_failed(&mut self, _dead: Option<Box<Engine>>) {}
+
+    /// 今の環境と、設定にある切り替え先を表示する。
+    fn show_env(&mut self) {
+        let cfg = self.eng.cfg();
+        let project = cfg.project.as_deref().unwrap_or("Lake プロジェクト無し");
+        self.out
+            .write(&self.style.dim(&format!("{cfg}: {project}")));
+        self.out.write(&self.style.dim(&format!(
+            "env {} (base {}, 宣言 {} 件)",
+            env_text(self.eng.env()),
+            env_text(self.eng.base()),
+            self.eng.log().len()
+        )));
+        let names =
+            load_config(&self.ctx.config).and_then(|conf| env_names(&conf, &self.ctx.config));
+        match names {
+            Ok(names) if names.is_empty() => {}
+            Ok(names) => self.out.write(
+                &self
+                    .style
+                    .dim(&format!("切り替え先: {}  (:env <name>)", names.join(" "))),
+            ),
+            Err(e) => self.out.fail(&self.style.red(&e.to_string())),
+        }
     }
 
     /// 直前の n 件の宣言を取り消す。
@@ -1541,6 +1697,50 @@ impl Repl {
             self.out
                 .write(&self.style.dim(&format!("  保留中の宣言 {left} 件も捨てた")));
         }
+    }
+}
+
+/// エンジンを作って起点の環境を作る。起動時と `:env` の切り替えで使う。
+///
+/// `hook` はテストの差し込み口で、作った `Engine` に移す。boot に失敗したら `hook`
+/// に戻し、プロセスを終了させた `Engine` も返す。Engine を作った時点で repl の
+/// プロセスは起動しているので、呼び出し元が捨てる前に終了させておく (Drop も kill
+/// するが、意図を書いておく)。
+fn boot_engine(
+    ctx: &Ctx,
+    cfg: EnvConfig,
+    hook: &mut Option<ExchangeHook>,
+    out: &mut dyn Output,
+    style: Style,
+) -> Result<Engine, (EngineFault, Option<Box<Engine>>)> {
+    let mut eng = match Engine::new(ctx, cfg, &mut ToOutput(out)) {
+        Ok(eng) => eng,
+        Err(e) => return Err((e, None)),
+    };
+    eng.set_hook(hook.take());
+    if let Some(warning) = eng.warning() {
+        out.write(&style.yellow(warning));
+    }
+    let t0 = Instant::now();
+    if let Err(e) = eng.boot() {
+        *hook = eng.take_hook();
+        eng.kill();
+        return Err((e, Some(Box::new(eng))));
+    }
+    out.write(&style.dim(&format!(
+        "leani: {} / {} / {:.1}s",
+        eng.toolchain(),
+        eng.cfg(),
+        t0.elapsed().as_secs_f64()
+    )));
+    Ok(eng)
+}
+
+/// 失敗の理由。空なら「理由は分からない」。
+fn reason(e: &EngineFault) -> String {
+    match e.to_string() {
+        s if s.is_empty() => "理由は分からない".to_string(),
+        s => s,
     }
 }
 

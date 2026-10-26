@@ -70,6 +70,24 @@ mod 起動時の確認 {
         let why = died_message(eng.send_cmd("def after_kill := 1", true));
         assert!(why.contains("SIGKILL"), "{why}");
     }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn 起動に失敗したエンジンのプロセスを残さない() {
+        // Engine を作った時点で repl は起動している。boot が失敗したあとに
+        // Repl がエンジンを差し替えると、終了させる方法が無いままプロセスが残る。
+        let mut repl = Driver::new();
+        only_core(&mut repl);
+        repl.feed(&[":env wide"]);
+
+        let failed = repl.repl.failed_engines_mut();
+        assert_eq!(failed.len(), 1, "boot に失敗したエンジンは 1 つ");
+        assert!(!failed[0].alive(), "起動に失敗したエンジンが残った");
+        assert!(
+            repl.repl.eng_mut().alive(),
+            "戻った先のエンジンまで終了させた"
+        );
+    }
 }
 
 mod 式の評価 {
@@ -573,6 +591,32 @@ fn init_with(repl: &mut Driver, text: &str) -> String {
     repl.repl.set_init(&path);
     repl.feed_with("apply_init", |r| r.apply_init());
     path
+}
+
+/// core 以外の環境の boot を失敗させる (Python 版の `only_core`)。import が成功するかは
+/// boot するまで分からないので、wide の起点の環境を作る要求でエンジンを止める。
+/// 差し込み口は `:env` が新しいエンジンに引き継ぐ。
+fn only_core(repl: &mut Driver) {
+    repl.hook(|stage| match stage {
+        Stage::Before(obj) if fresh(obj) && cmd(obj).contains("Lean.Elab.Frontend") => Hooked::Kill,
+        _ => Hooked::Pass,
+    });
+}
+
+/// どの環境の boot も失敗させる (Python 版の `boot` を `EngineDied` にする差し込み)。
+fn no_boot(repl: &mut Driver) {
+    repl.hook(|stage| match stage {
+        Stage::Before(obj) if fresh(obj) => Hooked::Kill,
+        _ => Hooked::Pass,
+    });
+}
+
+/// 設定ファイルに環境を 1 つ書き足す。
+fn add_env(repl: &Driver, text: &str) {
+    let config = repl.tmp().join("config.toml");
+    let mut conf = std::fs::read_to_string(&config).expect("read config");
+    conf.push_str(text);
+    std::fs::write(&config, conf).expect("write config");
 }
 
 mod ファイルの読み書き {
@@ -2095,6 +2139,19 @@ mod 保留と環境の切り替え {
         lib
     }
 
+    #[story("G5", "F2")]
+    #[test]
+    fn colon_env_の切り替えでも保留を引き継ぐ() {
+        let mut repl = Driver::new();
+        strand(&mut repl, "envKeep");
+
+        repl.feed(&[":env wide"]);
+        assert_eq!(
+            repl.repl.eng().unplayed(),
+            ["def envKeepUse := envKeepDep + 1"]
+        );
+    }
+
     #[story("B4", "F2")]
     #[test]
     fn colon_l_が保留を捨てるなら件数を表示する() {
@@ -2196,5 +2253,160 @@ mod 再起動に失敗したときの証明モード {
 
         repl.unhook();
         assert!(repl.feed(&[":restart"]).contains("1 件"));
+    }
+}
+
+mod 環境の切り替え {
+    use super::*;
+
+    #[story("G1", "G5")]
+    #[test]
+    fn 切り替えても設定と読み込んだファイルが残る() {
+        let mut repl = Driver::new();
+        let path = repl.tmp().join("switched.lean").display().to_string();
+        repl.feed(&["def switched := 11", &format!(":save {path}"), ":reset"]);
+        repl.feed(&[&format!(":l {path}"), ":time", ":env wide"]);
+
+        assert_eq!(repl.repl.eng().cfg().name, "wide");
+        assert!(repl.repl.show_time(), ":time の設定が消えた");
+        assert!(
+            repl.feed(&["switched"]).contains("11"),
+            ":l したファイルが引き継がれていない"
+        );
+    }
+
+    #[story("G5")]
+    #[test]
+    fn 設定に無い名前を指定してもセッションが続く() {
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":env nosuch"]).contains("設定に無い"));
+        assert!(
+            repl.feed(&["1 + 1"]).contains('2'),
+            "環境が壊れてセッションが終了している"
+        );
+    }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn 切り替え先が起動できなければ元の環境に戻る() {
+        // import が成功するかは boot するまで分からない。今のエンジンは kill 済み
+        // なので、そのままエラーを返すとセッションごと消える。
+        let mut repl = Driver::new();
+        only_core(&mut repl);
+        let out = repl.feed(&[":env wide"]);
+
+        assert!(out.contains("起動できなかった"), "{out}");
+        assert_eq!(repl.repl.eng().cfg().name, "core", "元の環境に戻っていない");
+        assert!(repl.feed(&["1 + 1"]).contains('2'), "使えなくなっている");
+    }
+
+    #[story("G5")]
+    #[test]
+    fn 引数の無い_colon_env_は今の環境と切り替え先を表示する() {
+        let mut repl = Driver::new();
+        let out = repl.feed(&[":env"]);
+        assert!(out.contains("core"), "{out}");
+        assert!(out.contains("切り替え先: core wide"), "{out}");
+    }
+
+    #[story("G5")]
+    #[test]
+    fn 今の環境の名前を指定したら再起動しない() {
+        let mut repl = Driver::new();
+        repl.feed(&["def stay := 1"]);
+        let before = (repl.repl.eng().pid(), repl.repl.eng().generation());
+
+        assert!(repl.feed(&[":env core"]).contains("すでに core"));
+        let after = (repl.repl.eng().pid(), repl.repl.eng().generation());
+        assert_eq!(after, before, "再起動した");
+    }
+}
+
+mod 切り替えに失敗したとき {
+    use super::*;
+
+    #[story("G4", "G5")]
+    #[test]
+    fn 入力した宣言も元の環境に残る() {
+        let mut repl = Driver::new();
+        repl.feed(&["def typedHere := 42"]);
+        only_core(&mut repl);
+        let out = repl.feed(&[":env wide"]);
+
+        assert!(out.contains("起動できなかった"), "{out}");
+        // 元の環境に戻るときは新しい Engine を作る。:l したファイルの内容は preload で
+        // 戻るが、対話で入力した宣言は再実行しないと消える。
+        assert!(
+            repl.feed(&["#eval typedHere"]).contains("42"),
+            "入力した宣言が消えた"
+        );
+    }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn エンジンを用意できない環境に切り替えても今のエンジンを残す() {
+        let mut repl = Driver::new();
+        repl.feed(&["def typedHere := 42"]);
+        let before = (repl.repl.eng().pid(), repl.repl.eng().generation());
+
+        // lakefile が壊れた Lake プロジェクトを project にすると、設定の確認は通り、
+        // 準備の lake env が失敗する (Python 版は prepare を EngineError にしていた)。
+        let noproj = repl.tmp().join("noproj");
+        std::fs::create_dir(&noproj).expect("mkdir");
+        std::fs::write(noproj.join("lakefile.lean"), "this is not a lakefile\n").expect("write");
+        add_env(
+            &repl,
+            &format!("\n[env.broken]\nproject = \"{}\"\n", noproj.display()),
+        );
+        let out = repl.feed(&[":env broken"]);
+
+        assert!(out.contains("lake env"), "{out}");
+        let after = (repl.repl.eng().pid(), repl.repl.eng().generation());
+        assert_eq!(after, before, "エンジンを作り直した");
+        assert!(repl.feed(&["typedHere"]).contains("42"));
+    }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn colon_env_で元の環境にも戻れなければ終了を知らせる例外になる() {
+        // 環境が無いまま続けても、どの入力もエラーになるだけ。端末 (cli) はこの
+        // 理由を表示して終了し、カーネルは次のセルでエンジンを起動し直す。
+        // Rust 版は例外を投げず、feed が true (ループを抜ける) を返して理由を
+        // `env_lost` に残す。
+        let mut repl = Driver::new();
+        no_boot(&mut repl);
+        repl.feed_with("env", |r| assert!(r.feed(":env wide"), "ループを抜けない"));
+
+        let why = repl.repl.env_lost().expect("理由が無い");
+        assert!(why.contains("にも戻れなくなった"), "{why}");
+    }
+
+    #[story("F1", "G5")]
+    #[test]
+    fn 切り替えたあとの再実行が中断されても宣言を保留に残す() {
+        let mut repl = Driver::new();
+        repl.feed(&["def carried := 1"]);
+
+        interrupt_after_write(&mut repl, |o| cmd(o) == "def carried := 1");
+        let out = repl.feed(&[":env wide"]);
+
+        assert!(out.contains("再実行しなかった宣言: 1 件"), "{out}");
+        assert_eq!(repl.repl.eng().unplayed(), ["def carried := 1"]);
+    }
+}
+
+mod 切り替えが成功したとき {
+    use super::*;
+
+    #[story("G1", "G5")]
+    #[test]
+    fn 入力した宣言も新しい環境に追加される() {
+        let mut repl = Driver::new();
+        repl.feed(&["def carried := 42"]);
+        let out = repl.feed(&[":env wide"]);
+
+        // 切り替えが成功したときも、新しいエンジンには入力した宣言が無い。
+        // 再実行しないと、入力した宣言が何も表示されずに消える。
+        assert!(repl.feed(&["#eval carried"]).contains("42"), "{out}");
     }
 }
