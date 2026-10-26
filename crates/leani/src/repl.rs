@@ -1,36 +1,44 @@
 //! 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する (副作用)。
 //!
-//! Python 版の `repl.py` から移している途中。この段階では、式と宣言の評価、
-//! `:{ ... :}`、エンジンの再起動、init、`:l` `:r` `:reset` `:undo` `:save`、履歴、
-//! `:help` `:time` `:restart` `:quit` `:!`、証明モード、`:env` がある。補完は
-//! あとの段階で足す。
+//! Python 版の `repl.py` から移している。式と宣言の評価、`:{ ... :}`、エンジンの
+//! 再起動、init、`:l` `:r` `:reset` `:undo` `:save`、履歴、`:help` `:time` `:restart`
+//! `:quit` `:!`、証明モード、`:env`、`:t` `:i` `:p` `:loogle` `:abbrev`、Tab 補完がある。
 //!
 //! 入力を読むループは `Repl` の外に置く (計画の「テスト用の差し込み口」)。`Repl` は
 //! `feed` で 1 行ずつ受け取るだけなので、端末、パイプ、Jupyter、テストのどれからでも
 //! 同じように呼べる。
+//!
+//! Tab 補完は `complete` で受け取る。何を補完するかの判定は `leani_core::pure` に、
+//! ファイルと PATH を読む候補は `leani_read::complete` にあり、ここではエンジンに
+//! 問い合わせる定数名の候補と、そのキャッシュだけを持つ。
 
 use std::any::Any;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::LazyLock;
 use std::time::Instant;
 
+use leani_core::abbrev::{abbrev_lookup, abbrev_table};
 use leani_core::pure::{
-    Style, abspath, balanced, block_continues, classify, classify_tac, continues, errors,
-    has_error, head_line, indent, int, last_json, lean_str, list, messages, nested_action,
-    not_evaluable_reason, save_body, sorries, splice_sorry, strip_imports, tactic_step,
-    tactic_undo, text, try_this,
+    Style, abspath, balanced, block_continues, classify, classify_tac, complete_hits, continues,
+    errors, full_names, has_error, head_line, indent, int, last_json, lean_str, lean_strs, list,
+    loogle_text, messages, meta_names, name_chunk, nested_action, not_evaluable_reason, own_names,
+    save_body, scope_of, sorries, splice_sorry, strip_imports, tactic_step, tactic_undo, text,
+    try_this,
 };
-use leani_core::queries::{META_LINE, PARSE_PROBE, fill};
-use leani_core::types::{EngineFault, Json, Kind, Output, Proof, State};
-use leani_read::config::{EnvConfig, env_names, load_config, problem, resolve};
-use leani_read::places::Ctx;
+use leani_core::queries::{COMPLETE_QUERY, DOC_QUERY, META_LINE, PARSE_PROBE, SCOPE_QUERY, fill};
+use leani_core::types::{Candidate, EngineFault, Json, Kind, Output, Proof, Scope, State};
+use leani_read::complete::candidates;
+use leani_read::config::{EnvConfig, config_envs, env_names, load_config, problem, resolve};
+use leani_read::places::{COMPLETE_CAP, Ctx};
 
 use crate::boot::prepare;
 use crate::engine::{Engine, ExchangeHook, Replay, Undone, strerror};
 use crate::history::BlockHistory;
-use crate::show::{panic_check, render};
+use crate::search::Search;
+use crate::show::{columns, panic_check, render};
 
 pub const HELP: &str = "\
 式を書くと #eval で評価する。宣言はそのまま実行する。入力が終わったかは Lean のパーサで
@@ -66,6 +74,9 @@ pub const HELP: &str = "\
 ";
 
 pub const PROOF_HELP: &str = "証明モード: 1 回の入力が 1 タクティク。:goals ゴール  :script スクリプト  :undo 取り消す  :done 終了";
+
+/// Tab 補完に出す `:` コマンドの名前。ヘルプから取り出す。
+pub static META_NAMES: LazyLock<Vec<String>> = LazyLock::new(|| meta_names(HELP));
 
 /// 再実行できなかった宣言は `Engine` の unplayed に保留する。その案内。
 pub const PENDING_HINT: &str = "これらの宣言は環境に追加せず、保留にした。:restart で再実行できる";
@@ -132,6 +143,16 @@ pub struct Repl {
     out: Box<dyn Output>,
     style: Style,
     eng: Engine,
+    /// `:loogle` の問い合わせ先。テストでは偽物に差し替える。
+    search: Box<dyn Search>,
+
+    // 補完のキャッシュ
+    /// `name_chunk` ごとの定数名。base 環境に紐付ける (`chunks` を参照)。
+    comp_cache: HashMap<(Option<i64>, String), Vec<String>>,
+    /// 今の namespace と open。(世代, env) が変わったら問い合わせ直す。
+    scope: Option<((u64, Option<i64>), Scope)>,
+    /// REPL で実行した宣言の名前。ログの長さが変わったら集め直す。
+    own: (Option<usize>, Vec<String>),
 
     // 入力バッファ
     buf: Vec<String>,
@@ -164,12 +185,14 @@ pub struct Repl {
 
 impl Repl {
     /// エンジンを起動して起点の環境を作る。表示はすべて `out` に出す。
-    /// `preload` は起動時に `:l` するファイル (`leani file.lean`)。
+    /// `preload` は起動時に `:l` するファイル (`leani file.lean`)。`search` は
+    /// `:loogle` の問い合わせ先。
     pub fn new(
         ctx: &Ctx,
         cfg: EnvConfig,
         preload: Option<&str>,
         mut out: Box<dyn Output>,
+        search: Box<dyn Search>,
     ) -> Result<Repl, EngineFault> {
         let style = Style { color: ctx.color };
         let eng = boot_engine(ctx, cfg, &mut None, out.as_mut(), style).map_err(|(e, _)| e)?;
@@ -179,6 +202,10 @@ impl Repl {
             out,
             style,
             eng,
+            search,
+            comp_cache: HashMap::new(),
+            scope: None,
+            own: (None, Vec::new()),
             buf: Vec::new(),
             ready: None,
             last: None,
@@ -215,7 +242,8 @@ impl Repl {
         self.begin(preload);
     }
 
-    /// セッションの状態を起動した直後に戻す。
+    /// セッションの状態を起動した直後に戻す。補完のキャッシュも捨てる (別の
+    /// エンジンの環境のものなので)。
     fn forget(&mut self) {
         self.buf.clear();
         self.ready = None;
@@ -225,6 +253,9 @@ impl Repl {
         self.show_time = false;
         self.proof = None;
         self.held = None;
+        self.comp_cache.clear();
+        self.scope = None;
+        self.own = (None, Vec::new());
     }
 
     // -- 読むためのメソッド -------------------------------------------------
@@ -302,6 +333,109 @@ impl Repl {
             Some(_) => self.style.c("35", "⊢> "),
             None => self.style.c("36", &self.eng.cfg().prompt),
         }
+    }
+
+    // -- 補完 -------------------------------------------------------------
+
+    /// カーソルの前の文字列 `text` に対する Tab 補完の候補。
+    ///
+    /// 定数名はエンジンに問い合わせるので、`:` コマンドや略記の途中では問い合わせない
+    /// (`leani_read::complete::candidates` が、必要なときだけ `complete_names` を呼ぶ)。
+    pub fn complete(&mut self, text: &str) -> Vec<Candidate> {
+        let ctx = self.ctx.clone();
+        candidates(
+            &ctx,
+            text,
+            &mut |prefix| self.complete_names(prefix),
+            &|| config_envs(&ctx),
+            &META_NAMES,
+        )
+    }
+
+    /// 今の環境で短い名前で書ける定数のうち、prefix で始まるもの。
+    ///
+    /// `open Lean` のあとの `Json.pa` は `Lean.Json.pa` として探し、`Lean.` を
+    /// 取り除いて返す。namespace の中なら、その名前空間と親の名前空間からも同じ
+    /// ように探す。
+    pub fn complete_names(&mut self, prefix: &str) -> Vec<String> {
+        if prefix.chars().count() < 2 {
+            return Vec::new();
+        }
+        let scope = self.scope_now();
+        let keys: BTreeSet<String> = full_names(prefix, &scope.opens)
+            .iter()
+            .map(|(_, full)| name_chunk(full).to_string())
+            .collect();
+        let chunks = self.chunks(&keys);
+        let own = self.own_names_now();
+        complete_hits(prefix, &scope, &chunks, &own)
+    }
+
+    /// 名前空間ごとの定数名の一覧。キャッシュに無いものは、定数を 1 回走査して
+    /// まとめて取得する。
+    ///
+    /// キャッシュは base 環境 (import / :l 直後の環境) に紐付ける。宣言を 1 つ
+    /// 実行するたびにキャッシュを捨てると Mathlib では毎回 1.1 秒かかるので、
+    /// REPL で実行した宣言の名前だけを leani 側で追加する。open する名前空間が
+    /// 増えても、定数の走査は 1 回で済ませる。
+    fn chunks(&mut self, keys: &BTreeSet<String>) -> BTreeMap<String, Vec<String>> {
+        let base = self.eng.base();
+        let missing: Vec<String> = keys
+            .iter()
+            .filter(|k| !self.comp_cache.contains_key(&(base, (*k).clone())))
+            .cloned()
+            .collect();
+        if !missing.is_empty() {
+            let query = fill(
+                COMPLETE_QUERY,
+                &[&lean_strs(&missing), &COMPLETE_CAP.to_string()],
+            );
+            let out = self.guard(|eng| eng.query(&query)).flatten();
+            let got = last_json(out.as_deref());
+            if let Some(arrays) = got.as_ref().and_then(Json::as_array)
+                && arrays.len() == missing.len()
+            {
+                for (k, names) in missing.iter().zip(arrays) {
+                    let names: Vec<String> = list_of_strings(names);
+                    self.comp_cache.insert((base, k.clone()), names);
+                }
+            }
+        }
+        keys.iter()
+            .filter_map(|k| {
+                self.comp_cache
+                    .get(&(base, k.clone()))
+                    .map(|names| (k.clone(), names.clone()))
+            })
+            .collect()
+    }
+
+    /// 今の namespace と open。環境が変わったときだけ問い合わせ直す。
+    ///
+    /// open は宣言と同じく環境ごとに repl が保存しているので、入力した文字列から
+    /// 解析するより正確に取得できる (`open X in` は含まれず、`hiding` や
+    /// `renaming` も反映される)。この問い合わせは定数を走査しないので、Mathlib
+    /// でも数十ミリ秒で終わる。
+    fn scope_now(&mut self) -> Scope {
+        let key = (self.eng.generation(), self.eng.env());
+        match &self.scope {
+            Some((at, scope)) if *at == key => scope.clone(),
+            _ => {
+                let out = self.guard(|eng| eng.query(SCOPE_QUERY)).flatten();
+                let scope = scope_of(last_json(out.as_deref()).as_ref());
+                self.scope = Some((key, scope.clone()));
+                scope
+            }
+        }
+    }
+
+    /// REPL で実行した宣言の名前。ログが増えたときだけ集め直す。
+    fn own_names_now(&mut self) -> Vec<String> {
+        let len = self.eng.log().len();
+        if self.own.0 != Some(len) {
+            self.own = (Some(len), own_names(self.eng.log()));
+        }
+        self.own.1.clone()
     }
 
     // -- 起動 -------------------------------------------------------------
@@ -1380,9 +1514,6 @@ impl Repl {
     // -- コマンド ---------------------------------------------------------
 
     /// `:` で始まる行を処理する。true を返したらループを抜ける。
-    ///
-    /// `:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で足す。それまでは
-    /// 「不明なコマンド」になる。
     fn meta(&mut self, line: &str) -> bool {
         if let Some(rest) = line.strip_prefix(":!") {
             self.out.shell(rest.trim());
@@ -1402,6 +1533,11 @@ impl Repl {
         match cmd {
             "q" | "quit" => return true,
             "?" | "h" | "help" => self.out.put(HELP),
+            "t" | "type" => self.cmd_type(&arg),
+            "i" | "info" => self.cmd_info(&arg),
+            "p" | "print" => self.cmd_print(&arg),
+            "loogle" => self.cmd_loogle(&arg),
+            "abbrev" => self.cmd_abbrev(&arg),
             "goals" | "g" => self.show_pending(),
             "script" | "done" => self.out.write(&self.style.dim("証明モードではない")),
             "prove" => self.prove(&arg),
@@ -1429,6 +1565,102 @@ impl Repl {
         }
         // :env で元の環境にも戻れなければ、環境が無いので続けない。
         self.lost.is_some()
+    }
+
+    /// 略記の一覧を表示する。引数が記号ならその記号の略記、それ以外なら引数で始まる
+    /// 略記。長くなるので pager に出す。
+    fn cmd_abbrev(&mut self, arg: &str) {
+        let pairs = abbrev_lookup(arg);
+        if pairs.is_empty() {
+            let what = if arg.is_ascii() {
+                "で始まる"
+            } else {
+                "を入力する"
+            };
+            self.out
+                .write(&self.style.dim(&format!("{arg} {what}略記は無い")));
+            return;
+        }
+        self.out.page(&abbrev_table(&pairs, columns()));
+    }
+
+    /// `#check` で式の型を表示する。
+    fn cmd_type(&mut self, arg: &str) {
+        if arg.is_empty() {
+            self.out.fail(&self.style.red(":t には式が必要"));
+            return;
+        }
+        let check = format!("#check\n{}", indent(arg, "  "));
+        match self.guard(|eng| eng.query(&check)).flatten() {
+            Some(out) if !out.is_empty() => self.out.write(out.trim_end()),
+            _ => self.out.fail(&self.style.red("型を取得できなかった")),
+        }
+    }
+
+    /// 名前の型と docstring を表示する。
+    fn cmd_info(&mut self, arg: &str) {
+        if arg.is_empty() {
+            self.out.fail(&self.style.red(":i には名前が必要"));
+            return;
+        }
+        let check = format!("#check @{arg}");
+        match self.guard(|eng| eng.query(&check)).flatten() {
+            Some(out) if !out.is_empty() => self.out.write(out.trim_end()),
+            _ => self.out.fail(&self.style.red(&format!("不明: {arg}"))),
+        }
+        let query = fill(DOC_QUERY, &[arg]);
+        let doc = self.guard(|eng| eng.query(&query)).flatten();
+        if let Some(doc) = doc.as_deref().map(str::trim)
+            && !doc.is_empty()
+        {
+            self.out.write(&self.style.dim(doc));
+        }
+    }
+
+    /// `#print` で定義を表示する。
+    fn cmd_print(&mut self, arg: &str) {
+        if arg.is_empty() {
+            self.out.fail(&self.style.red(":p には名前が必要"));
+            return;
+        }
+        let print = format!("#print {arg}");
+        if let Some(resp) = self.guard(|eng| eng.send_cmd(&print, false)) {
+            render(self.out.as_mut(), self.style, &resp, arg, 0, 0);
+        }
+    }
+
+    /// loogle に問い合わせる。エンジンは操作しないので、環境は変わらない。
+    fn cmd_loogle(&mut self, arg: &str) {
+        if arg.is_empty() {
+            self.out.fail(
+                &self
+                    .style
+                    .red(":loogle には名前か型のパターンが必要  (例: |- ?a + ?b = ?b + ?a)"),
+            );
+            return;
+        }
+        match self.ask_loogle(arg) {
+            Ok(got) => self
+                .out
+                .write(&loogle_text(&got, 10, columns(), self.style)),
+            Err(e) => self
+                .out
+                .fail(&self.style.red(&format!("loogle の検索に失敗した: {e}"))),
+        }
+    }
+
+    /// loogle に問い合わせているあいだ、メッセージを 1 行表示する。
+    ///
+    /// 重いパターンだと loogle の処理に 20 秒近くかかる。何も表示しないと leani が
+    /// 止まったように見える。成功しても失敗しても、次の出力を表示する前にこの行を消す。
+    fn ask_loogle(&mut self, query: &str) -> Result<Json, leani_core::types::SearchError> {
+        if !self.ctx.tty {
+            return self.search.loogle(query);
+        }
+        self.out.put(&self.style.dim("loogle に問い合わせている…"));
+        let got = self.search.loogle(query);
+        self.out.put("\r\x1b[K");
+        got
     }
 
     /// 引数が無ければ今の環境を表示し、名前を渡すとその環境で再起動する。
@@ -1637,6 +1869,8 @@ impl Repl {
 
         // 読み込みが成功すると保留は捨てられる。
         let left = self.eng.unplayed().len();
+        // base 環境が変わるので、補完のキャッシュは使えなくなる。
+        self.comp_cache.clear();
         let Some(out) = self.guard(|eng| eng.load_file(&path, Some(&src))) else {
             return;
         };
@@ -1777,6 +2011,16 @@ fn panic_text(payload: &(dyn Any + Send)) -> String {
         (_, Some(s)) => s.clone(),
         _ => "panic".to_string(),
     }
+}
+
+/// JSON の配列のうち文字列だけを取り出す。配列でなければ空。
+fn list_of_strings(v: &Json) -> Vec<String> {
+    v.as_array().map_or_else(Vec::new, |xs| {
+        xs.iter()
+            .filter_map(Json::as_str)
+            .map(String::from)
+            .collect()
+    })
 }
 
 /// `env {n}` の表示。環境が無ければ Python 版と同じく `None`。

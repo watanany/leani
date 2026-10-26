@@ -751,6 +751,143 @@ mod コマンドの一覧 {
         assert!(repl.feed(&[":nosuch"]).contains("不明なコマンド: :nosuch"));
         assert!(repl.feed(&["1 + 1"]).contains('2'));
     }
+
+    #[story("C7")]
+    #[test]
+    fn colon_abbrev_で略記の一覧を表示する() {
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":abbrev →"]).contains("\\to"));
+        assert!(
+            repl.feed(&[":abbrev nosuch"])
+                .contains("nosuch で始まる略記は無い")
+        );
+        assert!(
+            repl.feed(&[":abbrev あ"])
+                .contains("あ を入力する略記は無い")
+        );
+    }
+}
+
+mod 実行時間 {
+    //! 重い計算を切り分けるための目安。デフォルトでは表示しない (ノイズになる)。
+    use super::*;
+
+    #[story("A3")]
+    #[test]
+    fn colon_time_で実行時間を表示する() {
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":time"]).contains("on"));
+        let out = repl.feed(&["1 + 1"]);
+        assert!(out.contains('2'), "{out}");
+        assert!(out.contains("s)"), "{out}");
+
+        assert!(repl.feed(&[":time"]).contains("off"));
+        assert!(!repl.feed(&["1 + 1"]).contains("s)"));
+    }
+}
+
+mod 型と_docstring {
+    use super::*;
+
+    #[story("D2")]
+    #[test]
+    fn colon_i_は型と_docstring_を表示する() {
+        let mut repl = Driver::new();
+        let out = repl.feed(&[":i Nat.succ"]);
+        assert!(out.contains("Nat.succ : Nat → Nat"), "{out}");
+        assert!(out.contains("successor"), "{out}");
+    }
+
+    #[story("D2")]
+    #[test]
+    fn 無い名前はエラーを表示する() {
+        let mut repl = Driver::new();
+        assert!(
+            repl.feed(&[":i Nat.nosuchThing"])
+                .contains("Nat.nosuchThing")
+        );
+    }
+}
+
+mod 型と定義の表示 {
+    use super::*;
+
+    #[story("D2")]
+    #[test]
+    fn colon_t_は式の型を表示する() {
+        let mut repl = Driver::new();
+        for cmd in [":t", ":type"] {
+            assert!(repl.feed(&[&format!("{cmd} 1 + 1")]).contains("Nat"));
+        }
+    }
+
+    #[story("D3")]
+    #[test]
+    fn colon_p_は定義の本体を表示する() {
+        let mut repl = Driver::new();
+        repl.feed(&["def shown := 1 + 2"]);
+        assert!(repl.feed(&[":p shown"]).contains("1 + 2"));
+    }
+
+    #[story("D3", "H1")]
+    #[test]
+    fn colon_p_に名前が無ければ名前が必要と伝える() {
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":p"]).contains(":p には名前が必要"));
+    }
+}
+
+mod 定理を外部サービスで探す {
+    //! :loogle は外部サービスに問い合わせるだけで、エンジンは一度も操作しない。
+    use super::*;
+
+    #[story("D4")]
+    #[test]
+    fn パターンが無ければ問い合わせない() {
+        let mut repl = Driver::new();
+        assert!(repl.feed(&[":loogle"]).contains("必要"));
+        assert_eq!(repl.loogle_calls(), 0, "空の :loogle で問い合わせた");
+    }
+
+    #[story("D4")]
+    #[test]
+    fn 問い合わせても環境は変わらない() {
+        let mut repl = Driver::new();
+        repl.feed(&["def beforeLoogle := 7"]);
+        let env = repl.repl.eng().env();
+        let hit = json!({
+            "name": "Nat.add_comm",
+            "type": " : ∀ (n m : Nat), n + m = m + n",
+            "module": "Init",
+        });
+        repl.answer_loogle(Ok(json!({"count": 1, "hits": [hit]})));
+
+        assert!(
+            repl.feed(&[":loogle ?a + ?b = ?b + ?a"])
+                .contains("Nat.add_comm")
+        );
+        // loogle が返すのは Mathlib の名前で、今の環境とは無関係。
+        assert_eq!(repl.repl.eng().env(), env, ":loogle が環境を変えた");
+        assert!(
+            repl.feed(&["beforeLoogle"]).contains('7'),
+            ":loogle が宣言を消した"
+        );
+    }
+
+    #[story("D4", "F4")]
+    #[test]
+    fn loogle_が応答しなくてもセッションは続く() {
+        let mut repl = Driver::new();
+        repl.answer_loogle(Err("timed out"));
+
+        let out = repl.feed(&[":loogle Nat"]);
+        assert!(out.contains("検索に失敗した"), "{out}");
+        assert!(out.contains("timed out"), "{out}");
+        assert!(
+            repl.feed(&["1 + 1"]).contains('2'),
+            "loogle の失敗でセッションが壊れた"
+        );
+    }
 }
 
 mod 書き出しの安全対策 {
@@ -1485,6 +1622,18 @@ mod 元になる環境を失ったとき {
             .send_cmd("#check Nat", true)
             .expect("fresh");
         assert!(resp.get("env").is_some(), "{resp}");
+    }
+
+    #[story("F1", "D2")]
+    #[test]
+    fn 型も返さない() {
+        let mut repl = Driver::new();
+        no_env(&mut repl);
+
+        // 答えると Init だけの環境からの答えになる。設定の import が無いので
+        // 正しくない答えになるうえ、「エンジンは正常」に見えてしまう。
+        assert!(repl.feed(&[":t 1 + 1"]).contains("取得できなかった"));
+        assert!(repl.repl.eng().env().is_none());
     }
 }
 

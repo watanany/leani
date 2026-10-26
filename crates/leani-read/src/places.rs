@@ -64,6 +64,8 @@ pub struct Ctx {
     /// エンジンを用意するときの外部コマンドのタイムアウト。テストでは短くする。
     pub setup_timeout: Duration,
     pub loogle: String,
+    /// `:abbrev` の一覧を表示する pager (`MANPAGER`、`PAGER`、無ければ `less`)。
+    pub pager: String,
     pub tty: bool,
     /// 色を付けるかどうかは起動時に決める。パイプに出力するときは色を付けない。
     /// Jupyter のカーネルは stdout が端末ではないが、ノートブックは ANSI の色を
@@ -98,6 +100,9 @@ impl Ctx {
             no_setup: set("LEANI_NO_SETUP"),
             setup_timeout: SETUP_TIMEOUT,
             loogle: var("LEANI_LOOGLE").unwrap_or_else(|| LOOGLE.to_string()),
+            pager: var("MANPAGER")
+                .or_else(|| var("PAGER"))
+                .unwrap_or_else(|| "less".to_string()),
             tty,
             color: tty || set("FORCE_COLOR"),
             interrupted: Arc::new(AtomicBool::new(false)),

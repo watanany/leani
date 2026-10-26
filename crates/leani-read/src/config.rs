@@ -153,6 +153,14 @@ pub fn env_names(conf: &Table, config: &str) -> Result<Vec<String>, ConfigError>
     as_table(conf.get("env"), "env", config).map(|t| t.keys().cloned().collect())
 }
 
+/// 設定ファイルに書いた環境の名前 (`:env` の補完の候補)。設定ファイルを読めなければ
+/// 候補を出さない。
+pub fn config_envs(ctx: &Ctx) -> Vec<String> {
+    load_config(&ctx.config)
+        .and_then(|conf| env_names(&conf, &ctx.config))
+        .unwrap_or_default()
+}
+
 // ------------------------------------------------------------------ ファイル
 
 /// 設定ファイルを読む。無ければ空の設定。

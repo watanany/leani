@@ -10,13 +10,14 @@
 
 use std::fs;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::{Arc, LazyLock, Mutex};
 
 use leani::engine::{Hooked, Stage};
 use leani::repl::Repl;
+use leani::search::Search;
 use leani_core::pure::text;
-use leani_core::types::{Json, Output};
+use leani_core::types::{Json, Output, SearchError};
 use leani_read::config::{load_config, resolve};
 use leani_read::places::Ctx;
 use regex::Regex;
@@ -75,6 +76,27 @@ impl Output for Sink {
 
     fn page(&mut self, text: &str) {
         self.write(text);
+    }
+}
+
+// ------------------------------------------------------------------ 偽の loogle
+
+/// 決めた応答を返す loogle (Python 版の `mocker.patch.object(leani.repl, "loogle")`)。
+/// 応答を決めていなければ、問い合わせが無かったことにして失敗を返す。
+#[derive(Clone, Default)]
+pub struct FakeSearch {
+    answer: Arc<Mutex<Option<Result<Json, String>>>>,
+    calls: Arc<AtomicUsize>,
+}
+
+impl Search for FakeSearch {
+    fn loogle(&self, _query: &str) -> Result<Json, SearchError> {
+        self.calls.fetch_add(1, SeqCst);
+        match self.answer.lock().expect("answer").clone() {
+            Some(Ok(got)) => Ok(got),
+            Some(Err(e)) => Err(SearchError(e)),
+            None => Err(SearchError("応答を決めていない".to_string())),
+        }
     }
 }
 
@@ -145,6 +167,7 @@ pub const INVARIANTS: &[Invariant] = &[
 pub struct Driver {
     pub repl: Repl,
     out: Sink,
+    search: FakeSearch,
     sb: Sandbox,
 }
 
@@ -164,11 +187,34 @@ impl Driver {
         let table = load_config(&sb.ctx.config).expect("config");
         let cfg = resolve(&sb.ctx, None, None, &[], &table).expect("resolve");
         let out = Sink::default();
-        let repl = Repl::new(&sb.ctx, cfg, preload, Box::new(out.clone())).expect("起動できない");
-        let mut d = Driver { repl, out, sb };
+        let search = FakeSearch::default();
+        let repl = Repl::new(
+            &sb.ctx,
+            cfg,
+            preload,
+            Box::new(out.clone()),
+            Box::new(search.clone()),
+        )
+        .expect("起動できない");
+        let mut d = Driver {
+            repl,
+            out,
+            search,
+            sb,
+        };
         d.check("起動直後");
         d.take();
         d
+    }
+
+    /// `:loogle` の応答を決める。
+    pub fn answer_loogle(&self, answer: Result<Json, &str>) {
+        *self.search.answer.lock().expect("answer") = Some(answer.map_err(String::from));
+    }
+
+    /// `:loogle` が問い合わせた回数。
+    pub fn loogle_calls(&self) -> usize {
+        self.search.calls.load(SeqCst)
     }
 
     /// テストが一時ファイルを置く場所 (Python 版の `tmp_path`)。

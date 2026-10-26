@@ -1,16 +1,33 @@
 //! 表示を出す (副作用)。
 //!
 //! 組み立てた表示を `Output` に出す。組み立ての処理は `leani_core::pure` にある。
+//! 端末の幅と高さもここで読む (`:abbrev` の表と `:loogle` の結果を端末の幅に合わせる)。
 
 #![allow(clippy::print_stdout)]
 
 use std::io::Write;
+use std::process::{Command, Stdio};
 
 use leani_core::pure::{Style, has_error, indent, messages, panic_line, sorries, span, text};
 use leani_core::types::{Json, Output};
+use leani_read::places::Ctx;
 
 /// 端末用の `Output`。`leani | tee log` で log に残すため、エラーも stdout に出す。
-pub struct Console;
+pub struct Console {
+    /// stdout が端末か。端末でなければ pager を使わない。
+    tty: bool,
+    /// `:abbrev` の一覧を表示する pager のコマンド。`sh -c` で実行する。
+    pager: String,
+}
+
+impl Console {
+    pub fn new(ctx: &Ctx) -> Console {
+        Console {
+            tty: ctx.tty,
+            pager: ctx.pager.clone(),
+        }
+    }
+}
 
 impl Output for Console {
     fn put(&mut self, text: &str) {
@@ -26,12 +43,40 @@ impl Output for Console {
     fn shell(&mut self, cmd: &str) {
         // 出力を受け取らず、端末につないだまま実行する。vim のような対話するコマンドも
         // 使えるように。
-        let _ = std::process::Command::new("sh").args(["-c", cmd]).status();
+        let _ = Command::new("sh").args(["-c", cmd]).status();
     }
 
+    /// 画面に収まらないときだけ pager を使う。`leani | tee log` のように端末で
+    /// なければ、そのまま出力する。pager を起動できなければ、そのまま出力する。
     fn page(&mut self, text: &str) {
-        self.write(text);
+        let tall = text.matches('\n').count() + 1 >= rows();
+        if !(self.tty && tall) {
+            self.write(text);
+            return;
+        }
+        let spawned = Command::new("sh")
+            .args(["-c", &self.pager])
+            .stdin(Stdio::piped())
+            .spawn();
+        let Ok(mut child) = spawned else {
+            self.write(text);
+            return;
+        };
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = writeln!(stdin, "{text}");
+        }
+        let _ = child.wait();
     }
+}
+
+/// 端末の幅。端末でなければ 80 (Python 版の `shutil.get_terminal_size` と同じ)。
+pub fn columns() -> usize {
+    terminal_size::terminal_size().map_or(80, |(w, _)| usize::from(w.0))
+}
+
+/// 端末の高さ。端末でなければ 24。
+fn rows() -> usize {
+    terminal_size::terminal_size().map_or(24, |(_, h)| usize::from(h.0))
 }
 
 /// エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。

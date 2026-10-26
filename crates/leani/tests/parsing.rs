@@ -8,21 +8,24 @@
     mixed_script_confusables
 )]
 
-use leani::boot;
+use leani::{boot, search};
 use leani_core::abbrev::{
     ABBREV, abbrev_candidates, abbrev_head, abbrev_lookup, abbrev_table, cell_width, expand_abbrev,
 };
 use leani_core::pure::{self, PAIRS, Style};
 use leani_core::queries::{BLOCK_OPEN, DECL_NAME, INCOMPLETE};
-use leani_core::types::{Json, Kind, Proof, State};
+use leani_core::types::{Json, Kind, Proof, SearchError, State};
 use leani_read::args::{Args, parse_args};
 use leani_read::config::{self, EnvConfig};
 use leani_read::places::Ctx;
 use proptest::prelude::*;
 use serde_json::json;
 use std::fs;
+use std::io::{BufRead, BufReader, Write};
+use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::sync::mpsc;
 use std::time::Duration;
 use story::story;
 use test_strategy::proptest;
@@ -1779,6 +1782,73 @@ mod 定理検索 {
             out.split('\n').collect::<Vec<_>>(),
             ["loogle: unknown identifier 'Nope'", "もしかして: \"Nope\""]
         );
+    }
+
+    /// 1 回だけ応答するローカルの HTTP サーバ (Python 版の `urlopen` の差し替え)。
+    /// URL と、受け取ったリクエストの 1 行目を返す受け口を返す。
+    fn serve(status: &'static str, body: &'static str) -> (String, mpsc::Receiver<String>) {
+        let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let url = format!("http://{}/json", listener.local_addr().expect("addr"));
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let (mut sock, _) = listener.accept().expect("accept");
+            let mut reader = BufReader::new(sock.try_clone().expect("clone"));
+            let mut first = String::new();
+            reader.read_line(&mut first).expect("request line");
+            let mut line = String::new();
+            while reader.read_line(&mut line).is_ok_and(|n| n > 0) && line.trim() != "" {
+                line.clear();
+            }
+            let _ = write!(
+                sock,
+                "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            );
+            let _ = tx.send(first.trim_end().to_string());
+        });
+        (url, rx)
+    }
+
+    fn ask(url: &str, query: &str) -> Result<Json, SearchError> {
+        search::loogle(url, query, Duration::from_secs(5))
+    }
+
+    #[story("D4")]
+    #[test]
+    fn 記号を含むクエリも壊さずに送る() {
+        // `?a + ?b` の `+` をそのまま URL に含めると、loogle 側では空白として
+        // 解釈される。
+        let (url, got) = serve("200 OK", r#"{"count": 0, "hits": []}"#);
+        ask(&url, "?a + ?b").expect("loogle");
+        let line = got.recv().expect("request");
+        assert!(line.starts_with("GET /json?q=%3Fa%20%2B%20%3Fb "), "{line}");
+    }
+
+    #[story("D4")]
+    #[test]
+    fn 応答が無ければ_SearchError() {
+        // ネットワークの問題で REPL を終了させない。呼び出し側がエラーを受け取って
+        // 1 行で報告する。
+        let closed = TcpListener::bind("127.0.0.1:0").expect("bind");
+        let url = format!("http://{}/json", closed.local_addr().expect("addr"));
+        drop(closed);
+        assert!(ask(&url, "Nat").is_err());
+    }
+
+    #[story("D4", "F4")]
+    #[test]
+    fn HTTP_のエラーはコードと理由を_SearchError_にする() {
+        let (url, _) = serve("503 Service Unavailable", "");
+        let err = ask(&url, "Nat").expect_err("503");
+        assert_eq!(err.to_string(), "503 Service Unavailable");
+    }
+
+    #[story("D4", "F4")]
+    #[test]
+    fn 応答がオブジェクトでなければ_SearchError() {
+        let (url, _) = serve("200 OK", "[1, 2]");
+        let err = ask(&url, "Nat").expect_err("配列");
+        assert!(err.to_string().contains("オブジェクトではない"), "{err}");
     }
 }
 
