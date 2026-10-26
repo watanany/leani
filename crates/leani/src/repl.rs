@@ -1,22 +1,25 @@
 //! 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する (副作用)。
 //!
 //! Python 版の `repl.py` から移している途中。この段階では、式と宣言の評価、
-//! `:{ ... :}`、エンジンの再起動、`:help` `:time` `:restart` `:quit` だけがある。
-//! 証明モード、`:l`、`:env`、補完、履歴はあとの段階で足す。
+//! `:{ ... :}`、エンジンの再起動、init、`:l` `:r` `:reset` `:undo` `:save`、履歴、
+//! `:help` `:time` `:restart` `:quit` `:!` がある。証明モード、`:env`、補完は
+//! あとの段階で足す。
 //!
 //! 入力を読むループは `Repl` の外に置く (計画の「テスト用の差し込み口」)。`Repl` は
 //! `feed` で 1 行ずつ受け取るだけなので、端末、パイプ、Jupyter、テストのどれからでも
 //! 同じように呼べる。
 
 use std::any::Any;
+use std::collections::HashSet;
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
 use std::time::Instant;
 
 use leani_core::pure::{
-    Style, block_continues, classify, classify_tac, continues, errors, has_error, head_line,
-    indent, last_json, lean_str, nested_action, not_evaluable_reason, sorries, strip_imports, text,
+    Style, abspath, block_continues, classify, classify_tac, continues, errors, has_error,
+    head_line, indent, last_json, lean_str, nested_action, not_evaluable_reason, save_body,
+    sorries, strip_imports, text,
 };
 use leani_core::queries::{META_LINE, PARSE_PROBE, fill};
 use leani_core::types::{EngineFault, Json, Kind, Output, Proof, State};
@@ -24,6 +27,7 @@ use leani_read::config::EnvConfig;
 use leani_read::places::Ctx;
 
 use crate::engine::{Engine, Replay, Undone, strerror};
+use crate::history::BlockHistory;
 use crate::show::{panic_check, render};
 
 pub const HELP: &str = "\
@@ -137,6 +141,10 @@ pub struct Repl {
     /// rewind で取り消した宣言と、その宣言の sorry の保留。
     undone: Option<(Undone, Option<Held>)>,
     show_time: bool,
+    /// このセッションで `:save` したパス。同じパスへの 2 回目以降は上書きする。
+    saved: HashSet<String>,
+    /// 標準入力が端末のときだけ履歴を残す。パイプからの入力は履歴にしない。
+    history: Option<BlockHistory>,
 
     // 証明モード
     proof: Option<Proof>,
@@ -145,7 +153,13 @@ pub struct Repl {
 
 impl Repl {
     /// エンジンを起動して起点の環境を作る。表示はすべて `out` に出す。
-    pub fn new(ctx: &Ctx, cfg: EnvConfig, mut out: Box<dyn Output>) -> Result<Repl, EngineFault> {
+    /// `preload` は起動時に `:l` するファイル (`leani file.lean`)。
+    pub fn new(
+        ctx: &Ctx,
+        cfg: EnvConfig,
+        preload: Option<&str>,
+        mut out: Box<dyn Output>,
+    ) -> Result<Repl, EngineFault> {
         let style = Style { color: ctx.color };
         let mut eng = Engine::new(ctx, cfg, &mut ToOutput(out.as_mut()))?;
         if let Some(warning) = eng.warning() {
@@ -177,11 +191,16 @@ impl Repl {
             explicit: false,
             undone: None,
             show_time: false,
+            saved: HashSet::new(),
+            history: history_for(ctx),
             proof: None,
             held: None,
         };
         if Path::new(&repl.ctx.init).is_file() {
             repl.apply_init();
+        }
+        if let Some(path) = preload {
+            repl.load(path, true);
         }
         Ok(repl)
     }
@@ -223,6 +242,21 @@ impl Repl {
         self.explicit
     }
 
+    /// init ファイルのパスを差し替える。テストだけが使う (Python 版の `INIT` の
+    /// monkeypatch に当たる)。
+    #[cfg(feature = "testing")]
+    #[doc(hidden)]
+    pub fn set_init(&mut self, path: &str) {
+        self.ctx.init = path.to_string();
+    }
+
+    /// rewind で取り消した宣言を直接置く。テストだけが使う。
+    #[cfg(feature = "testing")]
+    #[doc(hidden)]
+    pub fn set_undone(&mut self, undone: Undone) {
+        self.undone = Some((undone, None));
+    }
+
     /// 次の入力のプロンプト。証明モードでは `⊢> `。
     pub fn prompt(&self) -> String {
         match self.proof {
@@ -237,7 +271,7 @@ impl Repl {
     ///
     /// `:l` と違って環境を作り直さない。ここで実行した宣言は base に含めるので
     /// `:reset` しても消えない (GHCi の .ghci と同じ扱い)。
-    fn apply_init(&mut self) {
+    pub fn apply_init(&mut self) {
         let init = self.ctx.init.clone();
         let text = match std::fs::read_to_string(&init) {
             Ok(text) => text,
@@ -268,10 +302,13 @@ impl Repl {
     }
 
     /// 履歴に 1 件として追加する。複数行の宣言も全体で 1 件になる。
-    ///
-    /// 履歴は段階 5b で足す。それまでは何もしない。呼び出し箇所は Python 版と同じに
-    /// しておく。
-    fn remember(&mut self, _src: &str) {}
+    fn remember(&mut self, src: &str) {
+        if let Some(history) = &self.history
+            && !src.trim().is_empty()
+        {
+            history.record(src.trim_end());
+        }
+    }
 
     // -- 再起動 -----------------------------------------------------------
 
@@ -394,7 +431,7 @@ impl Repl {
 
     /// 入力した宣言を今のエンジンで再実行する。`:env` の切り替え後と、エンジンの
     /// 再起動で env id が無効になった宣言をテキストから戻すときに使う。
-    fn replay_into(&mut self, log: &[String]) {
+    pub fn replay_into(&mut self, log: &[String]) {
         if log.is_empty() {
             return;
         }
@@ -777,7 +814,7 @@ impl Repl {
     }
 
     /// rewind で取り消した宣言を戻す。書き直さずにやめたとき。
-    fn restore_undone(&mut self) {
+    pub fn restore_undone(&mut self) {
         let Some((undone, held)) = self.undone.take() else {
             return;
         };
@@ -974,11 +1011,17 @@ impl Repl {
 
     /// `:` で始まる行を処理する。true を返したらループを抜ける。
     ///
-    /// この段階にあるのは `:quit` `:help` `:time` `:restart` だけ。ほかのコマンドは
-    /// あとの段階で足す。それまでは「不明なコマンド」になる。
+    /// 証明モードのコマンド、`:env`、`:t` `:i` `:p` `:loogle` `:abbrev` はあとの段階で
+    /// 足す。それまでは「不明なコマンド」になる。
     fn meta(&mut self, line: &str) -> bool {
+        if let Some(rest) = line.strip_prefix(":!") {
+            self.out.shell(rest.trim());
+            return false;
+        }
+
         let mut parts = line.splitn(2, char::is_whitespace);
         let cmd = parts.next().unwrap_or("").get(1..).unwrap_or("");
+        let arg = parts.next().unwrap_or("").trim().to_string();
 
         match cmd {
             "q" | "quit" => return true,
@@ -993,11 +1036,188 @@ impl Repl {
             "restart" => {
                 self.revive();
             }
+            "l" | "load" => self.load(&arg, true),
+            "r" | "reload" => match self.eng.loaded().map(str::to_string) {
+                Some(path) => self.load(&path, true),
+                None => self.reset(),
+            },
+            "reset" => self.reset(),
+            "undo" => self.cmd_undo(&arg),
+            "save" => self.cmd_save(&arg),
             _ => self
                 .out
                 .fail(&self.style.red(&format!("不明なコマンド: :{cmd}  (:help)"))),
         }
         false
+    }
+
+    /// 直前の n 件の宣言を取り消す。
+    fn cmd_undo(&mut self, arg: &str) {
+        for _ in 0..arg.parse::<usize>().unwrap_or(1) {
+            self.eng.pop_decl();
+        }
+        self.clear_pending();
+        self.out
+            .write(&self.style.dim(&format!("env {}", env_text(self.eng.env()))));
+    }
+
+    /// 実行した宣言を .lean ファイルとして書き出す。
+    ///
+    /// repl には環境を pickle する機能もあるが、unpickle した環境で #eval すると
+    /// Lean のコンパイラが PANIC する (コンパイラの状態が pickle に含まれない)。
+    /// ソースで保存しておけば編集もできるし、lean でそのまま実行できる。
+    fn cmd_save(&mut self, arg: &str) {
+        let Some(path) = abspath(arg, &self.ctx.home, &self.ctx.cwd) else {
+            self.out.fail(&self.style.red(":save にはファイル名が必要"));
+            return;
+        };
+
+        let srcs = self.eng.sources();
+        let orphans = self.eng.unplayed().to_vec();
+        if srcs.is_empty() && orphans.is_empty() {
+            self.out.fail(&self.style.red("保存する宣言が無い"));
+            return;
+        }
+
+        if Path::new(&path).exists() && !self.saved.contains(&path) {
+            // パスの入力を間違えて、プロジェクトのソースを上書きしない。同じパスへの
+            // 2 回目以降の :save は上書きする。
+            self.out
+                .fail(&self.style.red(&format!("すでにある: {path}")));
+            self.out
+                .write(&self.style.dim("  ファイルを消すか、別の名前を指定する"));
+            return;
+        }
+
+        // 起動時と同じヘッダを書く。設定の import だけだと lean で直接実行したときに
+        // エラーになる (leani は起動時と :l のときに import Lean を自分で追加する)。
+        // :l したファイルの import も追加する (save_header)。
+        let body = save_body(&srcs, &orphans);
+        let file = format!("{}\n{body}\n", self.eng.save_header());
+        if let Err(e) = std::fs::write(&path, file) {
+            self.out.fail(
+                &self
+                    .style
+                    .red(&format!("書き出せなかった: {}", strerror(&e))),
+            );
+            return;
+        }
+
+        self.saved.insert(path.clone());
+        self.out.write(
+            &self
+                .style
+                .dim(&format!("宣言 {} 件を書き出した: {path}", srcs.len())),
+        );
+        self.out.write(&self.style.dim(&format!("-- :l {path}")));
+    }
+
+    /// ファイルを読み込んで環境を作り直す。`announce` が偽なら成功の表示を出さない。
+    pub fn load(&mut self, path: &str, announce: bool) {
+        if path.is_empty() {
+            self.out.fail(&self.style.red("ファイル名が必要"));
+            return;
+        }
+
+        let path = expand_home(path, &self.ctx.home);
+        if !Path::new(&path).is_file() {
+            self.out
+                .fail(&self.style.red(&format!("ファイルが無い: {path}")));
+            return;
+        }
+
+        let src = match std::fs::read_to_string(&path) {
+            Ok(src) => src,
+            Err(e) => {
+                let why = strerror(&e);
+                self.out
+                    .fail(&self.style.red(&format!("読めない: {path} ({why})")));
+                return;
+            }
+        };
+
+        // 読み込みが成功すると保留は捨てられる。
+        let left = self.eng.unplayed().len();
+        let Some(out) = self.guard(|eng| eng.load_file(&path, Some(&src))) else {
+            return;
+        };
+
+        render(self.out.as_mut(), self.style, &out.resp, &out.src, 0, 0);
+        if let Some(note) = &out.note {
+            self.out.write(&self.style.yellow(note));
+        }
+        if out.bad {
+            self.out
+                .fail(&self.style.red(&format!("読み込めなかった: {path}")));
+            return;
+        }
+
+        // 環境がすべて置き換わるので、前の環境の proofState は使えない。
+        self.proof = None;
+        self.last = None;
+        self.undone = None;
+        self.clear_pending();
+        if announce {
+            self.out.write(&self.style.dim(&format!(
+                "読み込んだ: {path} (env {})",
+                env_text(self.eng.env())
+            )));
+        }
+        if left > 0 {
+            // :reset と同じく、何も表示せずに捨てるとユーザーが気付けない。
+            self.out
+                .write(&self.style.dim(&format!("  保留中の宣言 {left} 件も捨てた")));
+        }
+    }
+
+    /// 宣言をすべて取り消して、起点の環境に戻す。
+    fn reset(&mut self) {
+        // 保留も捨てる。残すと、:reset で消したはずの宣言が次の :restart で戻ってくる。
+        let left = match self.eng.reset() {
+            Ok(left) => left,
+            Err(_) => {
+                // 起点の環境が無い (boot に失敗した)。env を設定し直しても、どの入力にも
+                // "Unknown environment." しか返さない状態になり、保留中の宣言だけが消える。
+                self.out.fail(
+                    &self
+                        .style
+                        .red("元になる環境が無い。:restart で再起動できる"),
+                );
+                return;
+            }
+        };
+        self.proof = None;
+        self.last = None;
+        self.clear_pending();
+        self.out.write(
+            &self
+                .style
+                .dim(&format!("env {} に戻した", env_text(self.eng.env()))),
+        );
+        if left > 0 {
+            self.out
+                .write(&self.style.dim(&format!("  保留中の宣言 {left} 件も捨てた")));
+        }
+    }
+}
+
+/// 標準入力が端末のときだけ履歴を持つ。履歴のディレクトリが無ければ作る。作れなくても
+/// 履歴が残らないだけなので、エラーは無視する。
+fn history_for(ctx: &Ctx) -> Option<BlockHistory> {
+    if !ctx.tty {
+        return None;
+    }
+    if let Some(dir) = Path::new(&ctx.hist).parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    Some(BlockHistory::new(&ctx.hist))
+}
+
+/// `~` だけを展開する (Python の `os.path.expanduser`)。相対パスはそのまま残す。
+fn expand_home(path: &str, home: &str) -> String {
+    match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
+        _ => path.to_string(),
     }
 }
 

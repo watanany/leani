@@ -407,6 +407,25 @@ pub fn hang(script: &str, pad: &str) -> String {
         .join("\n")
 }
 
+/// `:save` が書き出す本文。環境を構成しているソースに、保留中の宣言をコメントとして
+/// 足す。
+///
+/// 保留中の宣言 (環境に追加されなかったもの) を省くと、`:save` は成功を報告したのに
+/// 入力した宣言が消える。コメントにせずそのまま書くと、lean でエラーになるファイル
+/// になる。
+pub fn save_body(srcs: &[String], orphans: &[String]) -> String {
+    let mut parts: Vec<String> = srcs.to_vec();
+    if !orphans.is_empty() {
+        let note = orphans
+            .iter()
+            .map(|one| indent(one, "-- "))
+            .collect::<Vec<_>>()
+            .join("\n\n");
+        parts.push(format!("-- 保留中の宣言 ({} 件):\n{note}", orphans.len()));
+    }
+    parts.join("\n\n")
+}
+
 // ------------------------------------------------------------------ 応答の切り出し
 
 /// 受信バッファから最初の完全なレスポンスを取り出す。まだすべて届いていなければ None。

@@ -261,6 +261,13 @@ impl Engine {
         self.env = None;
     }
 
+    /// env を直接置き換える。エンジンに無い env id を持った状態を作るテストだけが使う。
+    #[cfg(feature = "testing")]
+    #[doc(hidden)]
+    pub fn set_env(&mut self, env: Option<i64>) {
+        self.env = env;
+    }
+
     // -- プロセス ---------------------------------------------------------------
 
     /// repl を起動する。再起動するたびに世代を進める。前のプロセスの proofState と
@@ -340,7 +347,18 @@ impl Engine {
     /// ときは、読んでいないレスポンスが残るので、このプロセスを止めてから
     /// `Interrupted` を返す。呼び出し側が再起動せずに次の `send` を呼んでも、古い
     /// レスポンスは読まず、`Died` になる。
+    ///
+    /// リクエストを書く前の中断 (差し込み口の `Before`) では、読んでいない
+    /// レスポンスが無いので、プロセスは止めない。Ctrl-C のフラグは `read` でしか
+    /// 確かめないので、実際の中断はすべて書いたあとに起きる。
     pub fn send(&mut self, obj: &Json) -> Result<Json, EngineFault> {
+        if !self.alive() {
+            return Err(self.died());
+        }
+        let got = self.hook(Stage::Before(obj));
+        if let Some(done) = self.obey(got) {
+            return done;
+        }
         match self.exchange(obj) {
             Err(EngineFault::Interrupted) => {
                 self.kill();
@@ -371,14 +389,8 @@ impl Engine {
         }
     }
 
+    /// リクエストを書いてレスポンスを読む。差し込み口の `Before` は `send` が呼ぶ。
     fn exchange(&mut self, obj: &Json) -> Result<Json, EngineFault> {
-        if !self.alive() {
-            return Err(self.died());
-        }
-        let got = self.hook(Stage::Before(obj));
-        if let Some(done) = self.obey(got) {
-            return done;
-        }
         if let Err(e) = self.write(obj) {
             return Err(self.died_or(e));
         }
