@@ -9,18 +9,19 @@
 
 mod common;
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
+use std::sync::{Arc, Mutex};
 
 use common::{
-    Driver, PANIC, cmd, die_once, fresh, interrupt_after_write, is_tactic, sandbox, with_info,
-    with_panic,
+    Driver, FakeSearch, PANIC, Sink, cmd, die_once, fresh, interrupt_after_write, is_tactic,
+    sandbox, with_info, with_panic,
 };
+use leani::cli::{Line, LineSource};
 use leani::engine::{Engine, Hooked, Stage};
 use leani::repl::Repl;
 use leani_core::pure::balanced;
 use leani_core::types::{EngineFault, Json};
-use leani_read::config::EnvConfig;
+use leani_read::config::{EnvConfig, load_config, resolve};
 use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 use serde_json::json;
@@ -2528,6 +2529,45 @@ mod 切り替えに失敗したとき {
 
         let why = repl.repl.env_lost().expect("理由が無い");
         assert!(why.contains("にも戻れなくなった"), "{why}");
+    }
+
+    /// 決めた行を順に返し、尽きたら入力の終わりを返す入力
+    /// (Python 版の `read_line` の `side_effect`)。
+    struct Script(std::vec::IntoIter<&'static str>);
+
+    impl LineSource for Script {
+        fn read_line(&mut self, _prompt: &str) -> Line {
+            match self.0.next() {
+                Some(line) => Line::Text(line.to_string()),
+                None => Line::End,
+            }
+        }
+    }
+
+    #[story("G4", "G5")]
+    #[test]
+    fn 端末では元の環境にも戻れなければ内部エラーにせずループを抜ける() {
+        // ループが想定外のエラーとして扱うと、環境が無いままセッションが続く。
+        // cli::run は Mutex<Repl> を受け取るので、Driver を使わずに Repl を作る。
+        let sb = sandbox();
+        let table = load_config(&sb.ctx.config).expect("config");
+        let cfg = resolve(&sb.ctx, None, None, &[], &table).expect("resolve");
+        let out = Sink::default();
+        let search = FakeSearch::default();
+        let mut repl =
+            Repl::new(&sb.ctx, cfg, None, Box::new(out), Box::new(search)).expect("起動できない");
+        repl.eng_mut().set_hook(Some(Box::new(|stage| match stage {
+            Stage::Before(obj) if fresh(obj) => Hooked::Kill,
+            _ => Hooked::Pass,
+        })));
+        let repl = Mutex::new(repl);
+
+        let mut lines = Script(vec![":env wide", ""].into_iter());
+        let got = leani::cli::run(&repl, &mut lines);
+
+        let why = got.expect_err("ループを抜けない");
+        assert!(why.contains("にも戻れなくなった"), "{why}");
+        repl.into_inner().expect("repl").close();
     }
 
     #[story("F1", "G5")]

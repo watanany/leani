@@ -19,6 +19,7 @@ nix = { version = "0.28", features = ["poll", "process", "signal"] }
 regex = "1"
 serde_json = "1"
 sha1_smol = "1"
+signal-hook = "0.3"
 tempfile = "3"
 terminal_size = "0.4"
 ureq = "3"
