@@ -296,6 +296,11 @@ impl Repl {
         self.explicit
     }
 
+    /// 入力の履歴。端末 (`term`) が Ctrl-P で呼び出すのに使う。端末でなければ None。
+    pub fn history(&self) -> Option<&BlockHistory> {
+        self.history.as_ref()
+    }
+
     pub fn show_time(&self) -> bool {
         self.show_time
     }

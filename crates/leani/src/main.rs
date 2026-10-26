@@ -8,7 +8,8 @@
 
 use std::process::ExitCode;
 
-use leani::cli::{self, Stdin};
+use leani::cli::{self, LineSource, Stdin};
+use leani::term::Terminal;
 use leani_read::places::Ctx;
 
 fn main() -> ExitCode {
@@ -19,8 +20,13 @@ fn main() -> ExitCode {
         eprintln!("leani: SIGINT のハンドラを登録できない: {e}");
     }
     let argv: Vec<String> = std::env::args().skip(1).collect();
-    let mut stdin = Stdin::new(&ctx);
-    match cli::main(&ctx, &argv, &mut stdin) {
+    let source = |repl: &_| -> Box<dyn LineSource> {
+        match Terminal::open(&ctx, repl) {
+            Some(term) => Box::new(term),
+            None => Box::new(Stdin::new(&ctx)),
+        }
+    };
+    match cli::main(&ctx, &argv, source) {
         Ok(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
         Err(why) => {
             eprintln!("leani: {why}");
