@@ -1,8 +1,7 @@
-//! `SPEC.rust.md` を生成する。使い方は lib.rs の先頭に書いてある。
+//! `SPEC.md` を生成する。使い方は lib.rs の先頭に書いてある。
 
 #![allow(clippy::print_stdout, clippy::print_stderr)]
 
-use std::path::Path;
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
@@ -17,11 +16,7 @@ fn main() -> ExitCode {
         [] => spec::generate(&root)
             .and_then(|text| std::fs::write(root.join(spec::OUT), text).map_err(|e| e.to_string())),
         ["--check"] => spec::check(&root),
-        ["--missing", path] => spec::missing(&root, Path::new(path)).map(|left| {
-            left.iter().for_each(|line| println!("{line}"));
-            println!("移していないテスト {} 件", left.len());
-        }),
-        _ => Err("使い方: spec [--check | --missing SPEC.md]".to_string()),
+        _ => Err("使い方: spec [--check]".to_string()),
     };
     match done {
         Ok(()) => ExitCode::SUCCESS,

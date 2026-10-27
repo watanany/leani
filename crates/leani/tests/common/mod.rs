@@ -112,11 +112,11 @@ pub fn strip_ansi(s: &str) -> String {
 
 // ------------------------------------------------------------------ 不変条件
 
-/// 1 行渡すごとに確かめる。1・2 番目は `Engine` のメソッドだけが変える。`Repl` は
-/// `Engine` の状態を書き換えない。
 /// 不変条件 1 つ。成り立たなくなったときに表示する理由と、確かめる関数。
 pub type Invariant = (&'static str, fn(&mut Repl) -> bool);
 
+/// 1 行渡すごとに確かめる。1・2 番目は `Engine` のメソッドだけが変える。`Repl` は
+/// `Engine` の状態を書き換えない。
 pub const INVARIANTS: &[Invariant] = &[
     (
         "env のスタックと宣言ログの長さが一致する",

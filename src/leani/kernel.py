@@ -1,19 +1,23 @@
 """Jupyter のカーネル (副作用)。
 
 ノートブックのセルを Repl に渡す。`python -m leani.kernel -f {connection_file}` で
-起動する。ipykernel は optional dependency (`leani[jupyter]`) なので、このモジュールは
-leani/__init__.py から import しない。"""
+起動する。`leani-kernel install` は、このモジュールを起動するカーネルをユーザーの
+Jupyter に登録する。ipykernel は optional dependency (`leani[jupyter]`) なので、この
+モジュールは leani/__init__.py から import しない。"""
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
+import tempfile
 from importlib.metadata import version
 from typing import Any
 
 from ipykernel.iostream import OutStream
 from ipykernel.kernelapp import IPKernelApp
 from ipykernel.kernelbase import Kernel
+from jupyter_client.kernelspec import KernelSpecManager
 from prompt_toolkit.completion import CompleteEvent, Completion
 from prompt_toolkit.document import Document
 
@@ -240,9 +244,36 @@ class LeaniKernel(Kernel):
         return {"status": "ok", "restart": restart}
 
 
-if __name__ == "__main__":
+def install_kernel() -> None:
+    """leani.kernel を起動するカーネルを、ユーザーの Jupyter に登録する。"""
+    spec = {
+        "argv": [sys.executable, "-m", "leani.kernel", "-f", "{connection_file}"],
+        "display_name": "Lean 4 (leani)",
+        "language": "lean4",
+        # stdout が端末ではないが、ノートブックは ANSI の色を表示できる。
+        "env": {"FORCE_COLOR": "1"},
+    }
+    with tempfile.TemporaryDirectory() as tmp:
+        with open(f"{tmp}/kernel.json", "w") as f:
+            json.dump(spec, f, ensure_ascii=False, indent=2)
+        path = KernelSpecManager().install_kernel_spec(tmp, "leani", user=True)
+    print(dim(f"登録した: {path}"))
+
+
+def main() -> None:
+    """
+    `leani-kernel` コマンド。`install` ならカーネルを登録し、それ以外ならカーネルを
+    起動する。
+    """
+    if sys.argv[1:] == ["install"]:
+        install_kernel()
+        return
     # ipykernel は既定で fd 1 と 2 の出力を取り込み、その時点で実行中のセルに表示する。
     # エンジンやその子プロセスがあとから書いた出力が、関係の無いセル (silent のセル
     # も含む) に表示されないように、取り込みを止める。その出力はカーネルを起動した
     # 端末に表示される。
     IPKernelApp.launch_instance(kernel_class=LeaniKernel, capture_fd_output=False)
+
+
+if __name__ == "__main__":
+    main()

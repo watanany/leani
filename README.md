@@ -12,11 +12,13 @@
 
 ## インストール
 
-[elan](https://lean-lang.org/install)、git、[uv](https://docs.astral.sh/uv/) が必要。
+[elan](https://lean-lang.org/install)、git、[Rust の toolchain](https://rustup.rs/) が必要。
 
 ```sh
-uv tool install git+https://github.com/watanany/leani
+cargo install --git https://github.com/watanany/leani leani
 ```
+
+`uv tool install` でインストールした Python 版の leani がある場合は、先に `uv tool uninstall leani` で消す。
 
 ## 使い方
 

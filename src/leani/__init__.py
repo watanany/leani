@@ -1,5 +1,8 @@
 """
-leani: Lean 4 の対話 REPL。
+leani: Lean 4 の対話 REPL の Python 版。
+
+端末の REPL (`leani` コマンド) は Rust 版 (`crates/`) に移した。Python 版は Jupyter の
+カーネル (`leani.kernel`) のためだけに残してあり、カーネルの不具合だけを直す。
 
 エンジンは leanprover-community/repl。repl は JSON を受け取って JSON を返す
 プログラム向けのプロトコルなので、leani が人間向けの層を担当する。
@@ -36,7 +39,6 @@ leani: Lean 4 の対話 REPL。
     search   副作用    loogle に問い合わせる
     show     副作用    表示を出す
     repl     副作用    フロントエンド
-    cli      副作用    エントリーポイント
     kernel   副作用    Jupyter のカーネル (leani[jupyter] のときだけ使える)
 
 純粋、読み取り、定数のモジュールが副作用のモジュールを import しないことは、
@@ -55,7 +57,6 @@ from __future__ import annotations
 from leani import (
     abbrev,
     boot,
-    cli,
     config,
     engine,
     places,
@@ -66,15 +67,12 @@ from leani import (
     show,
     types,
 )
-from leani.cli import main
 
 __all__ = [
     "abbrev",
     "boot",
-    "cli",
     "config",
     "engine",
-    "main",
     "places",
     "pure",
     "queries",
