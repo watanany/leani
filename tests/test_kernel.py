@@ -17,7 +17,7 @@ import sys
 import time
 
 import pytest
-from conftest import SRC, leani, story
+from conftest import SRC, story
 from jupyter_client.manager import start_new_kernel
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
@@ -401,7 +401,7 @@ def describe_カーネルの登録():
     def it_今の_Python_で_leani_kernel_を起動するカーネルを登録する(tmp_path):
         env = dict(os.environ, JUPYTER_DATA_DIR=str(tmp_path), PYTHONPATH=SRC)
         subprocess.run(
-            [sys.executable, "-m", "leani", "--install-kernel"], env=env, check=True
+            [sys.executable, "-m", "leani.kernel", "install"], env=env, check=True
         )
         spec = json.loads((tmp_path / "kernels/leani/kernel.json").read_text())
         assert spec["argv"][:3] == [sys.executable, "-m", "leani.kernel"]

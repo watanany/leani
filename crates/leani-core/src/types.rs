@@ -2,7 +2,7 @@
 //!
 //! repl の応答は `serde_json::Value` のまま扱い、struct にはしない。キーが無い、
 //! 型が違うといった応答でも、読む箇所で既定値に置き換えて先に進む (DECISIONS.md の
-//! 「pydantic で応答を検査する」を採用しなかった理由と同じ)。
+//! 「repl の応答を struct で検証する」)。
 
 use thiserror::Error;
 

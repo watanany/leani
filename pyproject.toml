@@ -13,7 +13,7 @@ Homepage = "https://github.com/watanany/leani"
 Repository = "https://github.com/watanany/leani"
 
 [project.scripts]
-leani = "leani.cli:main"
+leani-kernel = "leani.kernel:main"
 
 [project.optional-dependencies]
 jupyter = [
@@ -30,10 +30,8 @@ sources = ["src"]
 
 [dependency-groups]
 dev = [
-    "hypothesis>=6",
     "ipykernel>=7.3.0",
     "mypy>=2.3.1",
-    "pyte>=0.8.2",
     "pytest>=8",
     "pytest-describe>=2.2",
     "pytest-mock>=3.14",
@@ -86,7 +84,6 @@ ban-relative-imports = "all"
 "leani.engine".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.repl".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.search".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
-"leani.cli".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.show".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 "leani.kernel".msg = "純粋、読み取り、定数のモジュールは、副作用のモジュールを import しない"
 
@@ -94,16 +91,14 @@ ban-relative-imports = "all"
 # 副作用のモジュールどうしは import し合ってよい。名前をまとめる __init__ とテストも対象から外す。
 # 関数の複雑さの上限 (C901, PLR0911, PLR0912, PLR0915) は、純粋、読み取り、定数のモジュール
 # だけに適用する。副作用のモジュールでは、入力を順に分岐して処理する関数が長くなる。
-# print (T201) を使ってよいのは、Output の実装 (show、kernel)、Repl を作る前と終了したあとの cli、
+# print (T201) を使ってよいのは、Output の実装 (show、kernel)、カーネルの登録 (kernel)、
 # エンジンを用意する途中の boot、開発用の tools だけ。ほかの表示は Output で出す。
 "src/leani/boot.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/engine.py" = ["TID251", "C901", "PLR091"]
 "src/leani/search.py" = ["TID251", "C901", "PLR091"]
 "src/leani/show.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/repl.py" = ["TID251", "C901", "PLR091"]
-"src/leani/cli.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/kernel.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/__init__.py" = ["TID251", "C901", "PLR091"]
-"src/leani/__main__.py" = ["TID251", "C901", "PLR091"]
 "tests/**" = ["TID251", "C901", "PLR091"]
 "tools/**" = ["C901", "PLR091", "T201"]

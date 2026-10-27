@@ -1,4 +1,4 @@
-//! テストとユーザーストーリーから `SPEC.rust.md` を生成する。
+//! テストとユーザーストーリーから `SPEC.md` を生成する。
 //!
 //! leani で「何ができて、どういう性質を持つか」の一覧が必要。コードから導かずに書くと
 //! 必ずコードより古くなるので、情報源を 2 つだけに絞って生成する。手で書き足す場所は作らない。
@@ -6,17 +6,13 @@
 //! ```text
 //! stories.toml                誰の何を助けるか。コードからは分からないので、ここが情報源
 //! crates/leani/tests/*.rs     それを確かめているテスト。テスト名がそのまま仕様の文になる
+//! tests/test_*.py             Jupyter のカーネルのテスト (Python 版)
 //! ```
 //!
 //! ```text
-//! cargo run -p spec                         # SPEC.rust.md を書き直す
-//! cargo run -p spec -- --check              # 生成結果と違えば 1 を返す
-//! cargo run -p spec -- --missing SPEC.md    # SPEC.md にあって Rust に無いテストを表示する
+//! cargo run -p spec              # SPEC.md を書き直す
+//! cargo run -p spec -- --check   # 生成結果と違えば 1 を返す
 //! ```
-//!
-//! Python 版の `tools/spec.py` と同じ規則で生成する。移植が終わるまでは、Python 版が
-//! `SPEC.md` を、この crate が `SPEC.rust.md` を書く。`--missing` は、まだ Rust に
-//! 移していないテストの一覧を出す。
 //!
 //! ストーリーとテストは 1:1 ではない。テストの分け方はテストの都合で決まっていて
 //! (失敗する理由が 1 つになるように、なるべく速い層でテストするように)、ストーリーの
@@ -27,6 +23,11 @@
 //!
 //! Rust のテストには、Python 版の `it_` と `describe_` を付けない。`#[test]` か `#[proptest]`
 //! の付いた関数をテストと見なし、テストを含む `mod` を describe と見なす。
+//!
+//! Python のテストは行単位で読む。`def describe_` と `def it_` の行をインデントで入れ子に
+//! し、その前の `@story(...)` の行からストーリー番号を取る。名前からは `it_` と
+//! `describe_` を外す。Python の構文を解析する crate は使わない。カーネルのテストは
+//! 数が少なく、書き方も決まっているので、行単位で足りる。
 //!
 //! テスト名を文に戻す規則は 5 つだけ。
 //!
@@ -40,7 +41,6 @@
 //!
 //! Python は識別子を NFKC で正規化して読むので、ここでも名前を NFKC にしてから戻す。
 
-use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -49,15 +49,17 @@ use syn::punctuated::Punctuated;
 use syn::{Attribute, Item, LitStr, Token};
 use unicode_normalization::UnicodeNormalization;
 
-/// 生成するファイル。移植が終わったら `SPEC.md` にする。
-pub const OUT: &str = "SPEC.rust.md";
+/// 生成するファイル。
+pub const OUT: &str = "SPEC.md";
 
-const HEAD: &str = "<!-- crates/spec が crates/leani/tests/ から生成する。手で編集しない。 -->
+const HEAD: &str =
+    "<!-- crates/spec が crates/leani/tests/ と tests/ から生成する。手で編集しない。 -->
 
 # leani の性質一覧
 
 leani が誰の何を助けるか (`stories.toml`) に、それを確かめているテストの
-名前を並べたもの。テスト名はすべて `cargo nextest run` で実際に確かめられている。
+名前を並べたもの。テスト名はすべて `cargo nextest run` (層 kernel は `uv run pytest`)
+で実際に確かめられている。
 項目が増えたり減ったりするのは、ストーリーかテストを追加または削除したときだけ。
 
     cargo run -p spec
@@ -218,25 +220,79 @@ fn descend(items: &[Item], layer: &str, place: &str) -> Vec<Test> {
         .collect()
 }
 
-/// テストを、ファイル名の順、ファイル内で出てくる順に返す。層の名前はファイル名から取る。
-pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
-    let dir = root.join("crates/leani/tests");
-    let mut paths: Vec<PathBuf> = fs::read_dir(&dir)
+/// Python のテストファイルを行単位で読む。describe はインデントで入れ子にする。
+fn python_tests(text: &str, layer: &str) -> Vec<Test> {
+    struct Scan {
+        /// 開いている describe の (インデント, 名前)。
+        describes: Vec<(usize, String)>,
+        /// 次の `def` に付く `@story` の番号。
+        pending: Vec<String>,
+        out: Vec<Test>,
+    }
+    let start = Scan {
+        describes: Vec::new(),
+        pending: Vec::new(),
+        out: Vec::new(),
+    };
+    let done = text.lines().fold(start, |mut scan, line| {
+        let body = line.trim_start();
+        let indent = line.len() - body.len();
+        let name = body
+            .strip_prefix("def ")
+            .and_then(|rest| rest.split('(').next());
+        if body.starts_with("@story(") {
+            scan.pending
+                .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
+            return scan;
+        }
+        let Some(name) = name else {
+            return scan;
+        };
+        scan.describes.retain(|(at, _)| *at < indent);
+        let stories = std::mem::take(&mut scan.pending);
+        if let Some(d) = name.strip_prefix("describe_") {
+            scan.describes.push((indent, label(d)));
+        } else if let Some(it) = name.strip_prefix("it_") {
+            let place = scan.describes.last().map_or(layer, |(_, d)| d.as_str());
+            scan.out.push(Test {
+                what: label(it),
+                place: format!("{layer} / {place}"),
+                stories,
+            });
+        }
+        scan
+    });
+    done.out
+}
+
+/// ディレクトリにある、名前が `prefix` で始まり拡張子が `ext` のファイルを、
+/// (層の名前, パス) にして返す。層の名前はファイル名から `prefix` と拡張子を外したもの。
+fn layers(dir: &Path, prefix: &str, ext: &str) -> Result<Vec<(String, PathBuf)>, String> {
+    Ok(fs::read_dir(dir)
         .map_err(|e| format!("{}: {e}", dir.display()))?
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "rs"))
-        .collect();
-    paths.sort();
-    paths
+        .filter(|p| p.extension().is_some_and(|x| x == ext))
+        .filter_map(|p| {
+            let stem = p.file_stem()?.to_string_lossy().into_owned();
+            Some((stem.strip_prefix(prefix)?.to_string(), p))
+        })
+        .collect())
+}
+
+/// テストを、層の名前の順、ファイル内で出てくる順に返す。
+pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
+    let mut files = layers(&root.join("crates/leani/tests"), "", "rs")?;
+    files.extend(layers(&root.join("tests"), "test_", "py")?);
+    files.sort();
+    files
         .iter()
-        .map(|path| {
+        .map(|(layer, path)| {
             let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+            if path.extension().is_some_and(|x| x == "py") {
+                return Ok(python_tests(&text, layer));
+            }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-            let layer = path
-                .file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            Ok(descend(&file.items, &layer, &layer))
+            Ok(descend(&file.items, layer, layer))
         })
         .collect::<Result<Vec<_>, String>>()
         .map(|v| v.into_iter().flatten().collect())
@@ -248,7 +304,7 @@ pub fn complaints(stories: &Stories, tests: &[Test]) -> Vec<String> {
         let missing = t
             .stories
             .is_empty()
-            .then(|| format!("#[story] が無い: {} / {}", t.place, t.what));
+            .then(|| format!("story が無い: {} / {}", t.place, t.what));
         let unknown = t
             .stories
             .iter()
@@ -329,32 +385,6 @@ pub fn check(root: &Path) -> Result<(), String> {
     }
 }
 
-// ------------------------------------------------------------- 移していないもの
-
-/// SPEC の 1 行 `- what (層 / describe)` を (層 / describe, what) にする。
-fn entry(line: &str) -> Option<(String, String)> {
-    let body = line.strip_prefix("- ")?.strip_suffix(')')?;
-    let (what, place) = body.rsplit_once(" (")?;
-    Some((place.to_string(), what.to_string()))
-}
-
-/// `spec_md` (Python 版の `SPEC.md`) にあって、Rust のテストに無いもの。
-/// 1 つのテストは複数のストーリーの下に出てくるので、重複を除いて出てきた順に返す。
-pub fn missing(root: &Path, spec_md: &Path) -> Result<Vec<String>, String> {
-    let text = fs::read_to_string(spec_md).map_err(|e| format!("{}: {e}", spec_md.display()))?;
-    let have: HashSet<(String, String)> = collect(root)?
-        .into_iter()
-        .map(|t| (t.place, t.what))
-        .collect();
-    let mut seen = HashSet::new();
-    Ok(text
-        .lines()
-        .filter_map(entry)
-        .filter(|e| !have.contains(e) && seen.insert(e.clone()))
-        .map(|(place, what)| format!("{place} / {what}"))
-        .collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,6 +443,48 @@ mod tests {
                     "parsing / 式の評価".to_string(),
                     "連結しても閉じている".to_string(),
                     vec!["E2".to_string()],
+                ),
+            ]
+        );
+    }
+
+    #[test]
+    fn テストを行単位で読む() {
+        let text = r#"
+def describe_セルの実行():
+
+    @story("J1", "E3")
+    @pytest.mark.usefixtures("place")
+    def it_colon_q_は何もしない(kernel):
+        pass
+
+    def helper():
+        pass
+
+def describe_カーネルの登録():
+
+    @story("J1")
+    def it_複数行の(
+        tmp_path,
+    ):
+        pass
+"#;
+        let got: Vec<(String, String, Vec<String>)> = python_tests(text, "kernel")
+            .into_iter()
+            .map(|t| (t.place, t.what, t.stories))
+            .collect();
+        assert_eq!(
+            got,
+            [
+                (
+                    "kernel / セルの実行".to_string(),
+                    ":q は何もしない".to_string(),
+                    vec!["J1".to_string(), "E3".to_string()],
+                ),
+                (
+                    "kernel / カーネルの登録".to_string(),
+                    "複数行の".to_string(),
+                    vec!["J1".to_string()],
                 ),
             ]
         );
