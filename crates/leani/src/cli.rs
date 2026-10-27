@@ -100,9 +100,16 @@ fn has_repl(engine: &str) -> bool {
 
 /// 引数を読んで起動する。戻り値は終了コード。`Err` はメッセージを表示して終了コード 1。
 ///
+/// 入力の元は、`Repl` を起動したあとに `source` で作る。端末の Tab 補完が `Repl` を
+/// 使うためである。起動しなかったとき (`-h`、`-V`、`--setup`、起動の失敗) は作らない。
+///
 /// Ctrl-C で起動を中断したときは、Python 版の `KeyboardInterrupt` と同じく改行を出して
 /// 130 で終わる。
-pub fn main(ctx: &Ctx, argv: &[String], src: &mut dyn LineSource) -> Result<i32, String> {
+pub fn main(
+    ctx: &Ctx,
+    argv: &[String],
+    source: impl FnOnce(&Arc<Mutex<Repl>>) -> Box<dyn LineSource>,
+) -> Result<i32, String> {
     let args = parse_args(argv)?;
     if args.help {
         print!("{}{HELP}", usage(ctx));
@@ -145,8 +152,9 @@ pub fn main(ctx: &Ctx, argv: &[String], src: &mut dyn LineSource) -> Result<i32,
         }
         Err(e) => return Err(start_failure(&e)),
     };
-    let repl = Mutex::new(repl);
-    let code = run(&repl, src);
+    let repl = Arc::new(Mutex::new(repl));
+    let mut src = source(&repl);
+    let code = run(&repl, src.as_mut());
     lock(&repl).close();
     code
 }
@@ -250,7 +258,7 @@ fn lock(repl: &Mutex<Repl>) -> std::sync::MutexGuard<'_, Repl> {
 
 // ------------------------------------------------------------------ 行単位の入力
 
-/// stdin から 1 行ずつ読む。パイプと、端末だが行編集を使わないときの入力。
+/// stdin から 1 行ずつ読む。パイプと、端末だが行編集 (`term`) を使えないときの入力。
 ///
 /// UTF-8 として読めないバイトは置換文字にして Lean に渡し、構文エラーとして普通に
 /// 報告させる (Python 版の `errors="replace"`)。読めないバイトが 1 つあるだけで

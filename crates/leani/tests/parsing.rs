@@ -1331,7 +1331,9 @@ mod lake_env_の取得 {
             let path = fake_tools(dir.path(), &lake.into_iter().collect::<Vec<_>>());
             let state = path_str(&dir.path().join("state"));
             let mut ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
-            ctx.setup_timeout = Duration::from_millis(200);
+            // 200 ms にすると、テストを並列で実行したときに、失敗する偽の lake も
+            // 時間内に終わらないことがある。
+            ctx.setup_timeout = Duration::from_secs(1);
             let got = boot::lake_env(&ctx, Some(&proj), TC)
                 .expect_err("取得できてしまった")
                 .0;

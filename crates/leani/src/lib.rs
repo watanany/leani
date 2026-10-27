@@ -18,8 +18,10 @@
 //! | `show`     | 表示を出す (`Output` の端末の実装、メッセージの整形、pager)      |
 //! | `repl`     | 入力を 1 行ずつ受け取り、エンジンに送って結果を表示する。Tab 補完 |
 //! | `cli`      | 引数を読んで `Repl` を起動する。入力を読むループ。終了コード      |
+//! | `term`     | 端末の行編集。略記の変換、Tab 補完、ブロック単位の履歴          |
 //!
-//! `main.rs` が `leani` コマンドで、環境変数と stdin を `cli` に渡す。
+//! `main.rs` が `leani` コマンドで、環境変数と、入力の元 (`term` か stdin) を `cli` に
+//! 渡す。
 
 pub mod boot;
 pub mod cli;
@@ -28,3 +30,4 @@ pub mod history;
 pub mod repl;
 pub mod search;
 pub mod show;
+pub mod term;
