@@ -175,7 +175,7 @@ pub struct Repl {
 
     /// `:env` で元の環境にも戻れなくなった理由。環境が無いまま続けても、どの入力も
     /// エラーになるだけなので、`feed` はループを抜けるよう true を返す。端末はこの
-    /// 理由を表示して終了する (Python 版の `EnvLost`)。
+    /// 理由を表示して終了する。
     lost: Option<String>,
     /// `:env` の切り替えで boot に失敗して終了させたエンジン。プロセスを残して
     /// いないことをテストが確かめる。
@@ -234,8 +234,7 @@ impl Repl {
         }
     }
 
-    /// 新しいエンジンに入れ替えて、セッションの状態を起動した直後に戻す
-    /// (Python 版の `_start` の後半)。
+    /// 新しいエンジンに入れ替えて、セッションの状態を起動した直後に戻す。
     fn install(&mut self, eng: Engine, preload: Option<&str>) {
         self.eng = eng;
         self.forget();
@@ -317,8 +316,7 @@ impl Repl {
         &mut self.failed
     }
 
-    /// init ファイルのパスを差し替える。テストだけが使う (Python 版の `INIT` の
-    /// monkeypatch に当たる)。
+    /// init ファイルのパスを差し替える。テストだけが使う。
     #[cfg(feature = "testing")]
     #[doc(hidden)]
     pub fn set_init(&mut self, path: &str) {
@@ -678,8 +676,7 @@ impl Repl {
     /// 同じ入力でエンジンが毎回異常終了する場合がある。再起動しないと、終了した
     /// プロセスが残り、次の入力もすべて失敗する。
     ///
-    /// それ以外のエラー (`NoEnvironment`、`Io`、`Setup`) は Python 版では例外のまま
-    /// ループまで上がり、「内部エラー」として表示していた。ここでは同じ表示を出して
+    /// それ以外のエラー (`NoEnvironment`、`Io`、`Setup`) は「内部エラー」として表示し、
     /// None を返す。
     fn guard<T>(&mut self, f: impl Fn(&mut Engine) -> Result<T, EngineFault>) -> Option<T> {
         let retry = match f(&mut self.eng) {
@@ -767,8 +764,7 @@ impl Repl {
     /// セッションを終了するとそれまでの宣言をすべて失うので、それが一番大きな
     /// 損失になる。リクエストを書いてから応答を読むまでのあいだに panic すると、
     /// 読んでいない応答が残って次の応答とずれるので、エンジンを再起動して宣言を
-    /// replay する。Python 版はここで再起動しなかったが、Python 版の例外は
-    /// パイプから読む途中では起きにくかった。
+    /// replay する。
     pub fn feed_line(&mut self, line: &str) -> bool {
         match catch_unwind(AssertUnwindSafe(|| self.feed_lines(line))) {
             Ok(quit) => quit,
@@ -2032,7 +2028,7 @@ fn expand_home(path: &str, home: &str) -> String {
     }
 }
 
-/// 報告に使う宣言の先頭行の幅 (Python 版の `head_line` の既定値)。
+/// 報告に使う宣言の先頭行の幅。
 const HEAD_WIDTH: usize = 60;
 
 /// panic のメッセージ。`panic!` の引数は `&str` か `String` で届く。
@@ -2057,7 +2053,7 @@ fn list_of_strings(v: &Json) -> Vec<String> {
     })
 }
 
-/// `env {n}` の表示。環境が無ければ Python 版と同じく `None`。
+/// `env {n}` の表示。環境が無ければ `None`。
 fn env_text(env: Option<i64>) -> String {
     match env {
         Some(n) => n.to_string(),

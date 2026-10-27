@@ -48,7 +48,7 @@ pub fn candidates(
 /// する (`:l` と `:save` で読み書きするのはそれだけなので)。
 ///
 /// 候補は `word` を置き換える形ではなく、ファイル名の残りだけを返す
-/// (Python 版の prompt_toolkit の `PathCompleter` と同じ)。`start` は `word` の末尾に
+/// (prompt_toolkit の `PathCompleter` と同じ)。`start` は `word` の末尾に
 /// なるので、`candidates` では `word` の末尾を渡す。
 pub fn paths(ctx: &Ctx, word: &str, lean_only: bool) -> Vec<String> {
     let word = expand_user(ctx, word);

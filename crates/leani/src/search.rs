@@ -6,7 +6,7 @@
 //! REPL を終了させないため)。
 //!
 //! `Repl` は `Search` を通して問い合わせる。テストでは、決めた応答を返す偽物に
-//! 差し替える (Python 版の `mocker.patch.object(leani.repl, "loogle")`)。
+//! 差し替える。
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};

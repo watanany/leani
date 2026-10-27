@@ -1,9 +1,8 @@
 //! エントリーポイント (副作用)。
 //!
 //! 引数を読んで `Repl` を起動する。`process::exit` はここでは呼ばず、終了コードと
-//! エラーのメッセージを `Result` で bin (`main.rs`) に返す。Python 版の `die` は
-//! `Err(メッセージ)` に当たり、bin が `leani: メッセージ` を stderr に出して
-//! 終了コード 1 で終わる。
+//! エラーのメッセージを `Result` で bin (`main.rs`) に返す。`Err(メッセージ)` を
+//! 受け取った bin は、`leani: メッセージ` を stderr に出して終了コード 1 で終わる。
 //!
 //! 入力を読むループ (`run`) も `Repl` の外のここに置く。`Repl` は入力を持たず、
 //! 1 行ずつ `feed_line` で受け取るだけにする。入力の元は `LineSource` で差し替え、
@@ -103,8 +102,7 @@ fn has_repl(engine: &str) -> bool {
 /// 入力の元は、`Repl` を起動したあとに `source` で作る。端末の Tab 補完が `Repl` を
 /// 使うためである。起動しなかったとき (`-h`、`-V`、`--setup`、起動の失敗) は作らない。
 ///
-/// Ctrl-C で起動を中断したときは、Python 版の `KeyboardInterrupt` と同じく改行を出して
-/// 130 で終わる。
+/// Ctrl-C で起動を中断したときは、改行を出して 130 で終わる。
 pub fn main(
     ctx: &Ctx,
     argv: &[String],
@@ -206,7 +204,7 @@ pub enum Line {
 /// 入力を 1 行ずつ `Repl` に渡す。戻り値は終了コード。
 ///
 /// `:env` で元の環境にも戻れなくなったときは、環境が無いので続けず、理由を `Err` で
-/// 返す (Python 版の `EnvLost`)。`read_line` のあいだはロックを持たない。端末の
+/// 返す。`read_line` のあいだはロックを持たない。端末の
 /// Tab 補完が同じ `Mutex` をロックしてエンジンに問い合わせるためである。
 pub fn run(repl: &Mutex<Repl>, src: &mut dyn LineSource) -> Result<i32, String> {
     loop {
@@ -261,7 +259,7 @@ fn lock(repl: &Mutex<Repl>) -> std::sync::MutexGuard<'_, Repl> {
 /// stdin から 1 行ずつ読む。パイプと、端末だが行編集 (`term`) を使えないときの入力。
 ///
 /// UTF-8 として読めないバイトは置換文字にして Lean に渡し、構文エラーとして普通に
-/// 報告させる (Python 版の `errors="replace"`)。読めないバイトが 1 つあるだけで
+/// 報告させる。読めないバイトが 1 つあるだけで
 /// 後続の行まで失わないように。
 ///
 /// 読むあいだは 0.25 秒ごとに Ctrl-C のフラグを確かめ、立っていたら行の編集中の

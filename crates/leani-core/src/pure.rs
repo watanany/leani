@@ -3,8 +3,8 @@
 //! 色付け、応答の読み取り、エンジンのバージョン、完結判定、表示の組み立てを扱う。
 //! 入力だけで出力が決まるので、テストは入力と出力だけで書ける。
 //!
-//! repl の応答は `Json` のまま受け取る。キーが無いときや型が違うときは、Python 版の
-//! `.get(key, default)` と同じく既定値として読む (`text`、`int`、`list`)。
+//! repl の応答は `Json` のまま受け取る。キーが無いときや型が違うときは、既定値として
+//! 読む (`text`、`int`、`list`)。
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
@@ -107,7 +107,7 @@ pub fn name_start(text: &str) -> usize {
 /// 名前ではないので含めない。
 pub fn meta_names(help_text: &str) -> Vec<String> {
     static META: LazyLock<Regex> = LazyLock::new(|| Regex::new(r":(\w+)").expect("正規表現"));
-    // Python 版の `(?<![\w:])` の代わりに、`:` の直前の文字を確かめる
+    // regex は後読み (`(?<![\w:])`) を使えないので、`:` の直前の文字を確かめる
     let after_word = |at: usize| {
         help_text[..at]
             .chars()
@@ -331,7 +331,7 @@ pub fn complete_hits<S: AsRef<str>>(
 
 // ------------------------------------------------------------------ URL
 
-/// URL のクエリに入れる形にする (Python 版の `urllib.parse.quote`)。
+/// URL のクエリに入れる形にする (Python の `urllib.parse.quote` と同じ)。
 ///
 /// 英数字と `_.-~/` 以外を `%XX` にする。`?a + ?b` の `+` をそのまま入れると、
 /// loogle 側では空白として解釈される。

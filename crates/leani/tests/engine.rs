@@ -554,8 +554,7 @@ mod replay_が途中で止まったとき {
 }
 
 mod 内部エラーでもセッションが続く {
-    //! Python 版は想定外の例外を「内部エラー」として表示し、セッションを続けていた。
-    //! Rust 版では panic がそれに当たる。
+    //! 想定外の panic は「内部エラー」として表示し、セッションを続ける。
     use super::*;
 
     #[story("F1")]
@@ -579,14 +578,14 @@ mod 内部エラーでもセッションが続く {
     }
 }
 
-/// テストの一時ディレクトリにファイルを置いて、そのパスを返す (Python 版の `tmp_path`)。
+/// テストの一時ディレクトリにファイルを置いて、そのパスを返す。
 fn file(repl: &Driver, name: &str, text: &str) -> String {
     let path = repl.tmp().join(name);
     std::fs::write(&path, text).expect("write");
     path.display().to_string()
 }
 
-/// init ファイルを置いて実行する (Python 版の `INIT` の monkeypatch と `apply_init`)。
+/// init ファイルを置いて実行する。
 fn init_with(repl: &mut Driver, text: &str) -> String {
     let path = file(repl, "init.lean", text);
     repl.repl.set_init(&path);
@@ -594,7 +593,7 @@ fn init_with(repl: &mut Driver, text: &str) -> String {
     path
 }
 
-/// core 以外の環境の boot を失敗させる (Python 版の `only_core`)。import が成功するかは
+/// core 以外の環境の boot を失敗させる。import が成功するかは
 /// boot するまで分からないので、wide の起点の環境を作る要求でエンジンを止める。
 /// 差し込み口は `:env` が新しいエンジンに引き継ぐ。
 fn only_core(repl: &mut Driver) {
@@ -604,7 +603,7 @@ fn only_core(repl: &mut Driver) {
     });
 }
 
-/// どの環境の boot も失敗させる (Python 版の `boot` を `EngineDied` にする差し込み)。
+/// どの環境の boot も失敗させる。
 fn no_boot(repl: &mut Driver) {
     repl.hook(|stage| match stage {
         Stage::Before(obj) if fresh(obj) => Hooked::Kill,
@@ -886,7 +885,7 @@ mod 定理を外部サービスで探す {
         assert!(out.contains("timed out"), "{out}");
         assert!(
             repl.feed(&["1 + 1"]).contains('2'),
-            "loogle の失敗でセッションが壊れた"
+            "loogle の失敗のあと式を評価できない"
         );
     }
 }
@@ -965,8 +964,8 @@ mod 再起動のあとで読み込み直せないとき {
         init_with(&mut repl, "def fromInit := 99\n");
         let init_src = repl.repl.eng().init_src().expect("init_src").to_string();
 
-        // Python 版は init の送信で EngineDied を起こしていた。Rust 版の Kill は
-        // プロセスを止めるので、止めずに失敗させられる Interrupt を使う。
+        // init の送信を失敗させる。Kill はプロセスを止めるので、止めずに失敗させられる
+        // Interrupt を使う。
         repl.hook(move |stage| match stage {
             Stage::Before(obj) if cmd(obj) == init_src => Hooked::Interrupt,
             _ => Hooked::Pass,
@@ -1245,8 +1244,7 @@ mod 履歴から呼び出した入力 {
         repl.feed_with("feed_line", |r| {
             r.feed_line("#eval do\n  let x := 1\n  for i in [1, 2] do");
         });
-        // Python 版は submit が呼ばれなかったことを spy で確かめていた。送っていなければ
-        // 入力はバッファに残っている。
+        // 送っていなければ、入力はバッファに残っている。
         assert!(!repl.repl.buf().is_empty());
         let out = repl.feed(&["    IO.println (x + i)", ""]);
         assert!(out.contains("2\n3"), "{out}");
@@ -1265,7 +1263,7 @@ mod replay_で再実行できなかったもの {
         repl.feed(&[&format!(":l {path}")]);
         repl.feed(&["def usesA := libA + 1"]);
 
-        std::fs::write(&path, "def libA := (10 : Nat) +\n").expect("write"); // 直せない形に壊す
+        std::fs::write(&path, "def libA := (10 : Nat) +\n").expect("write"); // 直せない形に書き換える
         let out = repl.feed(&[":restart"]);
 
         assert!(out.contains("読み込み直せなかった"), "{out}");
@@ -1520,8 +1518,7 @@ mod 元になる環境を失ったとき {
 
     /// boot が失敗するエンジンにする。保留に宣言 1 件を残す。
     ///
-    /// Python 版は `Engine.boot` を差し替えて例外にしていた。Rust 版は boot の
-    /// リクエスト (env を付けない) にエラーの応答を返す。プロセスは動いたままなので、
+    /// boot のリクエスト (env を付けない) にエラーの応答を返す。プロセスは動いたままなので、
     /// 差し込み口を外せば次の `:restart` で戻る。
     fn no_env(repl: &mut Driver) {
         repl.feed(&["def held := 1"]);
@@ -1672,7 +1669,7 @@ mod 引数の受け取り {
     #[story("F2", "F4")]
     #[test]
     fn colon_undo_の引数が数でなくても異常終了しない() {
-        // 上付きの ²。Python の isdigit() は True を返すが、int() は変換できない。
+        // 上付きの ²。Unicode では数字の文字だが、数としては読めない。
         let mut repl = Driver::new();
         repl.feed(&["def a := 1"]);
         repl.feed(&["def b := 2"]);
@@ -1869,8 +1866,7 @@ mod 証明モード {
     #[story("E3")]
     #[test]
     fn sorry_の位置が分からなければ宣言は_sorry_のままだと知らせる() {
-        // Python 版は splice_sorry を None を返す関数に差し替えていた。ここでは
-        // 宣言の応答から sorry の位置を消して、同じ状態を作る。
+        // 宣言の応答から sorry の位置を消して、位置が分からない状態を作る。
         let mut repl = Driver::new();
         repl.hook(|stage| match stage {
             Stage::Read(obj, resp) if cmd(obj).starts_with("theorem lostPos") => {
@@ -2432,7 +2428,7 @@ mod 環境の切り替え {
         assert!(repl.feed(&[":env nosuch"]).contains("設定に無い"));
         assert!(
             repl.feed(&["1 + 1"]).contains('2'),
-            "環境が壊れてセッションが終了している"
+            "環境を失ってセッションが終了している"
         );
     }
 
@@ -2499,8 +2495,8 @@ mod 切り替えに失敗したとき {
         repl.feed(&["def typedHere := 42"]);
         let before = (repl.repl.eng().pid(), repl.repl.eng().generation());
 
-        // lakefile が壊れた Lake プロジェクトを project にすると、設定の確認は通り、
-        // 準備の lake env が失敗する (Python 版は prepare を EngineError にしていた)。
+        // lakefile を読めない Lake プロジェクトを project にすると、設定の確認は通り、
+        // 準備の lake env が失敗する。
         let noproj = repl.tmp().join("noproj");
         std::fs::create_dir(&noproj).expect("mkdir");
         std::fs::write(noproj.join("lakefile.lean"), "this is not a lakefile\n").expect("write");
@@ -2518,11 +2514,10 @@ mod 切り替えに失敗したとき {
 
     #[story("G4", "G5")]
     #[test]
-    fn colon_env_で元の環境にも戻れなければ終了を知らせる例外になる() {
-        // 環境が無いまま続けても、どの入力もエラーになるだけ。端末 (cli) はこの
-        // 理由を表示して終了し、カーネルは次のセルでエンジンを起動し直す。
-        // Rust 版は例外を投げず、feed が true (ループを抜ける) を返して理由を
-        // `env_lost` に残す。
+    fn colon_env_で元の環境にも戻れなければ入力のループを抜けて理由を残す() {
+        // 環境が無いまま続けても、どの入力もエラーになるだけ。feed は true (ループを
+        // 抜ける) を返して理由を `env_lost` に残し、端末 (cli) はこの理由を表示して
+        // 終了する。
         let mut repl = Driver::new();
         no_boot(&mut repl);
         repl.feed_with("env", |r| assert!(r.feed(":env wide"), "ループを抜けない"));
@@ -2531,8 +2526,7 @@ mod 切り替えに失敗したとき {
         assert!(why.contains("にも戻れなくなった"), "{why}");
     }
 
-    /// 決めた行を順に返し、尽きたら入力の終わりを返す入力
-    /// (Python 版の `read_line` の `side_effect`)。
+    /// 決めた行を順に返し、尽きたら入力の終わりを返す入力。
     struct Script(std::vec::IntoIter<&'static str>);
 
     impl LineSource for Script {
