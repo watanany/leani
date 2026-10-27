@@ -41,7 +41,7 @@ title = "証明する"
 
 [[group]]
 id = "F"
-title = "壊れずにセッションを続ける"
+title = "失敗してもセッションを続ける"
 
 [[group]]
 id = "G"

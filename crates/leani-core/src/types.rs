@@ -140,10 +140,8 @@ pub struct Candidate {
 
 /// エンジンとのやりとりが失敗した理由。
 ///
-/// Python 版では例外ごとに型が分かれていた (`EngineDied`、`Interrupted`、
-/// `NoEnvironment`、`OSError`)。Rust では 1 つの enum にして、呼び出し側が `match` で
-/// 分ける。raise する箇所と except する箇所が別のモジュールなので、どちらでもない
-/// ここに置く。
+/// 理由ごとに型を分けず 1 つの enum にして、呼び出し側が `match` で分ける。エラーを
+/// 作る箇所と分ける箇所が別のモジュールなので、どちらでもないここに置く。
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EngineFault {
     /// エンジンを用意できない。起動時なら起動を中止する。起動後なら REPL は続ける。
@@ -162,7 +160,7 @@ pub enum EngineFault {
     /// 宣言が消える)。エラーを出さずに進むよりは、ここで止める。
     #[error("{0}")]
     NoEnvironment(String),
-    /// ファイルやプロセスの操作が失敗した (Python 版の `OSError`)。
+    /// ファイルやプロセスの操作が失敗した。
     #[error("{0}")]
     Io(String),
 }

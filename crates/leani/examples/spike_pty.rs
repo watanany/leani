@@ -1,5 +1,5 @@
 //! `spike` を擬似端末で動かし、キー入力のあとの画面を表示する。
-//! 端末のテストの土台 (`portable-pty` + `vt100`) を確かめるための spike。
+//! 端末のテストに使う `portable-pty` と `vt100` を確かめるための spike。
 //!
 //!     cargo build -p leani --example spike && cargo run -p leani --example spike_pty
 #![allow(clippy::print_stdout, clippy::print_stderr)]

@@ -101,9 +101,9 @@ pub enum Hooked {
 
 /// テスト用の差し込み口。リクエストと応答を書き換えたり、途中で止めたりする。
 ///
-/// Python 版は `mocker` で `send_cmd` や `_exchange` を差し替えていた。Rust では
-/// `Engine` に関数を入れて、`exchange` が決まった時点で呼ぶ。`Repl` が作る
-/// すべての `Engine` に同じ関数を渡せるように `Clone` ではなく `Box` にする。
+/// テストは `Engine` に関数を入れ、`Engine` は `exchange` が決まった時点でその関数を
+/// 呼ぶ。`Repl` が作るすべての `Engine` に同じ関数を渡せるように `Clone` ではなく
+/// `Box` にする。
 pub type ExchangeHook = Box<dyn FnMut(Stage<'_>) -> Hooked + Send>;
 
 /// repl のサブプロセス 1 つ。異常終了したら `restart` で再起動する。
@@ -256,9 +256,8 @@ impl Engine {
 
     /// 差し込み口を外して返す。`:env` が新しい `Engine` に引き継ぐ。
     ///
-    /// Python 版はクラスのメソッドを差し替えるので、あとから作る `Engine` にも
-    /// 差し込みが効いた。Rust 版の差し込み口は `Engine` の値が持つので、`Repl` が
-    /// `Engine` を作り直すときに持ち越す。テストでなければ常に None。
+    /// 差し込み口は `Engine` の値が持つので、`Repl` が `Engine` を作り直すときに
+    /// 持ち越す。テストでなければ常に None。
     #[doc(hidden)]
     pub fn take_hook(&mut self) -> Option<ExchangeHook> {
         self.hook.take()
@@ -919,8 +918,8 @@ impl Drop for Engine {
 
 /// repl に渡す環境変数。エンジンの .olean の場所を LEAN_PATH の先頭に足す。
 ///
-/// Python 版は `os.environ` に lake env を重ねていた。`Command` は親の環境変数を
-/// 引き継ぐので、ここでは lake env と LEAN_PATH だけを返す。元の LEAN_PATH は
+/// `Command` は親の環境変数を引き継ぐので、ここでは lake env と LEAN_PATH だけを
+/// 返す。元の LEAN_PATH は
 /// lake env に無ければプロセスの環境変数から読む。
 fn proc_env(
     ctx: &Ctx,
@@ -950,7 +949,7 @@ fn reap(p: &mut Child, limit: Duration) -> Option<std::process::ExitStatus> {
     }
 }
 
-/// OS のエラーを、Python 版の `strerror` と同じく理由だけにする。
+/// OS のエラーを、エラー番号を付けずに理由だけにする。
 pub(crate) fn strerror(e: &io::Error) -> String {
     match e.raw_os_error() {
         Some(code) => nix::errno::Errno::from_raw(code).desc().to_string(),

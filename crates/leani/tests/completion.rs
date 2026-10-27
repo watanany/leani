@@ -43,8 +43,8 @@ fn count_chunk_queries(repl: &mut Driver) -> Arc<AtomicUsize> {
     count
 }
 
-/// PATH とカレントディレクトリを、決まったファイルだけがある場所にした `Ctx`
-/// (Python 版の `place` fixture)。ディレクトリは `Ctx` と同じ寿命で持つ。
+/// PATH とカレントディレクトリを、決まったファイルだけがある場所にした `Ctx`。
+/// ディレクトリは `Ctx` と同じ寿命で持つ。
 fn place() -> (Ctx, tempfile::TempDir) {
     let sb = sandbox();
     let dir = tempfile::tempdir().expect("tempdir");

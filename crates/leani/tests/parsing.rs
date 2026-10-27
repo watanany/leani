@@ -974,7 +974,7 @@ mod 設定ファイルの読み込み {
 
     #[story("G4")]
     #[test]
-    fn 設定ファイルが壊れていたら_ConfigError_にする() {
+    fn TOML_として読めない設定ファイルは_ConfigError_にする() {
         let dir = tmp();
         let path = dir.path().join("config.toml");
         fs::write(&path, "default = \n").expect("write");
@@ -1725,7 +1725,7 @@ mod 定理検索 {
         ])
     }
 
-    /// Python 版の既定値 (10 件、幅 100) で整形する。
+    /// 10 件、幅 100 で整形する。
     fn text(got: &Json) -> String {
         pure::loogle_text(got, 10, 100, Style::PLAIN)
     }
@@ -1786,7 +1786,7 @@ mod 定理検索 {
         );
     }
 
-    /// 1 回だけ応答するローカルの HTTP サーバ (Python 版の `urlopen` の差し替え)。
+    /// 1 回だけ応答するローカルの HTTP サーバ。
     /// URL と、受け取ったリクエストの 1 行目を返す受け口を返す。
     fn serve(status: &'static str, body: &'static str) -> (String, mpsc::Receiver<String>) {
         let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -1817,7 +1817,7 @@ mod 定理検索 {
 
     #[story("D4")]
     #[test]
-    fn 記号を含むクエリも壊さずに送る() {
+    fn 記号を含むクエリも_URL_エンコードして送る() {
         // `?a + ?b` の `+` をそのまま URL に含めると、loogle 側では空白として
         // 解釈される。
         let (url, got) = serve("200 OK", r#"{"count": 0, "hits": []}"#);
@@ -1915,7 +1915,7 @@ mod Lake_プロジェクトの判定 {
 
     #[story("G4", "G6")]
     #[test]
-    fn lakefile_toml_が壊れていたら空を返す() {
+    fn TOML_として読めない_lakefile_toml_からは空を返す() {
         let dir = tmp();
         assert!(libs(dir.path(), "lakefile.toml", "[[lean_lib]\n").is_empty());
     }
@@ -2010,9 +2010,8 @@ mod 起動オプション {
 }
 
 mod 起動 {
-    //! cli::main。`leani` コマンドを起動して、終了コードと表示を確かめる。Python 版は
-    //! Repl とエンジンの用意を差し替えていたが、Rust 版は偽の elan、lake、git を
-    //! PATH に置く。
+    //! cli::main。`leani` コマンドを起動して、終了コードと表示を確かめる。エンジンの
+    //! 用意は、偽の elan、lake、git を PATH に置いて差し替える。
     use super::*;
     use std::process::{Command, Stdio};
 

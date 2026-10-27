@@ -69,7 +69,7 @@ impl Output for Console {
     }
 }
 
-/// 端末の幅。端末でなければ 80 (Python 版の `shutil.get_terminal_size` と同じ)。
+/// 端末の幅。端末でなければ 80。
 pub fn columns() -> usize {
     terminal_size::terminal_size().map_or(80, |(w, _)| usize::from(w.0))
 }

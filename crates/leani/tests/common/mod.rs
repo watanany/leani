@@ -1,4 +1,4 @@
-//! エンジンを使うテストの共通部分 (Python 版の `conftest.py` に当たる)。
+//! エンジンを使うテストの共通部分。
 //!
 //! `spec` は `crates/leani/tests/*.rs` だけを読むので、このファイルのテストは
 //! SPEC に載らない。ここにはテストを書かない。
@@ -33,8 +33,8 @@ pub struct Sandbox {
 /// 環境変数は PATH と HOME などプロセスのものを使い、設定、履歴、init だけを
 /// 一時ディレクトリに向ける。環境は core (既定) と wide の 2 つ。
 ///
-/// Python 版は環境変数そのものを書き換えていたが、Rust 版の `Ctx` は値を持つだけ
-/// なので、テストごとに別の `Ctx` を作れる。
+/// `Ctx` は値を持つだけで、プロセスの環境変数は書き換えない。そのため、テストごとに
+/// 別の `Ctx` を作れる。
 pub fn sandbox() -> Sandbox {
     let dir = tempfile::tempdir().expect("tempdir");
     let config = dir.path().join("config.toml");
@@ -83,7 +83,7 @@ impl Output for Sink {
 
 // ------------------------------------------------------------------ 偽の loogle
 
-/// 決めた応答を返す loogle (Python 版の `mocker.patch.object(leani.repl, "loogle")`)。
+/// 決めた応答を返す loogle。
 /// 応答を決めていなければ、問い合わせが無かったことにして失敗を返す。
 #[derive(Clone, Default)]
 pub struct FakeSearch {
@@ -141,10 +141,8 @@ pub const INVARIANTS: &[Invariant] = &[
                 .is_none_or(|p| p.generation == r.eng().generation())
         },
     ),
-    // Python 版は「プロセスが実行中である」だけを確かめていた。Python 版の kill は
-    // 終了を待たないので、中断で止めた直後も poll はまだ None を返し、成り立って
-    // いるように見えていた。Rust 版の kill は終了を待つので、止まったままでよい
-    // 状態を書く。再起動に失敗して環境が無いときと、replay が中断されて保留が
+    // kill は終了を待つので、中断で止めた直後はプロセスが止まっている。止まったまま
+    // でよい状態を書く。再起動に失敗して環境が無いときと、replay が中断されて保留が
     // 残っているとき。どちらも次の入力で再起動する。
     (
         "エンジンのプロセスが実行中である (止まっているなら環境が無いか、保留がある)",
@@ -219,7 +217,7 @@ impl Driver {
         self.search.calls.load(SeqCst)
     }
 
-    /// テストが一時ファイルを置く場所 (Python 版の `tmp_path`)。
+    /// テストが一時ファイルを置く場所。
     pub fn tmp(&self) -> &Path {
         self.sb.dir.path()
     }
@@ -267,13 +265,13 @@ impl Driver {
         self.repl.eng().log().to_vec()
     }
 
-    /// エンジンとのやりとりに差し込み口を入れる (Python 版の `mocker.patch.object`)。
+    /// エンジンとのやりとりに差し込み口を入れる。
     /// 再起動しても同じ `Engine` なので、差し込み口は残る。
     pub fn hook(&mut self, f: impl FnMut(Stage<'_>) -> Hooked + Send + 'static) {
         self.repl.eng_mut().set_hook(Some(Box::new(f)));
     }
 
-    /// 差し込み口を外す (Python 版の `mocker.stopall`)。
+    /// 差し込み口を外す。
     pub fn unhook(&mut self) {
         self.repl.eng_mut().set_hook(None);
     }
@@ -315,8 +313,7 @@ pub fn is_tactic(obj: &Json) -> bool {
     obj.get("tactic").is_some()
 }
 
-/// when(リクエスト) が真になった最初のリクエストでエンジンを止める (Python 版の
-/// `query` や `send_tactic` を 1 回だけ `EngineDied` にする差し込み)。
+/// when(リクエスト) が真になった最初のリクエストでエンジンを止める。
 ///
 /// 差し込み口は再起動しても残るので、2 回目からは通す。
 pub fn die_once(d: &mut Driver, when: impl Fn(&Json) -> bool + Send + 'static) {
