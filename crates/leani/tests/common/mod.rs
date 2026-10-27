@@ -8,6 +8,8 @@
 
 #![allow(dead_code)]
 
+pub mod pty;
+
 use std::fs;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
