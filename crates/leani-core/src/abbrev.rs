@@ -162,7 +162,7 @@ fn fits(cols: &[&[(String, &str)]], width: usize) -> bool {
     used <= width
 }
 
-/// r 行目。列ごとにキーと記号の幅を揃える。
+/// r 行目。列ごとにキーと記号の幅をそろえる。
 fn table_row(cols: &[&[(String, &str)]], r: usize) -> String {
     let parts: Vec<String> = cols
         .iter()

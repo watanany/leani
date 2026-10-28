@@ -2033,7 +2033,7 @@ mod sorry_が複数あるとき {
 
     #[story("E1", "E3")]
     #[test]
-    fn 単独の行にある_sorry_のインデントを崩さない() {
+    fn 単独の行にある_sorry_のインデントを変えない() {
         // 前後の空白まで変えると "    sorry" が " trivial" になり、インデントが
         // 浅くなって by ブロックの外に出る (unexpected identifier)。
         let mut repl = Driver::new();
