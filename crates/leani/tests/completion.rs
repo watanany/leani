@@ -17,7 +17,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 
-use common::{Driver, cmd, sandbox};
+use common::{Driver, cmd, die_once, sandbox};
 use leani::engine::{Hooked, Stage};
 use leani::repl::META_NAMES;
 use leani_core::pure::meta_names;
@@ -316,6 +316,32 @@ mod 候補 {
     }
 }
 
+mod エンジンが異常終了したあとの_Tab_補完 {
+    use super::*;
+
+    #[story("D1", "F1")]
+    #[test]
+    fn 補完ではエンジンを再起動せず次の入力で再起動する() {
+        // Tab 補完は行編集の途中で呼ばれる。そこで再起動すると、再起動の表示が
+        // 入力の行に混ざり、証明モードなどの状態も失われる。
+        let mut repl = Driver::new();
+        repl.feed(&["def survivor := 9"]);
+        let generation = repl.repl.eng().generation();
+        die_once(&mut repl, |_| true);
+
+        let mut names = Vec::new();
+        let out = repl.ask(|r| names = r.complete_names("Nat.suc"));
+
+        assert!(!out.contains("再起動"), "{out}");
+        assert_eq!(repl.repl.eng().generation(), generation, "補完で再起動した");
+        assert!(names.is_empty(), "{names:?}");
+
+        let out = repl.feed(&["survivor"]);
+        assert!(out.contains("再起動する"), "{out}");
+        assert!(out.contains('9'), "{out}");
+    }
+}
+
 mod open_した名前空間 {
     use super::*;
 
@@ -353,6 +379,17 @@ mod open_した名前空間 {
         repl.feed(&["open Lean hiding Json"]);
         let names = repl.repl.complete_names("Js");
         assert!(!names.contains(&"Json".to_string()), "{names:?}");
+        assert!(names.contains(&"JsonNumber".to_string()), "{names:?}");
+    }
+
+    #[story("D5")]
+    #[test]
+    fn もう一度_open_して_hiding_を外した名前は補完される() {
+        // 2 回目の open Lean は JsonNumber だけを隠すので、Json はソースに書ける。
+        let mut repl = Driver::new();
+        repl.feed(&["open Lean hiding Json", "open Lean hiding JsonNumber"]);
+        let names = repl.repl.complete_names("Js");
+        assert!(names.contains(&"Json".to_string()), "{names:?}");
         assert!(names.contains(&"JsonNumber".to_string()), "{names:?}");
     }
 

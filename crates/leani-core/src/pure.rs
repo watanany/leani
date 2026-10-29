@@ -281,17 +281,22 @@ pub fn own_names<S: AsRef<str>>(log: &[S]) -> Vec<String> {
         .collect()
 }
 
+/// 名前空間 ns の中で prefix を完全な名前にしたもの。ns が空なら root。
+fn full_name(ns: &str, prefix: &str) -> String {
+    if ns.is_empty() {
+        prefix.to_string()
+    } else {
+        format!("{ns}.{prefix}")
+    }
+}
+
 /// root と open した名前空間それぞれで、prefix を完全な名前にしたもの。
 /// `open Lean` のあとの `Json.pa` は `Lean.Json.pa` としても探す。
 pub fn full_names(prefix: &str, opens: &[(String, Vec<String>)]) -> Vec<(String, String)> {
     std::iter::once(String::new())
         .chain(opens.iter().map(|(ns, _)| ns.clone()))
         .map(|ns| {
-            let full = if ns.is_empty() {
-                prefix.to_string()
-            } else {
-                format!("{ns}.{prefix}")
-            };
+            let full = full_name(&ns, prefix);
             (ns, full)
         })
         .collect()
@@ -301,23 +306,22 @@ pub fn full_names(prefix: &str, opens: &[(String, Vec<String>)]) -> Vec<(String,
 ///
 /// chunks は `name_chunk` ごとの定数名 (COMPLETE_QUERY の応答)。root と open した
 /// 名前空間からそれぞれ探して短くし、alias と REPL で実行した宣言の名前を足す。
+/// 同じ名前空間を `hiding` を変えて何度も open できるので、隠す名前は open ごとに
+/// 見る。
 pub fn complete_hits<S: AsRef<str>>(
     prefix: &str,
     scope: &Scope,
     chunks: &BTreeMap<String, Vec<String>>,
     own: &[S],
 ) -> Vec<String> {
-    let hidden = |ns: &str| -> &[String] {
-        scope
-            .opens
-            .iter()
-            .find(|(n, _)| n == ns)
-            .map_or(&[], |(_, h)| h.as_slice())
-    };
-    let opened = full_names(prefix, &scope.opens)
-        .into_iter()
-        .filter_map(|(ns, full)| chunks.get(name_chunk(&full)).map(|got| (ns, got)))
-        .flat_map(|(ns, got)| shorten(got, prefix, &ns, hidden(&ns)));
+    let root = (String::new(), Vec::new());
+    let opened = std::iter::once(&root)
+        .chain(scope.opens.iter())
+        .filter_map(|(ns, hidden)| {
+            let full = full_name(ns, prefix);
+            chunks.get(name_chunk(&full)).map(|got| (ns, hidden, got))
+        })
+        .flat_map(|(ns, hidden, got)| shorten(got, prefix, ns, hidden));
     let aliased = scope.aliases.iter().cloned();
     let mine = own.iter().map(|x| x.as_ref().to_string());
     opened

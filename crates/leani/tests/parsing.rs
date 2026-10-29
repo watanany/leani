@@ -1303,6 +1303,22 @@ mod lake_env_の取得 {
         assert_eq!(lake_count(dir.path()), 0);
     }
 
+    #[story("G3", "G6")]
+    #[test]
+    fn エンジンの_olean_の場所を_LEAN_PATH_の先頭に足す() {
+        // lake env に LEAN_PATH があればそれに、無ければ起動時の環境変数に足す。
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[("LEAN_PATH", "/inherited")]);
+        let proj = project(dir.path());
+        let lean_path = |project: Option<&str>| {
+            let cfg = EnvConfig::make(&ctx, "t", project, &[], None, None);
+            let env = leani::engine::proc_env(&ctx, &cfg, TC, "/eng").expect("proc_env");
+            env.get("LEAN_PATH").cloned().unwrap_or_default()
+        };
+        assert_eq!(lean_path(None), "/eng/.lake/build/lib/lean:/inherited");
+        assert_eq!(lean_path(Some(&proj)), "/eng/.lake/build/lib/lean:/a");
+    }
+
     #[story("G1", "G6")]
     #[test]
     fn キャッシュが新しければ_lake_env_を実行しない() {
