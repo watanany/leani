@@ -948,15 +948,20 @@ pub fn panic_line(resp: &Json) -> Option<String> {
 
 /// 括弧が閉じているか。提案を途中で切っていないかの確認に使う。
 pub fn balanced(src: &str) -> bool {
-    let mut stack = Vec::new();
-    for ch in src.chars() {
-        if let Some(&(_, close)) = PAIRS.iter().find(|(open, _)| *open == ch) {
-            stack.push(close);
-        } else if PAIRS.iter().any(|(_, close)| *close == ch) && stack.pop() != Some(ch) {
-            return false;
+    // 開く括弧は閉じる括弧を積み、閉じる括弧は積んだものと合わなければ None にする。
+    let left = src.chars().try_fold(Vec::new(), |mut stack, ch| {
+        let opens = PAIRS.iter().find(|(open, _)| *open == ch);
+        let closes = PAIRS.iter().any(|(_, close)| *close == ch);
+        match (opens, closes) {
+            (Some(&(_, close)), _) => {
+                stack.push(close);
+                Some(stack)
+            }
+            (None, true) => (stack.pop() == Some(ch)).then_some(stack),
+            (None, false) => Some(stack),
         }
-    }
-    stack.is_empty()
+    });
+    left.is_some_and(|stack| stack.is_empty())
 }
 
 /// "Try this:" の提案を返す。無ければ None。
@@ -1121,13 +1126,19 @@ pub fn nested_action(blob: &str) -> bool {
 
 // ------------------------------------------------------------------ パス
 
+/// 先頭の `~` だけをホームディレクトリにする (Python の `os.path.expanduser`)。
+/// `~user` は展開しない。相対パスはそのまま残す。
+pub fn expand_home(path: &str, home: &str) -> String {
+    match path.strip_prefix('~') {
+        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
+        _ => path.to_string(),
+    }
+}
+
 /// `~` を展開して絶対パスにする (Python の `os.path.abspath(os.path.expanduser(p))`)。
 /// ファイルは見ないので、シンボリックリンクは解決しない。空なら None。
 pub fn abspath(path: &str, home: &str, cwd: &str) -> Option<String> {
-    let expanded = match path.strip_prefix('~') {
-        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
-        _ => path.to_string(),
-    };
+    let expanded = expand_home(path, home);
     match expanded.as_str() {
         "" => None,
         p if p.starts_with('/') => Some(normpath(p)),

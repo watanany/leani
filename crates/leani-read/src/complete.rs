@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use leani_core::pure::{completion_target, pick};
+use leani_core::pure::{completion_target, expand_home, pick};
 use leani_core::types::{Candidate, Target};
 
 use crate::places::Ctx;
@@ -51,7 +51,7 @@ pub fn candidates(
 /// (prompt_toolkit の `PathCompleter` と同じ)。`start` は `word` の末尾に
 /// なるので、`candidates` では `word` の末尾を渡す。
 pub fn paths(ctx: &Ctx, word: &str, lean_only: bool) -> Vec<String> {
-    let word = expand_user(ctx, word);
+    let word = expand_home(word, &ctx.home);
     let (dir, prefix) = split_dir(&word);
     let keep = |full: &Path| !lean_only || full.is_dir() || word_ends_lean(full);
     entries(ctx, dir, prefix)
@@ -63,9 +63,6 @@ pub fn paths(ctx: &Ctx, word: &str, lean_only: bool) -> Vec<String> {
 
 /// `word` で始まる、PATH にある実行できるコマンドの候補。`word` が空なら出さない。
 pub fn commands(ctx: &Ctx, word: &str) -> Vec<String> {
-    if word.is_empty() {
-        return Vec::new();
-    }
     let executable = |full: &Path| {
         full.is_dir()
             || std::fs::metadata(full).is_ok_and(|m| {
@@ -73,23 +70,19 @@ pub fn commands(ctx: &Ctx, word: &str) -> Vec<String> {
                 m.permissions().mode() & 0o111 != 0
             })
     };
-    let mut found: Vec<String> = ctx
-        .path
-        .split(':')
+    let dirs = if word.is_empty() {
+        Vec::new()
+    } else {
+        ctx.path.split(':').collect()
+    };
+    let mut found: Vec<String> = dirs
+        .into_iter()
         .flat_map(|dir| entries_in(Path::new(dir), word))
         .filter(|(full, _)| executable(full))
         .map(|(_, rest)| rest)
         .collect();
     found.sort();
     found
-}
-
-/// 先頭の `~` をホームディレクトリにする。
-fn expand_user(ctx: &Ctx, word: &str) -> String {
-    match word.strip_prefix('~') {
-        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{}{rest}", ctx.home),
-        _ => word.to_string(),
-    }
 }
 
 /// `bin/leanf` を (`bin/`, `leanf`) に分ける。`/` が無ければディレクトリは空。

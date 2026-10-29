@@ -23,10 +23,10 @@ use std::time::Instant;
 use leani_core::abbrev::{abbrev_lookup, abbrev_table};
 use leani_core::pure::{
     Style, abspath, balanced, block_continues, classify, classify_tac, complete_hits, continues,
-    errors, full_names, has_error, head_line, indent, int, last_json, lean_str, lean_strs, list,
-    loogle_text, messages, meta_names, name_chunk, nested_action, not_evaluable_reason, own_names,
-    save_body, scope_of, sorries, splice_sorry, strip_imports, tactic_step, tactic_undo, text,
-    try_this,
+    errors, expand_home, full_names, has_error, head_line, indent, int, last_json, lean_str,
+    lean_strs, list, loogle_text, messages, meta_names, name_chunk, nested_action,
+    not_evaluable_reason, own_names, save_body, scope_of, sorries, splice_sorry, strip_imports,
+    tactic_step, tactic_undo, text, try_this,
 };
 use leani_core::queries::{COMPLETE_QUERY, DOC_QUERY, META_LINE, PARSE_PROBE, SCOPE_QUERY, fill};
 use leani_core::types::{Candidate, EngineFault, Json, Kind, Output, Proof, Scope, State};
@@ -819,12 +819,6 @@ impl Repl {
         self.ready = None;
         self.explicit = false;
         self.restore_undone();
-    }
-
-    /// ノートブックのセルの始まり。前のセルの宣言に、このセルのインデント行を
-    /// 続けないようにする。
-    pub fn start_block(&mut self) {
-        self.last = None;
     }
 
     /// ノートブックのセルの終わりで入力を確定する。端末で空行を入力したときと同じ。
@@ -2044,14 +2038,6 @@ fn history_for(ctx: &Ctx) -> Option<BlockHistory> {
         let _ = std::fs::create_dir_all(dir);
     }
     Some(BlockHistory::new(&ctx.hist))
-}
-
-/// `~` だけを展開する (Python の `os.path.expanduser`)。相対パスはそのまま残す。
-fn expand_home(path: &str, home: &str) -> String {
-    match path.strip_prefix('~') {
-        Some(rest) if rest.is_empty() || rest.starts_with('/') => format!("{home}{rest}"),
-        _ => path.to_string(),
-    }
 }
 
 /// 報告に使う宣言の先頭行の幅。

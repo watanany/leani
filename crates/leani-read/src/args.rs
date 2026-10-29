@@ -38,7 +38,7 @@ pub fn parse_args<S: AsRef<str>>(argv: &[S]) -> Result<Args, String> {
             "--setup" => args.setup = true,
             "-h" | "--help" => args.help = true,
             "-V" | "--version" => args.version = true,
-            _ if a.starts_with('-') && a != "-" => {
+            _ if a.starts_with('-') => {
                 return Err(format!("不明なオプション: {a}  (-h で使い方)"));
             }
             _ => args.preload = Some(a.to_string()),

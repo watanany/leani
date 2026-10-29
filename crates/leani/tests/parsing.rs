@@ -2019,9 +2019,8 @@ mod 起動オプション {
 
     #[story("B4")]
     #[test]
-    fn ファイル名と_ハイフンは読み込むファイルとして受け取る() {
+    fn ファイル名は読み込むファイルとして受け取る() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
-        assert_eq!(parse(&["-"]).preload.as_deref(), Some("-"));
     }
 }
 

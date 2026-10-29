@@ -117,7 +117,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 入れ子のコメントの終わりを正しく判定する (parsing / ファイルの import)
 - 取り除くのは本物の import 行だけ (parsing / ファイルの import)
-- ファイル名とハイフンは読み込むファイルとして受け取る (parsing / 起動オプション)
+- ファイル名は読み込むファイルとして受け取る (parsing / 起動オプション)
 - 指定したファイルを Repl に渡す (parsing / 起動)
 - ファイルを指定して起動すると宣言を使える (terminal / 端末でない入力)
 
