@@ -164,8 +164,11 @@ mod 履歴 {
         term.block(&["def merged : Nat -> Nat", "  | 0 => 1", "  | _ => 2"]);
         term.type_keys("\x10");
         term.settle(0.2);
-        assert!(term.screen_text().contains("| _ => 2"));
-        assert!(term.screen_text().contains("def merged"));
+        // 入力したときの行は画面に残っているので、カーソルのある行とその上を見る。
+        let screen = term.screen_text();
+        let tail: Vec<&str> = screen.lines().rev().take(3).collect();
+        assert!(tail[0].contains("| _ => 2"), "{screen}");
+        assert!(tail[2].contains("def merged"), "{screen}");
         // 行単位で送っていたら 1 行目だけがエラーになる。
         assert!(
             term.line_until("", PROMPT, 40)
@@ -185,10 +188,7 @@ mod 履歴 {
             "\n# 2026-01-01 00:00:00.000000\n+def old := 1\n",
         );
         term.line("1 + 1");
-        assert!(
-            term.saved_history().iter().any(|e| e == "def old := 1"),
-            "前回の履歴が消えた"
-        );
+        assert_eq!(term.saved_history(), ["def old := 1", "1 + 1"]);
     }
 
     #[story("F3")]
@@ -212,9 +212,10 @@ mod 環境の切り替え {
         let mut term = Terminal::start();
         term.type_keys(":env wide\r");
         term.wait_prompt(WIDE_PROMPT, 90);
+        // 入力の行にも 3.14 があるので、Float の表示の形で見る。
         assert!(
             term.line_until("(3.14 : Float)", WIDE_PROMPT, 60)
-                .contains("3.14")
+                .contains("3.140000")
         );
     }
 }

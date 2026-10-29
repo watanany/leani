@@ -744,7 +744,7 @@ mod コマンドの一覧 {
         assert!(repl.feed(&[":help"]).contains("1 回の入力が 1 タクティク"));
     }
 
-    #[story("H1", "F4")]
+    #[story("H1")]
     #[test]
     fn 無いコマンドを入力したら知らせてセッションを続ける() {
         let mut repl = Driver::new();
@@ -802,10 +802,8 @@ mod 型と_docstring {
     #[test]
     fn 無い名前はエラーを表示する() {
         let mut repl = Driver::new();
-        assert!(
-            repl.feed(&[":i Nat.nosuchThing"])
-                .contains("Nat.nosuchThing")
-        );
+        let out = repl.feed(&[":i Nat.nosuchThing"]);
+        assert!(out.contains("不明: Nat.nosuchThing"), "{out}");
     }
 }
 
@@ -1362,7 +1360,7 @@ mod 保留した宣言とエンジンの世代 {
         assert!(repl.feed(&["#eval held + 1"]).contains('2'));
     }
 
-    #[story("C2", "E1", "F1", "A4")]
+    #[story("C2", "E1", "F1")]
     #[test]
     fn 再起動のあとで書き直しをやめたら前の宣言の_sorry_を残さない() {
         let mut repl = Driver::new();
@@ -1399,7 +1397,7 @@ mod 環境に無い宣言の扱い {
     //! しておくが、そのまま書き出すとエラーになるファイルができる。
     use super::*;
 
-    #[story("F1", "F2")]
+    #[story("F1")]
     #[test]
     fn 再実行に失敗した宣言を保留する() {
         let mut repl = Driver::new();
@@ -1414,7 +1412,7 @@ mod 環境に無い宣言の扱い {
         assert_eq!(repl.repl.eng().unplayed(), ["def usesB := libB + 1"]);
     }
 
-    #[story("B3", "F2")]
+    #[story("B3", "F1")]
     #[test]
     fn colon_save_はコメントとして添える() {
         let mut repl = Driver::new();
@@ -1666,9 +1664,9 @@ mod 解決できない_import_のファイル {
 mod 引数の受け取り {
     use super::*;
 
-    #[story("F2", "F4")]
+    #[story("F2")]
     #[test]
-    fn colon_undo_の引数が数でなくても異常終了しない() {
+    fn colon_undo_の引数が数でなければ_1_件戻す() {
         // 上付きの ²。Unicode では数字の文字だが、数としては読めない。
         let mut repl = Driver::new();
         repl.feed(&["def a := 1"]);
@@ -1709,6 +1707,8 @@ mod 証明モード {
         assert!(out.contains("スクリプトには"), "{out}");
         let done = out.find("証明完了").expect(&out);
         assert!(!out[done..].contains("exact?"), "置き換えた宣言に残った");
+        let decl = repl.declarations().pop().expect("宣言が無い");
+        assert!(decl.contains("exact ") && !decl.contains("sorry"), "{decl}");
     }
 
     #[story("E1")]
@@ -2285,7 +2285,7 @@ mod 保留と環境の切り替え {
         lib
     }
 
-    #[story("G5", "F2")]
+    #[story("G5", "F1")]
     #[test]
     fn colon_env_の切り替えでも保留を引き継ぐ() {
         let mut repl = Driver::new();
@@ -2298,7 +2298,7 @@ mod 保留と環境の切り替え {
         );
     }
 
-    #[story("B4", "F2")]
+    #[story("B4", "F1")]
     #[test]
     fn colon_l_が保留を捨てるなら件数を表示する() {
         let mut repl = Driver::new();

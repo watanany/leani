@@ -4,8 +4,8 @@
 //! `:save`、履歴、`:help` `:time` `:restart` `:quit` `:!`、証明モード、`:env`、`:t` `:i`
 //! `:p` `:loogle` `:abbrev`、Tab 補完がある。
 //!
-//! 入力を読むループは `Repl` の外 (`cli::run`) に置く。`Repl` は `feed` で 1 行ずつ
-//! 受け取るだけなので、端末、パイプ、テストのどれからでも同じように呼べる。
+//! 入力を読むループは `Repl` の外 (`cli::run`) に置く。`Repl` は `feed_line` で 1 行
+//! ずつ受け取るだけなので、端末、パイプ、テストのどれからでも同じように呼べる。
 //!
 //! Tab 補完は `complete` で受け取る。何を補完するかの判定は `leani_core::pure` に、
 //! ファイルと PATH を読む候補は `leani_read::complete` にあり、ここではエンジンに
@@ -137,7 +137,7 @@ impl io::Write for ToOutput<'_> {
 ///
 /// セッションの状態 (入力バッファ、直前の入力、証明モード、保留した sorry) を持つのは
 /// `Engine` とこの struct だけ。`Engine` の状態は `Engine` のメソッドだけが書き換え、
-/// `Repl` は読むためのメソッドだけを使う。
+/// `Repl` は `Engine` のフィールドに直接触らない。
 pub struct Repl {
     ctx: Ctx,
     out: Box<dyn Output>,

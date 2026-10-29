@@ -1,7 +1,7 @@
 [project]
 name = "leani"
 version = "0.1.0"
-description = "Lean 4 の対話 REPL"
+description = "Lean 4 の対話 REPL leani の Jupyter カーネル"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

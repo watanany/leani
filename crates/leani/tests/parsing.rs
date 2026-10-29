@@ -453,13 +453,13 @@ mod レスポンスの切り出し {
     //! 空行で区切られた JSON を、受信し終えた分だけ取り出す。
     use super::*;
 
-    #[story("F1")]
+    #[story("A1")]
     #[test]
     fn 受信し終えるまでは何も返さない() {
         assert_eq!(pure::first_response("{\"env\": 1}"), None);
     }
 
-    #[story("F1")]
+    #[story("A1")]
     #[test]
     fn 空行を受け取ったら読み込む() {
         assert_eq!(
@@ -468,7 +468,7 @@ mod レスポンスの切り出し {
         );
     }
 
-    #[story("F1")]
+    #[story("A1")]
     #[test]
     fn JSON_の中の空行では区切らない() {
         let buf = "{\"messages\": [{\"data\": \"a\\n\\nb\"}]}\n\n";

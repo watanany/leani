@@ -57,12 +57,13 @@ REPL の中では `:env <名前>` で環境を切り替えられる。
 
 ## ファイルの場所
 
-| ファイル | 場所                                       |
-|----------|--------------------------------------------|
-| 設定     | `~/.config/leani/config.toml`              |
-| init     | `~/.config/leani/init.lean`                |
-| 履歴     | `~/.local/state/leani/history`             |
-| エンジン | `~/.local/state/leani/engine/<バージョン>` |
+| ファイル               | 場所                                       |
+|------------------------|--------------------------------------------|
+| 設定                   | `~/.config/leani/config.toml`              |
+| init                   | `~/.config/leani/init.lean`                |
+| 履歴                   | `~/.local/state/leani/history`             |
+| エンジン               | `~/.local/state/leani/engine/<バージョン>` |
+| `lake env` のキャッシュ | `~/.local/state/leani/lake-env/`           |
 
 `XDG_CONFIG_HOME` と `XDG_STATE_HOME` を設定していれば、leani は `~/.config` と `~/.local/state` の代わりにそのディレクトリを使う。
 実際の場所は `leani -V` で確認できる。
