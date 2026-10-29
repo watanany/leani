@@ -51,6 +51,9 @@ pub struct Ctx {
     pub cwd: String,
     /// コマンドを探すときと、子プロセスに渡すときに使う PATH。
     pub path: String,
+    /// 起動時の LEAN_PATH。Lake プロジェクトが無いときは、エンジンの .olean の場所を
+    /// この先頭に足して repl に渡す。
+    pub lean_path: Option<String>,
     pub config: String,
     pub hist: String,
     pub init: String,
@@ -90,6 +93,7 @@ impl Ctx {
         Ctx {
             cwd: cwd.to_string(),
             path: var("PATH").unwrap_or_else(|| "/bin:/usr/bin".to_string()),
+            lean_path: var("LEAN_PATH"),
             config: var("LEANI_CONFIG")
                 .unwrap_or_else(|| format!("{config_home}/leani/config.toml")),
             hist: var("LEANI_HISTORY").unwrap_or_else(|| format!("{state}/history")),

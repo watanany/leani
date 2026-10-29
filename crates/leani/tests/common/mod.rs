@@ -143,7 +143,8 @@ pub const INVARIANTS: &[Invariant] = &[
     ),
     // kill は終了を待つので、中断で止めた直後はプロセスが止まっている。止まったまま
     // でよい状態を書く。再起動に失敗して環境が無いときと、replay が中断されて保留が
-    // 残っているとき。どちらも次の入力で再起動する。
+    // 残っているとき。どちらも次の入力で再起動する。補完の問い合わせは再起動しない
+    // ので、補完のあとは確かめない (`ask` を使う)。
     (
         "エンジンのプロセスが実行中である (止まっているなら環境が無いか、保留がある)",
         |r| r.eng_mut().alive() || r.eng().env().is_none() || !r.eng().unplayed().is_empty(),
@@ -251,6 +252,14 @@ impl Driver {
         self.take();
         f(&mut self.repl);
         self.check(&format!("{name} のあと"));
+        self.take()
+    }
+
+    /// 入力ではない問い合わせ (補完など) を呼んで、出力を返す。不変条件は確かめない。
+    /// 問い合わせは状態を変えず、エンジンの異常終了にも手当てをしないため。
+    pub fn ask(&mut self, f: impl FnOnce(&mut Repl)) -> String {
+        self.take();
+        f(&mut self.repl);
         self.take()
     }
 

@@ -416,7 +416,7 @@ impl Repl {
                 COMPLETE_QUERY,
                 &[&lean_strs(&missing), &COMPLETE_CAP.to_string()],
             );
-            let out = self.guard(|eng| eng.query(&query)).flatten();
+            let out = self.quiet(|eng| eng.query(&query)).flatten();
             let got = last_json(out.as_deref());
             if let Some(arrays) = got.as_ref().and_then(Json::as_array)
                 && arrays.len() == missing.len()
@@ -447,12 +447,21 @@ impl Repl {
         match &self.scope {
             Some((at, scope)) if *at == key => scope.clone(),
             _ => {
-                let out = self.guard(|eng| eng.query(SCOPE_QUERY)).flatten();
+                let out = self.quiet(|eng| eng.query(SCOPE_QUERY)).flatten();
                 let scope = scope_of(last_json(out.as_deref()).as_ref());
                 self.scope = Some((key, scope.clone()));
                 scope
             }
         }
+    }
+
+    /// 補完の問い合わせ。`guard` と違って、エンジンが異常終了していても再起動しない。
+    ///
+    /// 補完は行編集の途中 (端末が raw モードのとき) に呼ばれる。そこで再起動すると、
+    /// 再起動の表示と replay の結果が入力の行に混ざり、証明モードや直前の入力の状態も
+    /// 失われる。候補を返さずに、再起動は次の入力の `guard` に任せる。
+    fn quiet<T>(&mut self, f: impl FnOnce(&mut Engine) -> Result<T, EngineFault>) -> Option<T> {
+        f(&mut self.eng).ok()
     }
 
     /// REPL で実行した宣言の名前。ログが増えたときだけ集め直す。
@@ -1755,16 +1764,21 @@ impl Repl {
                 let name = back.name.clone();
                 match boot_engine(&self.ctx, back, &mut hook, self.out.as_mut(), self.style) {
                     Ok(eng) => eng,
+                    Err((EngineFault::Interrupted, dead)) => {
+                        // 戻るのを Ctrl-C で中断した。環境は無いが理由も無いので、
+                        // :restart の中断と同じく、宣言を保留にしてセッションを続ける。
+                        self.out.write(&self.style.yellow(&format!(
+                            "^C {name} に戻るのを中断した。:restart でやり直せる"
+                        )));
+                        self.lose_engine(dead, hook);
+                        self.eng.carry(log);
+                        return;
+                    }
                     Err((e, dead)) => {
                         // 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
                         // 終了し、カーネルは次のセルでエンジンを起動し直す。
-                        // 終了させた古いエンジンは宣言の記録を持ったままなので、環境の
-                        // 無いエンジンに入れ替えて、状態のつじつまを合わせる。
                         self.lost = Some(format!("{name} にも戻れなくなった: {e}"));
-                        if let Some(dead) = dead {
-                            self.eng = *dead;
-                        }
-                        self.forget();
+                        self.lose_engine(dead, hook);
                         return;
                     }
                 }
@@ -1776,6 +1790,18 @@ impl Repl {
         // エンジンには無い。どちらの場合も、ここで 1 回だけ再実行する。
         self.replay_into(&log);
         self.show_time = keep;
+    }
+
+    /// `:env` で元の環境にも戻れなかったあとの後始末。
+    ///
+    /// 終了させた古いエンジンは宣言の記録を持ったままなので、環境の無いエンジンに
+    /// 入れ替えて、状態のつじつまを合わせる。差し込み口も入れ替えたエンジンに戻す。
+    fn lose_engine(&mut self, dead: Option<Box<Engine>>, hook: Option<ExchangeHook>) {
+        if let Some(dead) = dead {
+            self.eng = *dead;
+        }
+        self.eng.set_hook(hook);
+        self.forget();
     }
 
     /// boot に失敗して終了させたエンジンを、テストが確かめられるように残す。

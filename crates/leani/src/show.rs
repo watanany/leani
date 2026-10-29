@@ -18,6 +18,9 @@ pub struct Console {
     tty: bool,
     /// `:abbrev` の一覧を表示する pager のコマンド。`sh -c` で実行する。
     pager: String,
+    /// `sh` に渡す PATH とカレントディレクトリ。プロセスの状態は `Ctx` だけから読む。
+    path: String,
+    cwd: String,
 }
 
 impl Console {
@@ -25,7 +28,18 @@ impl Console {
         Console {
             tty: ctx.tty,
             pager: ctx.pager.clone(),
+            path: ctx.path.clone(),
+            cwd: ctx.cwd.clone(),
         }
+    }
+
+    /// `sh -c` で実行するコマンド。
+    fn sh(&self, cmd: &str) -> Command {
+        let mut sh = Command::new("sh");
+        sh.args(["-c", cmd])
+            .env("PATH", &self.path)
+            .current_dir(&self.cwd);
+        sh
     }
 }
 
@@ -43,7 +57,7 @@ impl Output for Console {
     fn shell(&mut self, cmd: &str) {
         // 出力を受け取らず、端末につないだまま実行する。vim のような対話するコマンドも
         // 使えるように。
-        let _ = Command::new("sh").args(["-c", cmd]).status();
+        let _ = self.sh(cmd).status();
     }
 
     /// 画面に収まらないときだけ pager を使う。`leani | tee log` のように端末で
@@ -54,10 +68,7 @@ impl Output for Console {
             self.write(text);
             return;
         }
-        let spawned = Command::new("sh")
-            .args(["-c", &self.pager])
-            .stdin(Stdio::piped())
-            .spawn();
+        let spawned = self.sh(&self.pager).stdin(Stdio::piped()).spawn();
         let Ok(mut child) = spawned else {
             self.write(text);
             return;

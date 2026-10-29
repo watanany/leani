@@ -2564,6 +2564,37 @@ mod 切り替えに失敗したとき {
         repl.into_inner().expect("repl").close();
     }
 
+    #[story("A4", "G5")]
+    #[test]
+    fn 元の環境に戻るのを中断しても宣言を失わず_colon_restart_でやり直せる() {
+        // 切り替え先の boot は失敗させ、元の環境に戻る boot は Ctrl-C で中断する。
+        // 戻れなかったときと違って、環境を失った理由は無いのでセッションを続ける。
+        let mut repl = Driver::new();
+        repl.feed(&["def typedHere := 42"]);
+        let mut boots = 0;
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) => {
+                boots += 1;
+                match boots {
+                    1 => Hooked::Kill,
+                    _ => Hooked::Interrupt,
+                }
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed_with("env", |r| {
+            assert!(!r.feed(":env wide"), "ループを抜けた");
+        });
+
+        assert!(out.contains("中断した"), "{out}");
+        assert!(repl.repl.env_lost().is_none());
+        assert_eq!(repl.repl.eng().unplayed(), ["def typedHere := 42"]);
+
+        repl.unhook();
+        assert!(repl.feed(&[":restart"]).contains("1 件を再実行"));
+        assert!(repl.feed(&["typedHere"]).contains("42"));
+    }
+
     #[story("F1", "G5")]
     #[test]
     fn 切り替えたあとの再実行が中断されても宣言を保留に残す() {

@@ -593,6 +593,15 @@ impl Engine {
         Ok(left)
     }
 
+    /// 環境の無いエンジンに、別のエンジンから引き継いだ宣言を保留として持たせる。
+    ///
+    /// `:env` で元の環境に戻るのを中断したときに使う。環境は無いので log には
+    /// 入れられないが、保留にしておけば `:restart` が再実行し、`:save` もコメントとして
+    /// 書き出す。
+    pub fn carry(&mut self, decls: Vec<String>) {
+        self.unplayed = decls;
+    }
+
     /// `:save` が書き出すヘッダ。設定の import に、`:l` したファイルの import を追加する。
     ///
     /// 追加しないと、`:l` したファイルが import していたモジュールがヘッダに
@@ -919,16 +928,16 @@ impl Drop for Engine {
 /// repl に渡す環境変数。エンジンの .olean の場所を LEAN_PATH の先頭に足す。
 ///
 /// `Command` は親の環境変数を引き継ぐので、ここでは lake env と LEAN_PATH だけを
-/// 返す。元の LEAN_PATH は
-/// lake env に無ければプロセスの環境変数から読む。
-fn proc_env(
+/// 返す。元の LEAN_PATH は lake env のものを使い、lake env に無ければ起動時の
+/// 環境変数 (`ctx.lean_path`) を使う。
+pub fn proc_env(
     ctx: &Ctx,
     cfg: &EnvConfig,
     tc: &str,
     dir: &str,
 ) -> Result<BTreeMap<String, String>, EngineFault> {
     let mut env = lake_env(ctx, cfg.project.as_deref(), tc)?;
-    let inherited = std::env::var("LEAN_PATH").unwrap_or_default();
+    let inherited = ctx.lean_path.clone().unwrap_or_default();
     let lean_path = env.get("LEAN_PATH").cloned().unwrap_or(inherited);
     env.insert(
         "LEAN_PATH".to_string(),
