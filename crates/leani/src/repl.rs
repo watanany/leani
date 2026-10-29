@@ -1860,9 +1860,10 @@ impl Repl {
             return;
         }
 
-        if Path::new(&path).exists() && !self.saved.contains(&path) {
+        if std::fs::symlink_metadata(&path).is_ok() && !self.saved.contains(&path) {
             // パスの入力を間違えて、プロジェクトのソースを上書きしない。同じパスへの
-            // 2 回目以降の :save は上書きする。
+            // 2 回目以降の :save は上書きする。`exists` はリンク先を見るので、リンク先の
+            // 無いシンボリックリンクを「無い」と判定してしまう。
             self.out
                 .fail(&self.style.red(&format!("すでにある: {path}")));
             self.out

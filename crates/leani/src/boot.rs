@@ -7,6 +7,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::LazyLock;
@@ -20,6 +21,8 @@ use leani_core::pure::{
 use leani_core::types::EngineError;
 use leani_read::config::{EnvConfig, read_text, read_toolchain, which};
 use leani_read::places::{Ctx, ENGINE_REPO};
+use nix::sys::signal::{Signal, killpg};
+use nix::unistd::{Pid, getpgid};
 use regex::Regex;
 
 static LEAN_VERSION: LazyLock<Regex> =
@@ -38,7 +41,7 @@ fn say(out: &mut dyn Write, ctx: &Ctx, text: &str) {
 enum Stopped {
     /// `timeout` のあいだに終わらなかった。
     Timeout,
-    /// Ctrl-C。同じプロセスグループなので、子プロセスにも届いている。
+    /// Ctrl-C。子プロセスは別のセッションにしてあるので、`wait` が止める。
     Interrupted,
     /// 実行できなかった (PATH に無い、など)。
     Spawn(std::io::Error),
@@ -56,8 +59,8 @@ struct Finished {
 /// `Command` はプロセスの PATH で実行ファイルを探すので、`ctx` の PATH で探すのは
 /// ここで行う (テストでは偽の git や lake を置いた PATH を渡す)。`capture` なら出力を
 /// ためて返し、そうでなければ画面にそのまま出す。`timeout` のあいだに終わらないか、
-/// 待っているあいだに Ctrl-C が押されたら、子プロセスを kill して `Stopped` を返す。
-/// git が認証を求めて止まらないように `GIT_TERMINAL_PROMPT=0` を渡す。
+/// 待っているあいだに Ctrl-C が押されたら、子プロセスをグループごと止めて `Stopped` を
+/// 返す。git が認証を求めて止まらないように `GIT_TERMINAL_PROMPT=0` を渡す。
 fn run(
     ctx: &Ctx,
     tool: &str,
@@ -81,6 +84,17 @@ fn run(
     }
     if capture {
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+    }
+    // エンジンと同じく別のセッションにする。lake が起動する孫プロセス (lean など) も
+    // 同じプロセスグループに入るので、wait がグループごと止められる。
+    // SAFETY: setsid は fork のあと exec の前に呼んでよい async-signal-safe な
+    // システムコールで、メモリを確保しない。
+    unsafe {
+        cmd.pre_exec(|| {
+            nix::unistd::setsid()
+                .map(|_| ())
+                .map_err(std::io::Error::from)
+        });
     }
     let mut child = cmd.spawn().map_err(Stopped::Spawn)?;
     let stdout = child.stdout.take().map(drain);
@@ -121,9 +135,21 @@ fn wait(ctx: &Ctx, child: &mut Child, timeout: Option<Duration>) -> Result<ExitS
             thread::sleep(Duration::from_millis(20));
             continue;
         };
-        let _ = child.kill();
+        kill_group(child);
         let _ = child.wait();
         return Err(stopped);
+    }
+}
+
+/// 子プロセスをプロセスグループごと SIGKILL で止める。
+///
+/// 子だけを止めると、lake が起動した孫プロセスが残る。孫は出力のパイプを持った
+/// ままなので、ためている読み取りが孫の終了まで待ち続ける。
+fn kill_group(child: &mut Child) {
+    let pid = Pid::from_raw(child.id().cast_signed());
+    let group = getpgid(Some(pid)).and_then(|g| killpg(g, Signal::SIGKILL));
+    if group.is_err() {
+        let _ = child.kill();
     }
 }
 

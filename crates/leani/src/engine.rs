@@ -682,31 +682,23 @@ impl Engine {
         log.extend(self.unplayed.iter().cloned());
         let loaded = self.loaded.clone();
         if let Err(e) = self.boot() {
-            // boot が失敗した。プロセスは再起動したので前の env id は無効になって
-            // いて、宣言はどの環境にも含まれていない。log に残すと stack の長さと
-            // 一致しなくなり、:save が環境に無い宣言を本体に書き出す。保留にすれば
-            // コメントとして書き出され、ユーザーは直してから :restart で再実行できる。
-            // base も捨てる。:reset が無効な id を設定し直すと、submit は env が
-            // None かどうかしか見ないので検出できず、何を入力してもエラーになる。
-            self.env = None;
-            self.base = None;
-            self.stack.clear();
-            self.log.clear();
-            self.unplayed = log;
+            self.abandon(log);
             return Err(e);
         }
         self.log.clear();
         self.unplayed.clear();
 
         // init と :l したファイルの内容は base の環境に含まれていたので、再適用する。
-        // ファイルを読み込み直せた場合は、load_file の中で init も再適用される。
-        let mut notes = Vec::new();
-        let lost = self.reload(loaded.as_deref());
-        let reload_failed = lost.is_some();
-        notes.extend(lost);
-        if reload_failed || loaded.is_none() {
-            notes.extend(self.reapply_init());
-        }
+        // その途中で異常終了したか中断されたときも、boot の失敗と同じに扱う。
+        // 読み込み直せなかった理由として報告すると、止まったエンジンに宣言を送る
+        // ことになる。
+        let mut notes = match self.reapply(loaded.as_deref()) {
+            Ok(notes) => notes,
+            Err(e) => {
+                self.abandon(log);
+                return Err(e);
+            }
+        };
 
         let mut out = self.replay(&log);
         notes.append(&mut out.notes);
@@ -714,24 +706,57 @@ impl Engine {
         Ok(out)
     }
 
+    /// 再起動が途中で失敗したときに、宣言を保留にする。
+    ///
+    /// プロセスは再起動したので前の env id は無効になっていて、宣言はどの環境にも
+    /// 含まれていない。log に残すと stack の長さと一致しなくなり、:save が環境に
+    /// 無い宣言を本体に書き出す。保留にすればコメントとして書き出され、ユーザーは
+    /// 直してから :restart で再実行できる。base も捨てる。:reset が無効な id を
+    /// 設定し直すと、submit は env が None かどうかしか見ないので検出できず、何を
+    /// 入力してもエラーになる。
+    fn abandon(&mut self, log: Vec<String>) {
+        self.env = None;
+        self.base = None;
+        self.stack.clear();
+        self.log.clear();
+        self.unplayed = log;
+    }
+
+    /// init と `:l` したファイルの内容を、再起動した環境にもう一度入れる。
+    /// 読み込み直せなかった理由と、init を再実行できなかった理由を返す。
+    /// ファイルを読み込み直せた場合は、`load_file` の中で init も再適用される。
+    fn reapply(&mut self, loaded: Option<&str>) -> Result<Vec<String>, EngineFault> {
+        let lost = self.reload(loaded)?;
+        let reload_failed = lost.is_some();
+        let mut notes: Vec<String> = lost.into_iter().collect();
+        if reload_failed || loaded.is_none() {
+            notes.extend(self.reapply_init()?);
+        }
+        Ok(notes)
+    }
+
     /// `:l` したファイルを読み込み直す。読み込み直せなかったときは理由を返す
-    /// (`None` なら成功)。
+    /// (`None` なら成功)。エンジンが異常終了したときや中断されたときは、ファイルを
+    /// 覚えたまま `Err` を返す。次の `:restart` でまた読み込み直す。
     ///
     /// 読み込み直せなかったのに loaded_src を残すと、`sources` が env に無い宣言を
     /// 返し続ける。そのまま `:save` すると、書き出したファイルを `:l` したときに
-    /// 「すでに宣言されている」というエラーになる。
-    fn reload(&mut self, loaded: Option<&str>) -> Option<String> {
-        let path = loaded.filter(|p| !p.is_empty())?;
+    /// 「すでに宣言されている」というエラーになる。loaded_imports も同じで、残すと
+    /// `:save` のヘッダに、もう環境に無いファイルの import を書く。
+    fn reload(&mut self, loaded: Option<&str>) -> Result<Option<String>, EngineFault> {
+        let Some(path) = loaded.filter(|p| !p.is_empty()) else {
+            return Ok(None);
+        };
         let why = match self.load_file(path, None) {
-            Ok(out) if !out.bad => return out.note,
+            Ok(out) if !out.bad => return Ok(out.note),
             Ok(_) => "読み込み直したらエラーになった".to_string(),
             Err(EngineFault::Io(why)) => why,
-            Err(_) => "読み込み直している途中で、エンジンが異常終了したか、Ctrl-C で中断された"
-                .to_string(),
+            Err(e) => return Err(e),
         };
         self.loaded = None;
         self.loaded_src = None;
-        Some(format!("{path} を読み込み直せなかった: {why}"))
+        self.loaded_imports.clear();
+        Ok(Some(format!("{path} を読み込み直せなかった: {why}")))
     }
 
     /// init のソースを今の環境で実行する。エラーが無ければ、その環境を base にし、
@@ -752,23 +777,22 @@ impl Engine {
 
     /// init を今の base の上でもう一度実行する。エラーになったら init_src を捨てて
     /// 理由を返す。エンジンが異常終了したときや中断されたときは、init_src を残した
-    /// まま理由を返す。
+    /// まま `Err` を返す。
     ///
     /// init_src を捨てずに残すと、`reload` と同じく `sources` が env に無い宣言を
     /// 返すようになる。
-    fn reapply_init(&mut self) -> Option<String> {
-        let src = self.init_src.clone()?;
-        match self.run_init(&src) {
-            Err(_) => Some(
-                "init ファイルの再実行中に、エンジンが異常終了したか、Ctrl-C で中断された"
-                    .to_string(),
-            ),
-            Ok(resp) if has_error(&resp) => {
-                self.init_src = None;
-                Some("init ファイルを再実行したらエラーになった".to_string())
-            }
-            Ok(_) => None,
+    fn reapply_init(&mut self) -> Result<Option<String>, EngineFault> {
+        let Some(src) = self.init_src.clone() else {
+            return Ok(None);
+        };
+        let resp = self.run_init(&src)?;
+        if has_error(&resp) {
+            self.init_src = None;
+            return Ok(Some(
+                "init ファイルを再実行したらエラーになった".to_string(),
+            ));
         }
+        Ok(None)
     }
 
     /// その環境で import が有効になっているかを確認する。有効でなければ理由を返す。
@@ -904,7 +928,7 @@ impl Engine {
             self.loaded_imports = import_lines(&raw);
             // fresh で環境を作り直したので、init の内容は環境から消えている。
             // 再適用しないと、sources() が env に無い宣言を返し続ける。
-            self.reapply_init()
+            self.reapply_init()?
         };
         Ok(Loaded {
             resp,

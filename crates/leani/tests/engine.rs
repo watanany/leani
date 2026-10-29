@@ -463,6 +463,28 @@ mod エンジンが異常終了してもセッションが続く {
         assert!(repl.feed(&[":restart"]).contains("1 件を再実行"));
         assert!(repl.feed(&["before"]).contains('5'));
     }
+
+    #[story("A4", "F1")]
+    #[test]
+    fn ファイルの読み込み直しを中断しても_colon_restart_でやり直せる() {
+        let mut repl = Driver::new();
+        let path = file(&repl, "lib.lean", "def libA := 10\n");
+        repl.feed(&[&format!(":l {path}")]);
+        repl.feed(&["def usesA := libA + 1"]);
+
+        interrupt_after_write(&mut repl, |o| cmd(o).contains("def libA"));
+        let out = repl.feed(&[":restart"]);
+        assert!(out.contains("再起動を中断した"), "{out}");
+        // 読み込み直せなかった理由として報告すると、宣言の再実行まで進んで、
+        // 止めたエンジンに送ることになる。
+        assert!(!out.contains("再実行"), "{out}");
+        assert_eq!(repl.repl.eng().unplayed(), ["def usesA := libA + 1"]);
+
+        repl.unhook();
+        let out = repl.feed(&[":restart"]);
+        assert!(out.contains("1 件を再実行"), "{out}");
+        assert!(repl.feed(&["usesA"]).contains("11"));
+    }
 }
 
 mod エンジンを再起動できないとき {
@@ -910,6 +932,24 @@ mod 書き出しの安全対策 {
 
     #[story("B3")]
     #[test]
+    fn リンク先の無いシンボリックリンクも上書きしない() {
+        // `exists` はリンク先を見るので、リンク先が無いと「無い」と判定する。そのまま
+        // 書くと、リンク先に新しいファイルができる。
+        let mut repl = Driver::new();
+        let target = repl.tmp().join("gone.lean");
+        let link = repl.tmp().join("dangling.lean");
+        std::os::unix::fs::symlink(&target, &link).expect("symlink");
+        repl.feed(&["def x := 1"]);
+        let path = link.display().to_string();
+        assert!(
+            repl.feed(&[&format!(":save {path}")])
+                .contains("すでにある")
+        );
+        assert!(!target.exists());
+    }
+
+    #[story("B3")]
+    #[test]
     fn leani_が書き出したファイルは上書きする() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("mine.lean").display().to_string();
@@ -969,7 +1009,8 @@ mod 再起動のあとで読み込み直せないとき {
             _ => Hooked::Pass,
         });
         let out = repl.feed(&[":restart"]);
-        assert!(out.contains("init ファイルの再実行中に"), "{out}");
+        // 再起動そのものを止めたので、宣言の再実行には進まない。
+        assert!(out.contains("再起動を中断した"), "{out}");
         assert!(repl.repl.eng().init_src().is_some());
 
         repl.unhook();
@@ -1475,6 +1516,28 @@ mod 読み込んだファイルの_import {
         // lean でもエラーになる (Unknown identifier が並ぶ)。
         assert!(head.contains("import Lean.Elab.Frontend"), "{head}");
         assert!(head.contains("import Lean\n"), "{head}");
+    }
+
+    #[story("B3", "F1")]
+    #[test]
+    fn 読み込み直せなかったファイルの_import_は_colon_save_に書かない() {
+        let mut repl = Driver::new();
+        let src = file(
+            &repl,
+            "gone.lean",
+            "import Lean.Elab.Frontend\n\ndef fromGone := 1\n",
+        );
+        repl.feed(&[&format!(":l {src}")]);
+        std::fs::remove_file(&src).expect("remove");
+        let out = repl.feed(&[":restart"]);
+        assert!(out.contains("読み込み直せなかった"), "{out}");
+
+        repl.feed(&["def afterRestart := 2"]);
+        let out_path = repl.tmp().join("after.lean").display().to_string();
+        repl.feed(&[&format!(":save {out_path}")]);
+        let text = std::fs::read_to_string(&out_path).expect("read");
+        // ファイルの中身はもう環境に無いので、その import だけを書き出す理由も無い。
+        assert!(!text.contains("Lean.Elab.Frontend"), "{text}");
     }
 }
 

@@ -1217,6 +1217,52 @@ mod エンジンを自動で用意できないとき {
 
     #[story("G3")]
     #[test]
+    fn 時間内に終わらないコマンドは孫プロセスごと止める() {
+        // 偽の git が起動した孫プロセス (sleep) の pid を記録しておき、止めたあとに
+        // 残っていないことを確かめる。孫が残ると出力のパイプを閉じないので、
+        // 出力をためる読み取りが孫の終了まで待ち続ける。
+        let dir = tmp();
+        let pidfile = dir.path().join("grandchild.pid");
+        let body = format!("sleep 5 & echo $! > {}; wait", path_str(&pidfile));
+        let path = fake_tools(dir.path(), &[("git", &body)]);
+        let mut ctx = ctx_with(&[("PATH", &path)], "/");
+        ctx.setup_timeout = Duration::from_millis(300);
+        let started = std::time::Instant::now();
+        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+        assert!(got.is_err(), "用意できてしまった");
+        assert!(
+            started.elapsed() < Duration::from_secs(3),
+            "孫プロセスが終わるまで待った"
+        );
+
+        let pid = fs::read_to_string(&pidfile)
+            .expect("pid")
+            .trim()
+            .parse::<i32>()
+            .expect("pid");
+        assert!(
+            gone(pid, Duration::from_secs(1)),
+            "孫プロセス {pid} が残っている"
+        );
+    }
+
+    /// pid のプロセスが `within` のうちに消えるか。
+    fn gone(pid: i32, within: Duration) -> bool {
+        let deadline = std::time::Instant::now() + within;
+        loop {
+            let alive = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok();
+            if !alive {
+                return true;
+            }
+            if std::time::Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(20));
+        }
+    }
+
+    #[story("G3")]
+    #[test]
     fn タグの一覧から_refs_tags_の名前だけを取り出す() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.33.0", "v4.34.0-rc1"], &[]);
@@ -1631,6 +1677,21 @@ mod ファイルの_import {
         // 取り除いたあとに新しい import 行が現れることはない。ヘッダの終わりは
         // 変わらないので、1 回ですべて取り除ける。
         prop_assert!(pure::import_lines(&stripped).is_empty());
+    }
+}
+
+mod 履歴ファイルの形式 {
+    //! prompt_toolkit の形式の履歴ファイルを読む純粋関数。
+    use super::*;
+    use leani_core::history::history_strings;
+
+    #[story("F3")]
+    #[test]
+    fn 行末の_CR_を外して読む() {
+        // CRLF で書かれた履歴をそのまま読むと、呼び出した入力の各行の末尾に \r が
+        // 付いたままエンジンに送られる。
+        let text = "\r\n# 2026-10-26 12:34:56\r\n+def f : Nat -> Nat\r\n+  | 0 => 1\r\n";
+        assert_eq!(history_strings(text), ["def f : Nat -> Nat\n  | 0 => 1"]);
     }
 }
 

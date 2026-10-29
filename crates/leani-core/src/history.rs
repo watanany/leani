@@ -23,11 +23,14 @@ pub fn history_entry(stamp: &str, src: &str) -> String {
 /// 履歴ファイルの中身から、記録した順に件を取り出す。
 ///
 /// `+` で始まる行の並びが 1 件である。`+` で始まらない行はすべて区切りとして
-/// 扱うので、読めない形式の行は無視される。
+/// 扱うので、読めない形式の行は無視される。行末の `\r` は外す (CRLF で書かれた
+/// ファイルも読める)。
 pub fn history_strings(text: &str) -> Vec<String> {
     let mut entries = Vec::new();
     let mut lines: Vec<&str> = Vec::new();
     for line in text.split('\n') {
+        // 残すと、呼び出した入力の各行の末尾に \r が付いたままエンジンに送られる。
+        let line = line.strip_suffix('\r').unwrap_or(line);
         match line.strip_prefix('+') {
             Some(body) => lines.push(body),
             None => {
