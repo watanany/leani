@@ -64,7 +64,7 @@ Lean 本体だけで起動する。init ファイルは {init}。
 ///
 /// Lean のバージョンを調べているあいだに Ctrl-C が押されたら `Interrupted` を返す。
 pub fn version_text(ctx: &Ctx, cfg: &EnvConfig) -> Result<String, EngineFault> {
-    let tc = guess_toolchain(ctx, cfg)?;
+    let tc = guess_toolchain(ctx, &mut io::stdout(), cfg)?;
     let engine = tc
         .as_deref()
         .and_then(|tc| engine_dir(cfg.engine.as_deref(), tc, &ctx.engine_cache).ok())
@@ -166,7 +166,7 @@ pub fn main(
 
 /// `--setup`。用意済みならそう表示するだけで、エンジンを作り直さない。
 fn setup(ctx: &Ctx, cfg: &EnvConfig) -> Result<(), EngineFault> {
-    let tc = toolchain(ctx, cfg)?;
+    let tc = toolchain(ctx, &mut io::stdout(), cfg)?;
     let path = engine_dir(cfg.engine.as_deref(), &tc, &ctx.engine_cache)?;
     if has_repl(&path) {
         let style = Style { color: ctx.color };

@@ -9,7 +9,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 43 件、テスト 438 件。括弧の中はテストの場所
+ストーリー 43 件、テスト 439 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -555,6 +555,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - nightly の lean は nightly の toolchain と読む (parsing / 使うバージョンの決め方)
 - 知らない接尾辞のバージョンは分からないとする (parsing / 使うバージョンの決め方)
 - lean の version は時間を区切らずに待つ (parsing / 使うバージョンの決め方)
+- lean の version を待つあいだは端末にだけ表示する (parsing / 使うバージョンの決め方)
 - stable の toolchain は今のバージョンに置き換える (parsing / 使うバージョンの決め方)
 - 自分で指定したエンジンの stable は置き換えない (parsing / 使うバージョンの決め方)
 - タグとバージョンの書き換えまで含む (parsing / 手動でエンジンを用意する手順)

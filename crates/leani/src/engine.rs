@@ -149,7 +149,7 @@ impl Engine {
     ///
     /// エンジンを用意する進み具合は `out` に出す。
     pub fn new(ctx: &Ctx, cfg: EnvConfig, out: &mut dyn Write) -> Result<Engine, EngineFault> {
-        let tc = toolchain(ctx, &cfg)?;
+        let tc = toolchain(ctx, out, &cfg)?;
         let dir = ensure_engine(ctx, out, cfg.engine.as_deref(), &tc, false)?;
         let warning = toolchain_warning(
             cfg.engine.is_some(),

@@ -164,8 +164,25 @@ fn secs(d: Duration) -> u64 {
 /// ことがある。時間を区切ると、取得が終わる前に「分からない」と表示することになる
 /// ので、`lake env` と同じく区切らない。そのあいだの Ctrl-C は、分からないことに
 /// せず `Interrupted` で返す。
-fn lean_toolchain(ctx: &Ctx, args: &[&str]) -> Result<Option<String>, EngineFault> {
-    match run(ctx, "lean", args, None, true, None) {
+///
+/// 待っているあいだは、端末なら `out` に 1 行表示し、終わったら消す。何も表示しないと
+/// leani が止まったように見える。
+fn lean_toolchain(
+    ctx: &Ctx,
+    out: &mut dyn Write,
+    args: &[&str],
+) -> Result<Option<String>, EngineFault> {
+    let style = Style { color: ctx.color };
+    if ctx.tty {
+        let _ = write!(out, "{}", style.dim("Lean のバージョンを調べている…"));
+        let _ = out.flush();
+    }
+    let got = run(ctx, "lean", args, None, true, None);
+    if ctx.tty {
+        let _ = write!(out, "\r\x1b[K");
+        let _ = out.flush();
+    }
+    match got {
         Ok(got) => Ok(toolchain_of_version(&got.stdout)),
         Err(Stopped::Interrupted) => Err(EngineFault::Interrupted),
         Err(Stopped::Timeout | Stopped::Spawn(_)) => Ok(None),
@@ -186,14 +203,18 @@ fn lean_toolchain(ctx: &Ctx, args: &[&str]) -> Result<Option<String>, EngineFaul
 /// バージョンを取得できなければ、チャンネルの名前のまま使う。自分で指定したエンジンの
 /// ディレクトリは toolchain で決まらないので置き換えない。置き換えると、エンジンの
 /// lean-toolchain と名前が違うので、toolchain が違うという警告を表示する。
-pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<Option<String>, EngineFault> {
+pub fn guess_toolchain(
+    ctx: &Ctx,
+    out: &mut dyn Write,
+    cfg: &EnvConfig,
+) -> Result<Option<String>, EngineFault> {
     match read_toolchain(cfg.project.as_deref()).or_else(|| read_toolchain(cfg.engine.as_deref())) {
         Some(tc) if is_channel(&tc) && cfg.engine.is_none() => {
-            let now = lean_toolchain(ctx, &[&format!("+{tc}"), "--version"])?;
+            let now = lean_toolchain(ctx, out, &[&format!("+{tc}"), "--version"])?;
             Ok(Some(now.unwrap_or(tc)))
         }
         Some(tc) => Ok(Some(tc)),
-        None => lean_toolchain(ctx, &["--version"]),
+        None => lean_toolchain(ctx, out, &["--version"]),
     }
 }
 
@@ -203,8 +224,8 @@ pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<Option<String>, Eng
 /// プロジェクトの外から実行するとデフォルトのバージョンが選ばれて .olean を読めなく
 /// なる。ここで決めたバージョンを elan run で固定し、エンジンもそのバージョンで
 /// ビルドする。
-pub fn toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<String, EngineFault> {
-    guess_toolchain(ctx, cfg)?.ok_or_else(|| {
+pub fn toolchain(ctx: &Ctx, out: &mut dyn Write, cfg: &EnvConfig) -> Result<String, EngineFault> {
+    guess_toolchain(ctx, out, cfg)?.ok_or_else(|| {
         EngineFault::Setup(
             "Lean のバージョンが分からない (lean-toolchain が無く、lean --version からも取得できない)"
                 .to_string(),
@@ -564,7 +585,7 @@ fn save(cache: &str, text: &str) -> std::io::Result<()> {
 /// 実行するので、ここでエラーになった場合は何も変えずに済む。lake env の結果も
 /// 先に取得してキャッシュしておく (Engine の中で失敗させない)。
 pub fn prepare(ctx: &Ctx, out: &mut dyn Write, cfg: &EnvConfig) -> Result<(), EngineFault> {
-    let tc = toolchain(ctx, cfg)?;
+    let tc = toolchain(ctx, out, cfg)?;
     ensure_engine(ctx, out, cfg.engine.as_deref(), &tc, false)?;
     lake_env(ctx, out, cfg.project.as_deref(), &tc)?;
     Ok(())

@@ -21,7 +21,7 @@ use leani_read::places::Ctx;
 use proptest::prelude::*;
 use serde_json::json;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
@@ -1163,7 +1163,9 @@ mod 使うバージョンの決め方 {
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
         let cfg = EnvConfig::make(&ctx, "t", Some(&proj), &[], None, Some(&eng));
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            boot::guess_toolchain(&ctx, &mut io::sink(), &cfg)
+                .expect("guess")
+                .as_deref(),
             Some("leanprover/lean4:v4.34.0-rc2")
         );
     }
@@ -1180,7 +1182,9 @@ mod 使うバージョンの決め方 {
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&eng));
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            boot::guess_toolchain(&ctx, &mut io::sink(), &cfg)
+                .expect("guess")
+                .as_deref(),
             Some("leanprover/lean4:v4.33.0")
         );
     }
@@ -1194,7 +1198,10 @@ mod 使うバージョンの決め方 {
         let ctx = ctx_with(&[("PATH", &path)], "/");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
         let pressed = interrupt_when(&ctx, &mark);
-        assert_eq!(boot::toolchain(&ctx, &cfg), Err(EngineFault::Interrupted));
+        assert_eq!(
+            boot::toolchain(&ctx, &mut io::sink(), &cfg),
+            Err(EngineFault::Interrupted)
+        );
         pressed.join().expect("join");
     }
 
@@ -1207,7 +1214,9 @@ mod 使うバージョンの決め方 {
         let ctx = ctx_with(&[("PATH", &path)], "/");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            boot::guess_toolchain(&ctx, &mut io::sink(), &cfg)
+                .expect("guess")
+                .as_deref(),
             Some("leanprover/lean4:v4.9.0")
         );
     }
@@ -1219,7 +1228,7 @@ mod 使うバージョンの決め方 {
         let ctx = ctx_with(&[("PATH", &path)], "/");
         let proj = project_tc.map(|tc| toolchain_dir(dir.path(), "proj", tc));
         let cfg = EnvConfig::make(&ctx, "t", proj.as_deref(), &[], None, None);
-        boot::guess_toolchain(&ctx, &cfg).expect("guess")
+        boot::guess_toolchain(&ctx, &mut io::sink(), &cfg).expect("guess")
     }
 
     #[story("G3")]
@@ -1252,9 +1261,33 @@ mod 使うバージョンの決め方 {
         ctx.setup_timeout = Duration::from_millis(100);
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            boot::guess_toolchain(&ctx, &mut io::sink(), &cfg)
+                .expect("guess")
+                .as_deref(),
             Some("leanprover/lean4:v4.9.0")
         );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn lean_の_version_を待つあいだは端末にだけ表示する() {
+        // elan が toolchain を取得していると時間がかかる。何も表示しないと、leani が
+        // 止まったように見える。終わったら表示を消す。
+        let dir = tmp();
+        let lean = "echo 'Lean (version 4.9.0, x86_64-apple-darwin, commit abc, Release)'";
+        let path = fake_tools(dir.path(), &[("lean", lean)]);
+        let mut ctx = ctx_with(&[("PATH", &path)], "/");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
+        let shown = |ctx: &Ctx| {
+            let mut out = Vec::new();
+            boot::guess_toolchain(ctx, &mut out, &cfg).expect("guess");
+            String::from_utf8(out).expect("utf-8")
+        };
+        assert_eq!(shown(&ctx), "");
+        ctx.tty = true;
+        let got = shown(&ctx);
+        assert!(got.contains("Lean のバージョンを調べている"), "{got:?}");
+        assert!(got.ends_with("\r\x1b[K"), "{got:?}");
     }
 
     #[story("G3")]
@@ -1289,7 +1322,9 @@ esac"#;
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:stable");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&eng));
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            boot::guess_toolchain(&ctx, &mut io::sink(), &cfg)
+                .expect("guess")
+                .as_deref(),
             Some("leanprover/lean4:stable")
         );
     }
