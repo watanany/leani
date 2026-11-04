@@ -262,6 +262,13 @@ def code_of(line: str) -> str | None:
         two = line[i : i + 2]
         if two == "--" and not depth:
             break
+        if line[i] == "«" and not depth:
+            # `«A--B»` の中の `--` と `/-` はコメントではない
+            end = line.find("»", i)
+            end = len(line) if end < 0 else end + 1
+            code.append(line[i:end])
+            i = end
+            continue
         if two == "/-":
             depth += 1
             i += 1

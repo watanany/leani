@@ -9,7 +9,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 43 件、テスト 451 件。括弧の中はテストの場所
+ストーリー 43 件、テスト 452 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -134,6 +134,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 入れ子のコメントの終わりを正しく判定する (parsing / ファイルの import)
 - 行の中のブロックコメントを除いて import を読む (parsing / ファイルの import)
+- 名前のエスケープの中の記号をコメントと読まない (parsing / ファイルの import)
 - 修飾子の付いた import も読む (parsing / ファイルの import)
 - コメントの付いた module の行も読む (parsing / ファイルの import)
 - module の後ろに import を足す (parsing / ファイルの import)

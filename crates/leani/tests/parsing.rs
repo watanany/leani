@@ -2095,6 +2095,14 @@ mod ファイルの_import {
 
     #[story("B4")]
     #[test]
+    fn 名前のエスケープの中の記号をコメントと読まない() {
+        let src = "import «A--B»\nimport «C/-D» -- m\ndef x := 1";
+        assert_eq!(pure::import_lines(src), ["«A--B»", "«C/-D»"]);
+        assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
+    }
+
+    #[story("B4")]
+    #[test]
     fn 修飾子の付いた_import_も読む() {
         let src = "module\n\npublic import Lean.Elab\nmeta import all Std\nimport all Foo\n\
                    public meta import Bar\ndef x := 1";

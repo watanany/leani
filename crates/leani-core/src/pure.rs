@@ -501,6 +501,12 @@ fn code_of(line: &str) -> Option<String> {
     while i < bytes.len() {
         match (bytes.get(i..i + 2), depth) {
             (Some(b"--"), 0) => break,
+            // `«A--B»` の中の `--` と `/-` はコメントではない。`«` と `»` は 2 byte
+            (Some([0xC2, 0xAB]), 0) => {
+                let end = escape_end(bytes, i);
+                code.extend_from_slice(&bytes[i..end]);
+                i = end - 1;
+            }
             (Some(b"/-"), _) => {
                 depth += 1;
                 i += 1;
@@ -518,6 +524,14 @@ fn code_of(line: &str) -> Option<String> {
         0 => Some(String::from_utf8_lossy(&code).trim().to_string()),
         _ => None,
     }
+}
+
+/// bytes[i] の `«` で始まる名前の後ろの位置。閉じなければ末尾。
+fn escape_end(bytes: &[u8], i: usize) -> usize {
+    bytes[i..]
+        .windows(2)
+        .position(|w| w == "»".as_bytes())
+        .map_or(bytes.len(), |n| i + n + 2)
 }
 
 /// 先頭のヘッダ領域にある `module` と import を、行番号と一緒に返す。
@@ -564,19 +578,15 @@ fn is_module_line(one: &str) -> bool {
     one == "module" || drop_word(one, "module").is_some_and(|rest| rest.starts_with("--"))
 }
 
-/// import の行ならモジュール名。前後の空白は取り除いてある行を受け取る。
+/// import の行ならモジュール名。コメントと前後の空白は取り除いてある行を受け取る。
 ///
 /// module のファイルでは、`public`、`meta`、`all` を付けて書ける
 /// (`public meta import all X`)。
 fn import_of(one: &str) -> Option<&str> {
-    if one.contains("/-") {
-        None
-    } else {
-        let rest = drop_word(one, "public").unwrap_or(one);
-        let rest = drop_word(rest, "meta").unwrap_or(rest);
-        let rest = drop_word(rest, "import")?;
-        Some(drop_word(rest, "all").unwrap_or(rest).trim())
-    }
+    let rest = drop_word(one, "public").unwrap_or(one);
+    let rest = drop_word(rest, "meta").unwrap_or(rest);
+    let rest = drop_word(rest, "import")?;
+    Some(drop_word(rest, "all").unwrap_or(rest).trim())
 }
 
 /// 先頭の語が `word` なら、その後ろ。
