@@ -513,6 +513,8 @@ class Repl:
         now = (self.eng.gen, self.eng.env)
 
         def usable(k: str) -> bool:
+            # now ではなく今の値で判定する。問い合わせの途中でエンジンが再起動すると、
+            # now のキャッシュも使えなくなる。
             got = self._comp_cache.get(k)
             eng = self.eng
             return got is not None and cache_usable(got[0], eng.gen, eng.env, eng.stack)

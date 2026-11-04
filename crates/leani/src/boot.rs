@@ -156,6 +156,15 @@ fn secs(d: Duration) -> u64 {
     d.as_secs()
 }
 
+/// 端末のときだけ、改行せずに `text` を表示する。待っているあいだの表示とその消去に使う。
+fn show(out: &mut dyn Write, ctx: &Ctx, text: &str) {
+    if !ctx.tty {
+        return;
+    }
+    let _ = write!(out, "{text}");
+    let _ = out.flush();
+}
+
 // ------------------------------------------------------------------ バージョン
 
 /// `lean <args>` が出すバージョンの toolchain。分からなければ None。
@@ -173,15 +182,9 @@ fn lean_toolchain(
     args: &[&str],
 ) -> Result<Option<String>, EngineFault> {
     let style = Style { color: ctx.color };
-    if ctx.tty {
-        let _ = write!(out, "{}", style.dim("Lean のバージョンを調べている…"));
-        let _ = out.flush();
-    }
+    show(out, ctx, &style.dim("Lean のバージョンを調べている…"));
     let got = run(ctx, "lean", args, None, true, None);
-    if ctx.tty {
-        let _ = write!(out, "\r\x1b[K");
-        let _ = out.flush();
-    }
+    show(out, ctx, "\r\x1b[K");
     match got {
         Ok(got) => Ok(toolchain_of_version(&got.stdout)),
         Err(Stopped::Interrupted) => Err(EngineFault::Interrupted),
@@ -202,7 +205,7 @@ fn lean_toolchain(
 /// バージョンに進んでも、前のバージョンでビルドしたエンジンを使い続ける。今の
 /// バージョンを取得できなければ、チャンネルの名前のまま使う。自分で指定したエンジンの
 /// ディレクトリは toolchain で決まらないので置き換えない。置き換えると、エンジンの
-/// lean-toolchain と名前が違うので、toolchain が違うという警告を表示する。
+/// lean-toolchain と名前が違うことになり、起動のたびに toolchain が違うという警告が出る。
 pub fn guess_toolchain(
     ctx: &Ctx,
     out: &mut dyn Write,
