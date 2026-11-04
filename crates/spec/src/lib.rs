@@ -201,23 +201,39 @@ fn is_test(attrs: &[Attribute]) -> bool {
 }
 
 /// `mod` を再帰的にたどってテストを集める。テストを含む `mod` が describe になる。
-/// `mod` は入れ子にできる。
-fn descend(items: &[Item], layer: &str, place: &str) -> Vec<Test> {
+/// `mod` は入れ子にでき、describe の名前は外側の `mod` から ` / ` でつなぐ。
+///
+/// `#[story]` が付いているのにテストの属性が無い関数はエラーにする。テストとして
+/// 実行されないので、`SPEC.md` に載らないまま気づけない。
+fn descend(items: &[Item], layer: &str, place: Option<&str>) -> Result<Vec<Test>, String> {
+    let here = place.unwrap_or(layer);
     items
         .iter()
-        .flat_map(|item| match item {
+        .map(|item| match item {
             Item::Mod(m) => match &m.content {
-                Some((_, inner)) => descend(inner, layer, &label(&m.ident.to_string())),
-                None => Vec::new(),
+                Some((_, inner)) => {
+                    let name = label(&m.ident.to_string());
+                    let inside = match place {
+                        Some(outer) => format!("{outer} / {name}"),
+                        None => name,
+                    };
+                    descend(inner, layer, Some(&inside))
+                }
+                None => Ok(Vec::new()),
             },
-            Item::Fn(f) if is_test(&f.attrs) => vec![Test {
+            Item::Fn(f) if is_test(&f.attrs) => Ok(vec![Test {
                 what: label(&f.sig.ident.to_string()),
-                place: format!("{layer} / {place}"),
+                place: format!("{layer} / {here}"),
                 stories: marked(&f.attrs),
-            }],
-            _ => Vec::new(),
+            }]),
+            Item::Fn(f) if !marked(&f.attrs).is_empty() => Err(format!(
+                "テストでない関数に #[story] が付いている: {layer} / {here} / {}",
+                f.sig.ident
+            )),
+            _ => Ok(Vec::new()),
         })
-        .collect()
+        .collect::<Result<Vec<_>, String>>()
+        .map(|v| v.into_iter().flatten().collect())
 }
 
 /// 行の中で開いたまま閉じていない三重引用符。`"""` と `'''` のうち先に出てくるほうを
@@ -230,14 +246,35 @@ fn opens_string(line: &str) -> Option<&'static str> {
         .and_then(|(_, q)| (line.matches(q).count() % 2 == 1).then_some(q))
 }
 
+/// 行のうち、`#` のコメントより前の部分。引用符の中の `#` はコメントにしない。
+fn code_part(line: &str) -> &str {
+    let mut quote = None;
+    let mut escaped = false;
+    for (at, c) in line.char_indices() {
+        match (quote, c) {
+            _ if escaped => escaped = false,
+            (Some(_), '\\') => escaped = true,
+            (Some(q), c) if c == q => quote = None,
+            (None, '"' | '\'') => quote = Some(c),
+            (None, '#') => return &line[..at],
+            _ => {}
+        }
+    }
+    line
+}
+
 /// Python のテストファイルを行単位で読む。describe はインデントで入れ子にする。
 ///
 /// 三重引用符の中の行は読まない。セルの中身として書いた `def fib` を関数と見なすと、
-/// インデントが 0 なので、開いている describe を閉じてしまう。
+/// インデントが 0 なので、開いている describe を閉じてしまう。コメントの中の
+/// 三重引用符は文字列の始まりにしない。
+///
+/// pytest-describe が集めるのは `describe_` の関数の中の `it_` だけである。describe の
+/// 外や `class` の中の `it_` はエラーにする。実行されないテストが `SPEC.md` に載る。
 fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
     struct Scan {
-        /// 開いている describe の (インデント, 名前)。
-        describes: Vec<(usize, String)>,
+        /// 開いているブロックの (インデント, describe の名前)。`class` は名前が None。
+        describes: Vec<(usize, Option<String>)>,
         /// 次の `def` に付く `@story` の番号。
         pending: Vec<String>,
         /// 開いている三重引用符。閉じるまで行を読まない。
@@ -257,7 +294,7 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
             }
             return Ok(scan);
         }
-        scan.string = opens_string(line);
+        scan.string = opens_string(code_part(line));
         let body = line.trim_start();
         let indent = line.len() - body.len();
         let name = body
@@ -270,15 +307,24 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
                 .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
             return Ok(scan);
         }
+        if body.starts_with("class ") {
+            scan.describes.retain(|(at, _)| *at < indent);
+            scan.describes.push((indent, None));
+            return Ok(scan);
+        }
         let Some(name) = name else {
             return Ok(scan);
         };
         scan.describes.retain(|(at, _)| *at < indent);
         let stories = std::mem::take(&mut scan.pending);
         if let Some(d) = name.strip_prefix("describe_") {
-            scan.describes.push((indent, label(d)));
+            scan.describes.push((indent, Some(label(d))));
         } else if let Some(it) = name.strip_prefix("it_") {
-            let place = scan.describes.last().map_or(layer, |(_, d)| d.as_str());
+            let Some((_, Some(place))) = scan.describes.last() else {
+                return Err(format!(
+                    "describe の外の it_ は pytest で実行されない: {layer} / {name}"
+                ));
+            };
             scan.out.push(Test {
                 what: label(it),
                 place: format!("{layer} / {place}"),
@@ -321,7 +367,7 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
                 return python_tests(&text, layer);
             }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-            Ok(descend(&file.items, layer, layer))
+            descend(&file.items, layer, None)
         })
         .collect::<Result<Vec<_>, String>>()
         .map(|v| v.into_iter().flatten().collect())
@@ -507,7 +553,8 @@ mod tests {
             "#,
         )
         .unwrap();
-        let got: Vec<(String, String, Vec<String>)> = descend(&file.items, "parsing", "parsing")
+        let got: Vec<(String, String, Vec<String>)> = descend(&file.items, "parsing", None)
+            .unwrap()
             .into_iter()
             .map(|t| (t.place, t.what, t.stories))
             .collect();
@@ -608,6 +655,72 @@ def fib : Nat → Nat
     fn テストでない関数の_story_はエラーにする() {
         let text = "@story(\"J1\")\ndef helper():\n    pass\n";
         assert!(python_tests(text, "kernel").is_err());
+    }
+
+    #[test]
+    fn story_が付いているのにテストでない関数はエラーにする() {
+        let file = syn::parse_file(
+            r#"
+            mod 式の評価 {
+                #[story("A1")]
+                fn 属性を付け忘れた() {}
+            }
+            "#,
+        )
+        .unwrap();
+        assert!(descend(&file.items, "parsing", None).is_err());
+    }
+
+    #[test]
+    fn 入れ子の_mod_は外側の名前から並べる() {
+        let file = syn::parse_file(
+            r#"
+            mod 外側 {
+                mod 内側 {
+                    #[story("A1")]
+                    #[test]
+                    fn 評価される() {}
+                }
+            }
+            "#,
+        )
+        .unwrap();
+        let got: Vec<String> = descend(&file.items, "parsing", None)
+            .unwrap()
+            .into_iter()
+            .map(|t| t.place)
+            .collect();
+        assert_eq!(got, ["parsing / 外側 / 内側"]);
+    }
+
+    #[test]
+    fn コメントの中の三重引用符では文字列にしない() {
+        let text = r#"
+def describe_セルの実行():
+
+    @story("J1")
+    def it_前のテスト(kernel):
+        # 次の """ は文字列ではない
+        pass
+
+    @story("J2")
+    def it_後ろのテスト(kernel):
+        pass
+"#;
+        let got: Vec<String> = python_tests(text, "kernel")
+            .unwrap()
+            .into_iter()
+            .map(|t| t.what)
+            .collect();
+        assert_eq!(got, ["前のテスト", "後ろのテスト"]);
+    }
+
+    #[test]
+    fn describe_の外の_it_はエラーにする() {
+        let top = "@story(\"J1\")\ndef it_外のテスト(kernel):\n    pass\n";
+        assert!(python_tests(top, "kernel").is_err());
+        let class = "def describe_セル():\n    class TestX:\n        @story(\"J1\")\n        def it_中のテスト(self):\n            pass\n";
+        assert!(python_tests(class, "kernel").is_err());
     }
 
     #[test]
