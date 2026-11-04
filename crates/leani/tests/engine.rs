@@ -2756,6 +2756,45 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
     }
 }
 
+mod sorry_の置き換えを中断したとき {
+    use super::*;
+
+    #[story("E3", "F1")]
+    #[test]
+    fn 再起動のあとの再実行も中断したら置き換えを戻す宣言を保留の後ろに並べる() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "def baseVal := 1",
+            "theorem useIt : 1 = 1 := by sorry",
+            ":prove",
+        ]);
+
+        // 置き換えた宣言の実行と、再起動のあとの def baseVal の再実行を Ctrl-C で止める。
+        let mut hits = 0;
+        repl.hook(move |stage| match stage {
+            Stage::Written(obj)
+                if (hits == 0 && cmd(obj).contains("by rfl"))
+                    || (hits == 1 && cmd(obj) == "def baseVal := 1") =>
+            {
+                hits += 1;
+                Hooked::Interrupt
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["rfl"]);
+        repl.unhook();
+
+        // 先に実行すると、useIt が baseVal より前に並ぶ。
+        assert!(repl.declarations().is_empty(), "{out}");
+        assert_eq!(
+            repl.repl.eng().unplayed(),
+            ["def baseVal := 1", "theorem useIt : 1 = 1 := by sorry"],
+            "{out}"
+        );
+        assert_eq!(out.matches("件を再実行した").count(), 1, "{out}");
+    }
+}
+
 mod 再起動に失敗したときの証明モード {
     use super::*;
 
@@ -2785,6 +2824,23 @@ mod 再起動に失敗したときの証明モード {
 
         repl.unhook();
         assert!(repl.feed(&[":restart"]).contains("1 件"));
+    }
+
+    #[story("E1", "F1")]
+    #[test]
+    fn 再起動に失敗したら証明モードの終了を_1_回だけ知らせる() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem twice : True := by sorry", ":prove"]);
+
+        // タクティクの送信でエンジンが終了し、再起動の boot も失敗する。
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) || is_tactic(obj) => Hooked::Kill,
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["trivial"]);
+
+        assert_eq!(out.matches("証明モードを終了した").count(), 1, "{out}");
+        assert!(repl.repl.proof().is_none());
     }
 }
 
@@ -2967,6 +3023,35 @@ mod 切り替えに失敗したとき {
         repl.unhook();
         assert!(repl.feed(&[":restart"]).contains("1 件を再実行"));
         assert!(repl.feed(&["typedHere"]).contains("42"));
+    }
+
+    #[story("F1", "G5")]
+    #[test]
+    fn 元の環境のエンジンを用意するのを中断したら宣言を保留だけに残す() {
+        // 切り替え先の boot を失敗させるときにフラグを立てると、元の環境に戻るときの
+        // lean --version (Engine::new の中) が中断する。新しい Engine はできないので、
+        // 終了させた前のエンジンが宣言の記録を持ったまま残る。
+        let mut repl = Driver::new();
+        repl.feed(&["def typedHere := 42"]);
+        let flag = repl.interrupted();
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) => {
+                flag.store(true, SeqCst);
+                Hooked::Kill
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&[":env wide"]);
+
+        assert!(out.contains("中断した"), "{out}");
+        assert!(repl.declarations().is_empty(), "{out}");
+        assert!(repl.repl.eng().env().is_none(), "{out}");
+        assert_eq!(repl.repl.eng().unplayed(), ["def typedHere := 42"]);
+
+        repl.unhook();
+        let out = repl.feed(&[":restart"]);
+        assert!(out.contains("1 件を再実行"), "{out}");
+        assert_eq!(repl.declarations(), ["def typedHere := 42"]);
     }
 
     #[story("F1", "G5")]

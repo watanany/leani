@@ -304,6 +304,18 @@ mod 候補 {
 
     #[story("D1", "F2")]
     #[test]
+    fn colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない() {
+        // 宣言の数が同じなので、数だけを比べると前の名前を使い続ける。
+        let mut repl = Driver::new();
+        repl.feed(&["def myGone.helper := 1"]);
+        assert_eq!(repl.repl.complete_names("myGone.he"), ["myGone.helper"]);
+        repl.feed(&[":undo", "def myKept := 2"]);
+        assert!(repl.repl.complete_names("myGone.he").is_empty());
+        assert_eq!(repl.repl.complete_names("myKep"), ["myKept"]);
+    }
+
+    #[story("D1", "F2")]
+    #[test]
     fn colon_reset_で取り消した宣言は候補に出ない() {
         let mut repl = Driver::new();
         repl.feed(&["def myReset.helper := 1"]);

@@ -225,6 +225,12 @@ impl Driver {
         self.search.calls.load(SeqCst)
     }
 
+    /// Ctrl-C が押されたことを伝えるフラグ。立てると、次に外部のコマンドを待つ
+    /// ところ (`lean --version` など) が中断する。
+    pub fn interrupted(&self) -> Arc<AtomicBool> {
+        Arc::clone(&self.sb.ctx.interrupted)
+    }
+
     /// テストが一時ファイルを置く場所。
     pub fn tmp(&self) -> &Path {
         self.sb.dir.path()

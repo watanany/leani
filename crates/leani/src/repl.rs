@@ -164,8 +164,9 @@ pub struct Repl {
     comp_cache: HashMap<String, (EnvAt, Vec<String>)>,
     /// 今の namespace と open。(世代, env) が変わったら問い合わせ直す。
     scope: Option<(EnvAt, Scope)>,
-    /// REPL で実行した宣言の名前。ログの長さが変わったら集め直す。
-    own: (Option<usize>, Vec<String>),
+    /// REPL で実行した宣言の名前と、集めたときのログ。ログが変わったら集め直す。
+    /// 長さだけを覚えると、`:undo` のあとに同じ数の宣言を足したときに気づかない。
+    own: (Option<Vec<String>>, Vec<String>),
 
     // 入力バッファ
     buf: Vec<String>,
@@ -478,11 +479,11 @@ impl Repl {
         f(&mut self.eng).ok()
     }
 
-    /// REPL で実行した宣言の名前。ログが増えたときだけ集め直す。
+    /// REPL で実行した宣言の名前。ログが変わったときだけ集め直す。
     fn own_names_now(&mut self) -> Vec<String> {
-        let len = self.eng.log().len();
-        if self.own.0 != Some(len) {
-            self.own = (Some(len), own_names(self.eng.log()));
+        let log = self.eng.log();
+        if self.own.0.as_deref() != Some(log) {
+            self.own = (Some(log.to_vec()), own_names(log));
         }
         self.own.1.clone()
     }
@@ -1099,16 +1100,20 @@ impl Repl {
             self.held = held;
             return;
         }
-        let Some(src) = undone.src else {
-            return;
-        };
         // 保存しているあいだにエンジンが再起動された。保存した env id は無効に
         // なっているので設定できない。テキストから再実行する。
-        //
-        // 再起動の再実行を打ち切って保留が残っていたら、実行せずに保留の後ろに
-        // 並べる。取り消した宣言は保留の宣言より後ろにあったので、先に実行すると
-        // 順番が変わる。ユーザーが Ctrl-C で再実行を止めたときは、再実行を続ける
-        // ことにもなる。
+        if let Some(src) = undone.src {
+            self.restore_src(src);
+        }
+    }
+
+    /// 取り消した宣言を、再起動したエンジンにテキストから戻す。
+    ///
+    /// 再起動の再実行を打ち切って保留が残っていたら、実行せずに保留の後ろに
+    /// 並べる。取り消した宣言は保留の宣言より後ろにあったので、先に実行すると
+    /// 順番が変わる。ユーザーが Ctrl-C で再実行を止めたときは、再実行を続ける
+    /// ことにもなる。
+    fn restore_src(&mut self, src: String) {
         if self.eng.unplayed().is_empty() {
             self.replay_into(&[src]);
             return;
@@ -1317,13 +1322,15 @@ impl Repl {
 
     /// 1 行 = 1 タクティク。proofState を進める。
     fn tactic(&mut self, src: &str) {
-        let Some(proof) = self.proof.clone() else {
+        // guard の前に取り出しておく。再起動に失敗すると fold_proof も証明モードを
+        // 終了するが、取り出しておけば fold_proof は知らせず、ここで 1 回だけ知らせる。
+        let Some(proof) = self.proof.take() else {
             return;
         };
 
         let state = proof.state;
         let resp = self.guard(|eng| eng.send_tactic(src, state));
-        if self.proof.as_ref() != Some(&proof) || proof.generation != self.eng.generation() {
+        if proof.generation != self.eng.generation() {
             // guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
             // ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
             // 0 から振り直すので、別の証明の状態と番号が一致して「証明完了」と
@@ -1331,6 +1338,7 @@ impl Repl {
             self.drop_proof();
             return;
         }
+        self.proof = Some(proof.clone());
         let Some(resp) = resp else {
             return;
         };
@@ -1503,7 +1511,7 @@ impl Repl {
                     .dim("-- エンジンを再起動したので、sorry のままにしておく"),
             );
             if let Some(src) = undone.src {
-                self.replay_into(&[src]);
+                self.restore_src(src);
             }
             return;
         }
