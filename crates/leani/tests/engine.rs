@@ -1211,6 +1211,28 @@ mod 読み込みの中断 {
         repl.unhook();
         assert!(repl.feed(&["before"]).contains('5'));
     }
+
+    #[story("A4", "F1", "G2")]
+    #[test]
+    fn init_の再適用中に中断したら読み込みを取り消す() {
+        // ファイルの読み込みは終わっていても、init を戻せていない環境は使わせない。
+        // 「中断した」と表示したのに読み込んだままにすると、表示と状態が食い違い、
+        // それまでの宣言も表示なしに消える。
+        let mut repl = Driver::new();
+        init_with(&mut repl, "def fromInit := 99\n");
+        let init_src = repl.repl.eng().init_src().expect("init_src").to_string();
+        repl.feed(&["def before := 5"]);
+        let path = file(&repl, "loaded.lean", "def loaded := 1\n");
+
+        let hit = interrupt_after_write(&mut repl, move |o| cmd(o) == init_src);
+        repl.feed(&[&format!(":l {path}")]);
+        assert!(hit.load(SeqCst), "init の再適用を止めていない");
+        repl.unhook();
+
+        assert_eq!(repl.repl.eng().loaded(), None);
+        assert_eq!(repl.declarations(), ["def before := 5"]);
+        assert!(repl.feed(&["before"]).contains('5'));
+    }
 }
 
 mod 履歴の書き出し {

@@ -876,6 +876,10 @@ impl Engine {
     }
 
     /// ファイルを読み込んで、新しい環境を作る。`src` を渡せばファイルは読まない。
+    ///
+    /// 中断されたときとエンジンが異常終了したときは、`:l` を取り消して `Err` を返す。
+    /// ファイルを読み込んだあとの init の再適用で止まったときも同じで、環境、宣言、
+    /// 読み込んだファイルを `:l` の前に戻す。再起動すれば replay できる。
     pub fn load_file(&mut self, path: &str, src: Option<&str>) -> Result<Loaded, EngineFault> {
         let raw = match src {
             Some(s) => s.to_string(),
@@ -888,12 +892,7 @@ impl Engine {
         };
         let src = format!("{PROBE_IMPORT}{body}");
 
-        let keep = (
-            self.env,
-            std::mem::take(&mut self.stack),
-            std::mem::take(&mut self.log),
-            std::mem::take(&mut self.unplayed),
-        );
+        let keep = self.keep();
         self.env = None;
 
         let probed = self.send_cmd(&src, true).and_then(|resp| {
@@ -906,8 +905,6 @@ impl Engine {
         let (resp, why) = match probed {
             Ok(got) => got,
             Err(e) => {
-                // 中断や異常終了で、今の環境と宣言を失わないようにする。再起動すれば
-                // replay できる。
                 self.restore(keep);
                 return Err(e);
             }
@@ -928,7 +925,13 @@ impl Engine {
             self.loaded_imports = import_lines(&raw);
             // fresh で環境を作り直したので、init の内容は環境から消えている。
             // 再適用しないと、sources() が env に無い宣言を返し続ける。
-            self.reapply_init()?
+            match self.reapply_init() {
+                Ok(note) => note,
+                Err(e) => {
+                    self.restore(keep);
+                    return Err(e);
+                }
+            }
         };
         Ok(Loaded {
             resp,
@@ -938,9 +941,42 @@ impl Engine {
         })
     }
 
-    fn restore(&mut self, keep: (Option<i64>, Vec<i64>, Vec<String>, Vec<String>)) {
-        (self.env, self.stack, self.log, self.unplayed) = keep;
+    /// `:l` の前の状態を退避する。stack、log、unplayed は空にする。
+    fn keep(&mut self) -> Kept {
+        Kept {
+            env: self.env,
+            base: self.base,
+            stack: std::mem::take(&mut self.stack),
+            log: std::mem::take(&mut self.log),
+            unplayed: std::mem::take(&mut self.unplayed),
+            loaded: self.loaded.clone(),
+            loaded_src: self.loaded_src.clone(),
+            loaded_imports: self.loaded_imports.clone(),
+        }
     }
+
+    fn restore(&mut self, keep: Kept) {
+        self.env = keep.env;
+        self.base = keep.base;
+        self.stack = keep.stack;
+        self.log = keep.log;
+        self.unplayed = keep.unplayed;
+        self.loaded = keep.loaded;
+        self.loaded_src = keep.loaded_src;
+        self.loaded_imports = keep.loaded_imports;
+    }
+}
+
+/// `:l` が退避する状態。読み込みに失敗したときと中断されたときに戻す。
+struct Kept {
+    env: Option<i64>,
+    base: Option<i64>,
+    stack: Vec<i64>,
+    log: Vec<String>,
+    unplayed: Vec<String>,
+    loaded: Option<String>,
+    loaded_src: Option<String>,
+    loaded_imports: Vec<String>,
 }
 
 impl Drop for Engine {
