@@ -7,7 +7,9 @@ Python のテストは、Jupyter のカーネルのテスト (test_kernel.py) �
 しないので、このリポジトリの外に持ち出してもそのまま実行できる。
 """
 
+import atexit
 import os
+import shutil
 import sys
 import tempfile
 import textwrap
@@ -21,7 +23,9 @@ sys.path.insert(0, SRC)
 
 # 設定、履歴、init のパスは import 時に定数になるので、テストが leani を import する
 # 前に決める。conftest.py はテストのモジュールより先に読み込まれる。
+# pytest-xdist では worker ごとに作るので、プロセスの終わりに消す。
 _STATE = tempfile.mkdtemp(prefix="leani-test-")
+atexit.register(shutil.rmtree, _STATE, ignore_errors=True)
 os.environ["LEANI_INIT"] = os.path.join(_STATE, "no-such-init.lean")
 os.environ["LEANI_HISTORY"] = os.path.join(_STATE, "history")
 os.environ["LEANI_CONFIG"] = os.path.join(_STATE, "config.toml")
