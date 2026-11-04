@@ -555,7 +555,7 @@ def classify(probe: Probe | None) -> tuple[State, Kind]:
 
 
 def classify_tac(probe: Probe | None) -> tuple[State, Kind]:
-    """証明モードでは tacticSeq として読めるかだけを見る。"""
+    """証明モードでは、タクティクの列として読めるかだけを見る。"""
     match probe:
         case {"tac": {"ok": True}}:
             return COMPLETE, TAC

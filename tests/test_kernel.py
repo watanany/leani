@@ -177,6 +177,24 @@ def fib : Nat → Nat
         _, out, _ = run(kernel, "#print axioms cell_t")
         assert "sorryAx" not in out, out
 
+    @story("J1", "E1")
+    def it_証明モードで閉じていないタクティクは次の行に続ける(kernel):
+        run(
+            kernel,
+            "theorem cell_pair (p q : Prop) (hp : p) (hq : q) : p ∧ q := by sorry",
+        )
+        run(kernel, ":prove")
+        status, _, err = run(kernel, "exact ⟨hp,\nhq⟩")
+        assert status == "ok", err
+        _, out, _ = run(kernel, "#print axioms cell_pair")
+        assert "sorryAx" not in out, out
+
+    @story("J1")
+    def it_閉じていない_raw_文字列は次の行に続ける(kernel):
+        status, out, err = run(kernel, '#eval r#"a\nb"#.length')
+        assert status == "ok", err
+        assert "3" in out, out
+
     @story("J1")
     def it_閉じていない複数行ブロックのセルはエラーになり次のセルは実行できる(
         kernel,

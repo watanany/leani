@@ -8,18 +8,23 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-/// 完結判定。command / term / tacticSeq としてパースできるかを、1 回のリクエストで
+/// 完結判定。command、term、タクティクの列としてパースできるかを、1 回のリクエストで
 /// 確かめる。
+///
+/// タクティクの列を読む構文カテゴリは無い (`tacticSeq` はカテゴリではない)。`tactic`
+/// カテゴリは 1 つのタクティクしか読まず、`;` や `·` で並べた列をエラーにする。
+/// そこで、各行を字下げして `by` の後ろに置き、term として読む。
 pub const PARSE_PROBE: &str = r#"open Lean Parser in
 #eval show CoreM Unit from do
   let src := %s
   let env ← getEnv
-  let probe : Name → Json := fun cat =>
-    match runParserCategory env cat src with
+  let probe : Name → String → Json := fun cat s =>
+    match runParserCategory env cat s with
     | .ok _ => Json.mkObj [("ok", Json.bool true)]
     | .error e => Json.mkObj [("ok", Json.bool false), ("err", Json.str e)]
-  IO.println (Json.mkObj [("cmd", probe `command), ("term", probe `term),
-                          ("tac", probe `tacticSeq)]).compress"#;
+  let tac := "by\n" ++ "\n".intercalate ((src.splitOn "\n").map ("  " ++ ·))
+  IO.println (Json.mkObj [("cmd", probe `command src), ("term", probe `term src),
+                          ("tac", probe `term tac)]).compress"#;
 
 /// 補完の候補。複数の接頭辞の候補を、定数を 1 回走査するあいだにまとめて取得する
 /// (Mathlib では 1 回の走査に 1 秒かかる)。protected な名前には先頭に ! を付ける。
@@ -99,8 +104,11 @@ fn re(pattern: &str) -> Regex {
 }
 
 /// パーサが「まだ続きがある」と報告しているとみなすメッセージ。
-pub static INCOMPLETE: LazyLock<Regex> =
-    LazyLock::new(|| re(r"unexpected end of input|unterminated (comment|string)"));
+pub static INCOMPLETE: LazyLock<Regex> = LazyLock::new(|| {
+    re(
+        r"unexpected end of input|unterminated (comment|string|raw string literal|identifier escape)",
+    )
+});
 
 /// 複数行の入力の途中でも、: で始まる行でブロックを終わらせられるようにする (ブロックが
 /// 完結していれば送信し、途中なら捨てる)。Lean のソースの行が : で始まることは

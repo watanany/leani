@@ -708,9 +708,9 @@ class Repl:
 
     def parse(self, src: str) -> Probe | None:
         """
-        src が command / term / tacticSeq として読めるかを Lean のパーサに問い合わせる。
-        1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の notation も
-        認識される。
+        src が command、term、タクティクの列として読めるかを Lean のパーサに
+        問い合わせる。1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の
+        notation も認識される。
         """
         got = last_json(self.guard(lambda: self.eng.query(PARSE_PROBE % lean_str(src))))
         return cast(Probe, got) if isinstance(got, dict) else None

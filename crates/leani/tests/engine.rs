@@ -1992,6 +1992,18 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
+    fn 証明モードで閉じていないタクティクは次の行に続ける() {
+        let mut repl = Driver::new();
+        repl.feed(&[
+            "theorem pair (p q : Prop) (hp : p) (hq : q) : p ∧ q := by sorry",
+            ":prove",
+        ]);
+        let out = repl.feed(&["exact ⟨hp,", "hq⟩"]);
+        assert!(out.contains("証明完了"), "{out}");
+    }
+
+    #[story("E1")]
+    #[test]
     fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
         let mut repl = Driver::new();
         repl.feed(&[

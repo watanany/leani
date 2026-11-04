@@ -1077,7 +1077,7 @@ pub fn classify(probe: Option<&Json>) -> (State, Kind) {
     }
 }
 
-/// 証明モードでは tacticSeq として読めるかだけを見る。
+/// 証明モードでは、タクティクの列として読めるかだけを見る。
 pub fn classify_tac(probe: Option<&Json>) -> (State, Kind) {
     let err = probe
         .and_then(|p| p.get("tac"))

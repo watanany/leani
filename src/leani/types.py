@@ -64,7 +64,7 @@ class Parse(TypedDict, total=False):
 
 
 class Probe(TypedDict, total=False):
-    """PARSE_PROBE の応答。command / term / tacticSeq を 1 回で確かめた結果。"""
+    """PARSE_PROBE の応答。command、term、タクティクの列を 1 回で確かめた結果。"""
 
     cmd: Parse
     term: Parse

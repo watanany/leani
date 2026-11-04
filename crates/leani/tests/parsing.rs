@@ -154,6 +154,13 @@ mod パーサからの応答 {
         assert!(INCOMPLETE.is_match("unterminated comment"));
     }
 
+    #[story("C6")]
+    #[test]
+    fn 閉じていない_raw_文字列と名前のエスケープは続きを待つ() {
+        assert!(INCOMPLETE.is_match("<input>:1:9: unterminated raw string literal"));
+        assert!(INCOMPLETE.is_match("<input>:1:8: unterminated identifier escape"));
+    }
+
     #[story("C1")]
     #[test]
     fn ただのエラーは待たずに送る() {
@@ -445,7 +452,7 @@ mod 入力が完結したかの判定 {
 
     #[story("E1")]
     #[test]
-    fn 証明モードでは_tacticSeq_だけを見る() {
+    fn 証明モードではタクティクの列として読めるかだけを見る() {
         let ok = json!({"tac": {"ok": true}});
         assert_eq!(pure::classify_tac(Some(&ok)), (State::Complete, Kind::Tac));
         let more = json!({"tac": {"ok": false, "err": "unexpected end of input"}});
