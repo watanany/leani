@@ -200,27 +200,88 @@ fn is_test(attrs: &[Attribute]) -> bool {
     })
 }
 
+/// `#[ignore]` か、`cfg(test)` 以外の `#[cfg]` が付いているか。どちらのテストも、
+/// `cargo nextest run` で実行されないことがある。
+fn skipped(attrs: &[Attribute]) -> bool {
+    attrs.iter().any(|a| {
+        a.path().is_ident("ignore")
+            || (a.path().is_ident("cfg")
+                && a.meta
+                    .require_list()
+                    .map_or(true, |l| l.tokens.to_string() != "test"))
+    })
+}
+
+/// `mod x;` の中身。`dir` にある `x.rs` か `x/mod.rs` を読む。
+fn outside(dir: &Path, name: &str) -> Result<syn::File, String> {
+    let path = [
+        dir.join(format!("{name}.rs")),
+        dir.join(name).join("mod.rs"),
+    ]
+    .into_iter()
+    .find(|p| p.is_file())
+    .ok_or_else(|| format!("mod {name}; のファイルが無い: {}", dir.display()))?;
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// `mod` を再帰的にたどってテストを集める。テストを含む `mod` が describe になる。
 /// `mod` は入れ子にでき、describe の名前は外側の `mod` から ` / ` でつなぐ。
+/// `dir` は、`mod x;` と書いたときに `x` のファイルを探すディレクトリ。
 ///
-/// `#[story]` が付いているのにテストの属性が無い関数はエラーにする。テストとして
-/// 実行されないので、`SPEC.md` に載らないまま気づけない。
-fn descend(items: &[Item], layer: &str, place: Option<&str>) -> Result<Vec<Test>, String> {
+/// 次の書き方はエラーにする。どれも、`SPEC.md` と実行されるテストがずれるのに気づけない。
+///
+/// ```text
+/// #[story] が付いているのにテストの属性が無い関数   実行されないのに載る
+/// #[ignore] か #[cfg] が付いたテストと mod         実行されないことがあるのに載る
+/// 直下のマクロ (proptest! など)                   中のテストを読めないので載らない
+/// #[path] の付いた mod                            ファイルを探さないので載らない
+/// ```
+fn descend(
+    items: &[Item],
+    layer: &str,
+    place: Option<&str>,
+    dir: &Path,
+) -> Result<Vec<Test>, String> {
     let here = place.unwrap_or(layer);
     items
         .iter()
         .map(|item| match item {
-            Item::Mod(m) => match &m.content {
-                Some((_, inner)) => {
-                    let name = label(&m.ident.to_string());
-                    let inside = match place {
-                        Some(outer) => format!("{outer} / {name}"),
-                        None => name,
-                    };
-                    descend(inner, layer, Some(&inside))
+            Item::Mod(m) if m.attrs.iter().any(|a| a.path().is_ident("path")) => Err(format!(
+                "#[path] の付いた mod は読まない: {layer} / {here} / {}",
+                m.ident
+            )),
+            Item::Mod(m) => {
+                let ident = m.ident.to_string();
+                let name = label(&ident);
+                let inside = match place {
+                    Some(outer) => format!("{outer} / {name}"),
+                    None => name,
+                };
+                let sub = dir.join(&ident);
+                let tests = match &m.content {
+                    Some((_, inner)) => descend(inner, layer, Some(&inside), &sub)?,
+                    None => descend(&outside(dir, &ident)?.items, layer, Some(&inside), &sub)?,
+                };
+                match (skipped(&m.attrs), tests.is_empty()) {
+                    (true, false) => {
+                        Err(format!("実行されないことがあるテスト: {layer} / {inside}"))
+                    }
+                    _ => Ok(tests),
                 }
-                None => Ok(Vec::new()),
-            },
+            }
+            Item::Macro(m) if m.ident.is_none() => Err(format!(
+                "マクロの中のテストは読めない: {layer} / {here} / {}!",
+                m.mac
+                    .path
+                    .segments
+                    .last()
+                    .map_or(String::new(), |s| s.ident.to_string())
+            )),
+            Item::Fn(f) if is_test(&f.attrs) && skipped(&f.attrs) => Err(format!(
+                "実行されないことがあるテスト: {layer} / {here} / {}",
+                f.sig.ident
+            )),
             Item::Fn(f) if is_test(&f.attrs) => Ok(vec![Test {
                 what: label(&f.sig.ident.to_string()),
                 place: format!("{layer} / {here}"),
@@ -236,41 +297,53 @@ fn descend(items: &[Item], layer: &str, place: Option<&str>) -> Result<Vec<Test>
         .map(|v| v.into_iter().flatten().collect())
 }
 
-/// 行の中で開いたまま閉じていない三重引用符。`"""` と `'''` のうち先に出てくるほうを
-/// 見て、その数が奇数なら開いたままになる。1 行で閉じる docstring は偶数になる。
-fn opens_string(line: &str) -> Option<&'static str> {
-    ["\"\"\"", "'''"]
-        .into_iter()
-        .filter_map(|q| line.find(q).map(|at| (at, q)))
-        .min()
-        .and_then(|(_, q)| (line.matches(q).count() % 2 == 1).then_some(q))
+/// Python の 1 行を左から読んでいるときの状態。
+#[derive(Clone, Copy)]
+enum Lex {
+    Code,
+    /// `'` か `"` の文字列。行の中で閉じる。
+    Short(char),
+    /// 三重引用符の文字列。行をまたいで続く。
+    Long(&'static str),
 }
 
-/// 行のうち、`#` のコメントより前の部分。引用符の中の `#` はコメントにしない。
-fn code_part(line: &str) -> &str {
-    let mut quote = None;
-    let mut escaped = false;
-    for (at, c) in line.char_indices() {
-        match (quote, c) {
-            _ if escaped => escaped = false,
-            (Some(_), '\\') => escaped = true,
-            (Some(q), c) if c == q => quote = None,
-            (None, '"' | '\'') => quote = Some(c),
-            (None, '#') => return &line[..at],
-            _ => {}
-        }
+/// 1 行を左から読み、行の終わりで開いたままの三重引用符を返す。`open` は、行の始まりで
+/// 開いている三重引用符。引用符の中の `#` と三重引用符、`#` のコメントの中の引用符は
+/// 文字列の始まりと終わりにしない。三重引用符を閉じた行の残りも読む。
+fn string_after(line: &str, open: Option<&'static str>) -> Option<&'static str> {
+    let mut lex = open.map_or(Lex::Code, Lex::Long);
+    let mut rest = line;
+    while let Some(c) = rest.chars().next() {
+        let triple = if c == '"' { "\"\"\"" } else { "'''" };
+        let (next, used) = match (lex, c) {
+            (Lex::Code, '#') => return None,
+            (Lex::Code, '"' | '\'') if rest.starts_with(triple) => (Lex::Long(triple), 3),
+            (Lex::Code, '"' | '\'') => (Lex::Short(c), 1),
+            (Lex::Short(_) | Lex::Long(_), '\\') => {
+                (lex, 1 + rest[1..].chars().next().map_or(0, char::len_utf8))
+            }
+            (Lex::Short(q), c) if c == q => (Lex::Code, 1),
+            (Lex::Long(q), _) if rest.starts_with(q) => (Lex::Code, 3),
+            _ => (lex, c.len_utf8()),
+        };
+        lex = next;
+        rest = &rest[used..];
     }
-    line
+    match lex {
+        Lex::Long(q) => Some(q),
+        Lex::Code | Lex::Short(_) => None,
+    }
 }
 
 /// Python のテストファイルを行単位で読む。describe はインデントで入れ子にする。
 ///
 /// 三重引用符の中の行は読まない。セルの中身として書いた `def fib` を関数と見なすと、
-/// インデントが 0 なので、開いている describe を閉じてしまう。コメントの中の
-/// 三重引用符は文字列の始まりにしない。
+/// インデントが 0 なので、開いている describe を閉じてしまう。
 ///
-/// pytest-describe が集めるのは `describe_` の関数の中の `it_` だけである。describe の
-/// 外や `class` の中の `it_` はエラーにする。実行されないテストが `SPEC.md` に載る。
+/// describe の外や `class` の中の `it_` はエラーにする。pytest-describe はこれを
+/// 集めないので、実行されないテストが `SPEC.md` に載る。反対に、pytest は describe の
+/// 中の `it_` でない関数もテストとして集める。そのテストは、`tests/stories.py` が
+/// 実行する前に失敗させる。
 fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
     struct Scan {
         /// 開いているブロックの (インデント, describe の名前)。`class` は名前が None。
@@ -288,13 +361,11 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
         out: Vec::new(),
     };
     let done = text.lines().try_fold(start, |mut scan, line| {
-        if let Some(q) = scan.string {
-            if line.contains(q) {
-                scan.string = None;
-            }
+        let inside = scan.string;
+        scan.string = string_after(line, inside);
+        if inside.is_some() {
             return Ok(scan);
         }
-        scan.string = opens_string(code_part(line));
         let body = line.trim_start();
         let indent = line.len() - body.len();
         let name = body
@@ -320,7 +391,9 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
         if let Some(d) = name.strip_prefix("describe_") {
             scan.describes.push((indent, Some(label(d))));
         } else if let Some(it) = name.strip_prefix("it_") {
-            let Some((_, Some(place))) = scan.describes.last() else {
+            let names: Option<Vec<&str>> =
+                scan.describes.iter().map(|(_, d)| d.as_deref()).collect();
+            let Some(place) = names.filter(|n| !n.is_empty()).map(|n| n.join(" / ")) else {
                 return Err(format!(
                     "describe の外の it_ は pytest で実行されない: {layer} / {name}"
                 ));
@@ -367,7 +440,8 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
                 return python_tests(&text, layer);
             }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
-            descend(&file.items, layer, None)
+            let dir = path.parent().unwrap_or(Path::new("."));
+            descend(&file.items, layer, None, dir)
         })
         .collect::<Result<Vec<_>, String>>()
         .map(|v| v.into_iter().flatten().collect())
@@ -553,11 +627,12 @@ mod tests {
             "#,
         )
         .unwrap();
-        let got: Vec<(String, String, Vec<String>)> = descend(&file.items, "parsing", None)
-            .unwrap()
-            .into_iter()
-            .map(|t| (t.place, t.what, t.stories))
-            .collect();
+        let got: Vec<(String, String, Vec<String>)> =
+            descend(&file.items, "parsing", None, Path::new("."))
+                .unwrap()
+                .into_iter()
+                .map(|t| (t.place, t.what, t.stories))
+                .collect();
         assert_eq!(
             got,
             [
@@ -585,6 +660,7 @@ def describe_セルの実行():
     def it_colon_q_は何もしない(kernel):
         pass
 
+    @pytest.fixture
     def helper():
         pass
 
@@ -668,7 +744,7 @@ def fib : Nat → Nat
             "#,
         )
         .unwrap();
-        assert!(descend(&file.items, "parsing", None).is_err());
+        assert!(descend(&file.items, "parsing", None, Path::new(".")).is_err());
     }
 
     #[test]
@@ -685,7 +761,7 @@ def fib : Nat → Nat
             "#,
         )
         .unwrap();
-        let got: Vec<String> = descend(&file.items, "parsing", None)
+        let got: Vec<String> = descend(&file.items, "parsing", None, Path::new("."))
             .unwrap()
             .into_iter()
             .map(|t| t.place)
@@ -721,6 +797,102 @@ def describe_セルの実行():
         assert!(python_tests(top, "kernel").is_err());
         let class = "def describe_セル():\n    class TestX:\n        @story(\"J1\")\n        def it_中のテスト(self):\n            pass\n";
         assert!(python_tests(class, "kernel").is_err());
+    }
+
+    #[test]
+    fn ふつうの文字列の中の三重引用符では文字列にしない() {
+        let text = r#"
+def describe_セルの実行():
+
+    @story("J1")
+    def it_前のテスト(kernel):
+        src = 'x = """'
+        code = "theorem h''' : True := trivial"
+        doc = """閉じる""" + """
+続く"""
+        pass
+
+    @story("J2")
+    def it_後ろのテスト(kernel):
+        pass
+"#;
+        let got: Vec<String> = python_tests(text, "kernel")
+            .unwrap()
+            .into_iter()
+            .map(|t| t.what)
+            .collect();
+        assert_eq!(got, ["前のテスト", "後ろのテスト"]);
+    }
+
+    #[test]
+    fn 入れ子の_describe_は外側の名前から並べる() {
+        let text = r#"
+def describe_外側A():
+    def describe_共通():
+        @story("J1")
+        def it_同じ名前(kernel):
+            pass
+
+def describe_外側B():
+    def describe_共通():
+        @story("J1")
+        def it_同じ名前(kernel):
+            pass
+"#;
+        let got: Vec<String> = python_tests(text, "kernel")
+            .unwrap()
+            .into_iter()
+            .map(|t| t.place)
+            .collect();
+        assert_eq!(got, ["kernel / 外側A / 共通", "kernel / 外側B / 共通"]);
+    }
+
+    /// テストごとの一時ディレクトリ。`files` の (パス, 中身) を書いておく。
+    fn scratch(name: &str, files: &[(&str, &str)]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("spec-{}-{name}", std::process::id()));
+        for (path, text) in files {
+            let path = dir.join(path);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        dir
+    }
+
+    #[test]
+    fn 別のファイルの_mod_のテストも読む() {
+        let test = "#[story(\"A1\")]\n#[test]\nfn 評価される() {}\n";
+        let dir = scratch(
+            "mod",
+            &[
+                ("外.rs", "mod 内;\n"),
+                ("外/内.rs", test),
+                ("共通/mod.rs", "mod 下;\n"),
+                ("共通/下.rs", test),
+            ],
+        );
+        let file = syn::parse_file("mod 外;\nmod 共通;\n").unwrap();
+        let got = descend(&file.items, "parsing", None, &dir)
+            .map(|v| v.into_iter().map(|t| t.place).collect::<Vec<_>>());
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(got.unwrap(), ["parsing / 外 / 内", "parsing / 共通 / 下"]);
+    }
+
+    #[test]
+    fn 実行されないか読み取れないテストはエラーにする() {
+        let dir = std::env::temp_dir();
+        for text in [
+            "proptest! { #[test] fn 評価される(a in 0..1) {} }",
+            "#[story(\"A1\")] #[test] #[ignore] fn 評価される() {}",
+            "#[story(\"A1\")] #[test] #[cfg(unix)] fn 評価される() {}",
+            "#[cfg(unix)] mod 式 { #[story(\"A1\")] #[test] fn 評価される() {} }",
+            "mod 無いファイル;",
+        ] {
+            let file = syn::parse_file(text).unwrap();
+            assert!(
+                descend(&file.items, "parsing", None, &dir).is_err(),
+                "{text}"
+            );
+        }
     }
 
     #[test]

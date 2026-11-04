@@ -13,9 +13,11 @@ import shutil
 import sys
 import tempfile
 import textwrap
-import tomllib
 
 import pytest
+
+# stories は @story と、SPEC.md に載らないテストを見つける hook を持つ。
+pytest_plugins = ["pytester", "stories"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
@@ -45,33 +47,6 @@ with open(os.environ["LEANI_CONFIG"], "w") as _f:
         prompt = "λ+> "
         """)
     )
-
-with open(os.path.join(ROOT, "stories.toml"), "rb") as f:
-    STORIES = {s["id"] for s in tomllib.load(f)["story"]}
-
-
-# ---------------------------------------------------------- ストーリーの指定
-
-
-def story(*ids):
-    """
-    このテストが対象にするユーザーストーリー (stories.toml) を指定する。
-
-    テストの中身にも分け方にも影響しない。ID が stories.toml にあるかは
-    import するときに確認する。crates/spec は SPEC.md を生成するとき、この指定を
-    行単位で読む。1 つのテストが複数のストーリーを対象にしてよく、
-    1 つのストーリーを複数のテストが対象にしてよい。ストーリーはテストの目次ではなく、
-    テストが足りているかを数える表なので、対応は N:M になる。
-    """
-    unknown = [i for i in ids if i not in STORIES]
-    if unknown:
-        raise ValueError(f"stories.toml に無いストーリー: {unknown}")
-
-    def mark(fn):
-        return fn
-
-    return mark
-
 
 # ------------------------------------------------------------------ fixture
 

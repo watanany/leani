@@ -17,10 +17,11 @@ import sys
 import time
 
 import pytest
-from conftest import SRC, story
+from conftest import SRC
 from jupyter_client.manager import start_new_kernel
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
+from stories import story
 
 import leani.boot
 import leani.kernel
@@ -504,3 +505,37 @@ def describe_カーネルの登録():
         spec = json.loads((tmp_path / "kernels/leani/kernel.json").read_text())
         assert spec["argv"][:3] == [sys.executable, "-m", "leani.kernel"]
         assert spec["env"] == {"FORCE_COLOR": "1"}
+
+
+def describe_SPEC_md_との対応():
+    @story("X1")
+    def it_SPEC_md_に載らない形のテストはエラーにする(pytester):
+        pytester.makepyfile(
+            test_forms="""
+            from stories import story
+
+            def describe_セル():
+                @story("J1")
+                def it_載る():
+                    pass
+
+                def 補助():
+                    pass
+
+                def it_story_が無い():
+                    pass
+
+            def test_直下():
+                pass
+
+            class TestX:
+                def test_中(self):
+                    pass
+            """
+        )
+        result = pytester.runpytest("-p", "stories", "-p", "no:xdist")
+        out = result.stdout.str() + result.stderr.str()
+        assert result.ret != 0
+        for name in ("補助", "it_story_が無い", "test_直下", "test_中"):
+            assert name in out
+        assert "it_載る" not in out
