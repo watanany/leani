@@ -25,6 +25,7 @@ cargo install --git https://github.com/watanany/leani leani
 ```sh
 leani              # 起動する
 leani -i Mathlib   # Mathlib を import して起動する
+leani file.lean    # file.lean を読み込んで起動する
 ```
 
 REPL の中では `:help` でコマンドの一覧を表示する。
