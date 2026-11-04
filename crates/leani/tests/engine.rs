@@ -666,6 +666,7 @@ mod replay_が途中で止まったとき {
         repl.unhook();
 
         assert!(out.contains("再実行を中断した"), "{out}");
+        assert!(out.contains("入力した行は実行しなかった"), "{out}");
         assert!(!out.contains("再実行しても"), "{out}");
         assert_eq!(out.matches("件を再実行した").count(), 1, "{out}");
         assert_eq!(repl.declarations(), ["def r1 := 1"]);
@@ -2595,6 +2596,42 @@ mod 完結の判定を中断したとき {
             "取り消した宣言が戻っていない"
         );
         assert_eq!(repl.declarations().len(), 1);
+    }
+
+    #[story("A4", "F1")]
+    #[test]
+    fn 判定で再起動したときの再実行を止めたら取り消した宣言を保留の後ろに戻す() {
+        // 取り消した宣言 r3 は、保留にした r2 より後ろにあった。r3 をすぐに再実行
+        // すると、ユーザーが止めた再実行を続けることになり、:restart では r3 が r2
+        // より先に実行される。
+        let mut repl = Driver::new();
+        for one in ["def r1 := 1", "def r2 := 2", "def r3 := 3"] {
+            repl.feed(&[one]);
+        }
+
+        let (mut died, mut hit) = (false, false);
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if !died && probes(obj, "+ (") => {
+                died = true;
+                Hooked::Kill
+            }
+            Stage::Written(obj) if died && !hit && cmd(obj).starts_with("def r2") => {
+                hit = true;
+                Hooked::Interrupt
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["  + ("]); // r3 の続き。r3 を取り消して判定する
+        repl.unhook();
+
+        assert!(out.contains("再実行を中断した"), "{out}");
+        assert_eq!(
+            out.matches("入力した行は実行しなかった").count(),
+            1,
+            "{out}"
+        );
+        assert_eq!(repl.declarations(), ["def r1 := 1"]);
+        assert_eq!(repl.repl.eng().unplayed(), ["def r2 := 2", "def r3 := 3"]);
     }
 }
 

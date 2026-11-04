@@ -296,6 +296,26 @@ mod 補完する名前の切り出し {
     }
 
     #[story("D1")]
+    #[test]
+    fn Lean_の名前に使えない文字で区切る() {
+        // Lean の名前に使える文字は、Unicode の英数字より狭い。漢字や全角の英字を
+        // 名前に含めると、`定理Nat.su` を 1 つの名前として問い合わせ、候補が出ない。
+        for (text, before) in [("定理Nat.su", "定理"), ("①x", "①"), ("Ａx", "Ａ")] {
+            assert_eq!(pure::name_start(text), before.len(), "{text}");
+        }
+        for text in ["café", "Ω₁", "𝔽"] {
+            assert_eq!(pure::name_start(text), 0, "{text}");
+        }
+    }
+
+    #[story("D1")]
+    #[test]
+    fn 長い名前でもスタックを使い切らない() {
+        assert_eq!(pure::name_start(&"a".repeat(1_000_000)), 0);
+        assert_eq!(pure::name_start(&"«a»".repeat(300_000)), 0);
+    }
+
+    #[story("D1")]
     #[proptest]
     fn 記号のあとの名前をそのまま切り出す(
         #[strategy(prop::sample::select(vec!["@", "¬", "(", "⟨", " ", "+", "λ", "∘", "↦", "\""]))]
@@ -1878,7 +1898,7 @@ mod ファイルの_import {
                    public meta import Bar\ndef x := 1";
         assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std", "Foo", "Bar"]);
         assert_eq!(
-            pure::import_decls(src),
+            pure::scan_header(src).0.imports,
             [
                 "public import Lean.Elab",
                 "meta import all Std",
@@ -1888,6 +1908,15 @@ mod ファイルの_import {
         );
         // module の行も取り除く。既存の環境の上では module を宣言できない。
         assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
+    }
+
+    #[story("B4")]
+    #[test]
+    fn コメントの付いた_module_の行も読む() {
+        let src = "module -- メモ\nimport Std\ndef x := 1";
+        assert!(pure::scan_header(src).0.module);
+        assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
+        assert!(!pure::scan_header("modules\ndef x := 1").0.module);
     }
 
     #[story("B4")]

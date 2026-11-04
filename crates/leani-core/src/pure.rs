@@ -130,23 +130,45 @@ fn open_guillemet(text: &str) -> Option<usize> {
     }
 }
 
-/// text の末尾に続く名前の先頭。
+/// text の末尾に続く名前の先頭。再帰で書くと、長い入力でスタックを使い切る。
 fn name_run(text: &str) -> usize {
+    std::iter::successors(Some(text.len()), |&end| name_step(&text[..end]))
+        .last()
+        .unwrap_or(text.len())
+}
+
+/// text の末尾の 1 文字か `«…»` を名前の一部にしたときの、残りの長さ。
+fn name_step(text: &str) -> Option<usize> {
     match text.chars().next_back() {
-        Some('»') => match text.rfind('«') {
-            Some(open) => name_run(&text[..open]),
-            None => text.len(),
-        },
-        Some(c) if is_name_char(c) => name_run(&text[..text.len() - c.len_utf8()]),
-        _ => text.len(),
+        Some('»') => text.rfind('«'),
+        Some(c) if is_name_char(c) => Some(text.len() - c.len_utf8()),
+        _ => None,
     }
 }
 
-/// 名前に使える文字。英数字 (ギリシャ文字、`ℕ` などの記号の文字、下付き文字を含む)
-/// と `_ ' ! ? .`。λ、Π、Σ は Lean では名前に使えない。
+/// 名前に使える文字。Lean の `isIdRest` (`Init/Meta/Defs.lean`) と同じ規則に `.` を
+/// 足したもの。英数字は ASCII だけで、漢字や全角の英字は使えない。
 fn is_name_char(c: char) -> bool {
-    (c.is_alphanumeric() && !matches!(c, 'λ' | 'Π' | 'Σ'))
+    c.is_ascii_alphanumeric()
         || matches!(c, '_' | '\'' | '!' | '?' | '.')
+        || is_letter_like(c)
+        || is_subscript_alnum(c)
+}
+
+/// Lean の `isLetterLike`。ギリシャ文字 (λ、Π、Σ を除く)、ラテン文字の拡張、
+/// `ℕ` などの記号の文字、数学用の英字。
+fn is_letter_like(c: char) -> bool {
+    matches!(c,
+        '\u{3b1}'..='\u{3c9}' | '\u{391}'..='\u{3a9}' | '\u{3ca}'..='\u{3fb}'
+        | '\u{1f00}'..='\u{1ffe}' | '\u{2100}'..='\u{214f}' | '\u{1d49c}'..='\u{1d59f}'
+        | '\u{c0}'..='\u{ff}' | '\u{100}'..='\u{17f}')
+        && !matches!(c, 'λ' | 'Π' | 'Σ' | '×' | '÷')
+}
+
+/// Lean の `isSubScriptAlnum`。下付きの数字と英字。
+fn is_subscript_alnum(c: char) -> bool {
+    matches!(c,
+        '\u{2080}'..='\u{2089}' | '\u{2090}'..='\u{209c}' | '\u{1d62}'..='\u{1d6a}' | '\u{2c7c}')
 }
 
 /// ヘルプに書いてある `:` コマンドの名前 (`:` は付けない)。補完の候補にする。
@@ -493,7 +515,7 @@ pub fn scan_header(text: &str) -> (Header, BTreeSet<usize>) {
             continue;
         } else if one.starts_with("/-") {
             depth = comment_depth(line, 0);
-        } else if one == "module" {
+        } else if is_module_line(one) {
             head.module = true;
             at.insert(n);
         } else if import_of(one).is_some() {
@@ -505,6 +527,12 @@ pub fn scan_header(text: &str) -> (Header, BTreeSet<usize>) {
     }
 
     (head, at)
+}
+
+/// `module` の行か。後ろに行コメントを書いてもよい。前後の空白は取り除いてある
+/// 行を受け取る。
+fn is_module_line(one: &str) -> bool {
+    one == "module" || drop_word(one, "module").is_some_and(|rest| rest.starts_with("--"))
 }
 
 /// import の行ならモジュール名。前後の空白は取り除いてある行を受け取る。
@@ -539,11 +567,6 @@ pub fn import_lines(text: &str) -> Vec<String> {
         .filter_map(|line| import_of(line))
         .map(String::from)
         .collect()
-}
-
-/// import の行を、修飾子を付けたまま並べる。:save のヘッダに書き戻すため。
-pub fn import_decls(text: &str) -> Vec<String> {
-    scan_header(text).0.imports
 }
 
 /// `module` と import の行を取り除く。既存の環境の上で実行するときに使う。
@@ -607,13 +630,16 @@ pub fn save_header(imports: &[String], loaded: &Header) -> String {
         module_header(&loaded.imports)
     } else {
         let own = loaded.imports.iter().filter_map(|line| import_of(line));
-        let mut mods: Vec<&str> = vec!["Lean"];
-        for m in imports.iter().map(String::as_str).chain(own) {
-            if !mods.contains(&m) {
-                mods.push(m);
-            }
-        }
-        mods.iter().map(|m| format!("import {m}\n")).collect()
+        let mods: Vec<&str> = std::iter::once("Lean")
+            .chain(imports.iter().map(String::as_str))
+            .chain(own)
+            .collect();
+        // 同じモジュールは、最初に出てきたところにだけ書く。
+        mods.iter()
+            .enumerate()
+            .filter(|&(n, m)| !mods[..n].contains(m))
+            .map(|(_, m)| format!("import {m}\n"))
+            .collect()
     }
 }
 

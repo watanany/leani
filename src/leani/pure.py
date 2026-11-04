@@ -133,12 +133,32 @@ def name_run(text: str) -> int:
     return at
 
 
+# Lean の `isLetterLike` の範囲 (両端を含む)。ギリシャ文字、ラテン文字の拡張、
+# `ℕ` などの記号の文字、数学用の英字。
+LETTER_LIKE = (
+    (0x3B1, 0x3C9),
+    (0x391, 0x3A9),
+    (0x3CA, 0x3FB),
+    (0x1F00, 0x1FFE),
+    (0x2100, 0x214F),
+    (0x1D49C, 0x1D59F),
+    (0xC0, 0xFF),
+    (0x100, 0x17F),
+)
+
+# Lean の `isSubScriptAlnum` の範囲 (両端を含む)。下付きの数字と英字。
+SUBSCRIPT = ((0x2080, 0x2089), (0x2090, 0x209C), (0x1D62, 0x1D6A), (0x2C7C, 0x2C7C))
+
+
 def is_name_char(ch: str) -> bool:
     """
-    名前に使える文字。英数字 (ギリシャ文字、`ℕ` などの記号の文字、下付き文字を含む)
-    と `_ ' ! ? .`。λ、Π、Σ は Lean では名前に使えない。
+    名前に使える文字。Lean の `isIdRest` (`Init/Meta/Defs.lean`) と同じ規則に `.` を
+    足したもの。英数字は ASCII だけで、漢字や全角の英字は使えない。
     """
-    return (ch.isalnum() and ch not in "λΠΣ") or ch in "_'!?."
+    code = ord(ch)
+    letter_like = ch not in "λΠΣ×÷" and any(lo <= code <= hi for lo, hi in LETTER_LIKE)
+    subscript = any(lo <= code <= hi for lo, hi in SUBSCRIPT)
+    return (ch.isascii() and ch.isalnum()) or ch in "_'!?." or letter_like or subscript
 
 
 def meta_names(help_text: str) -> tuple[str, ...]:

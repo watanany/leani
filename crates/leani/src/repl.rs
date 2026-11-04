@@ -510,7 +510,7 @@ impl Repl {
             return;
         }
 
-        let Some(resp) = self.guard(|eng| eng.run_init(&src)) else {
+        let Some(resp) = self.guard_quiet(|eng| eng.run_init(&src)) else {
             return;
         };
         if has_error(&resp) {
@@ -680,7 +680,7 @@ impl Repl {
             return;
         }
 
-        let Some(out) = self.guard(|eng| Ok(eng.replay(log))) else {
+        let Some(out) = self.guard_quiet(|eng| Ok(eng.replay(log))) else {
             self.out.write(
                 &self
                     .style
@@ -711,7 +711,24 @@ impl Repl {
     ///
     /// それ以外のエラー (`NoEnvironment`、`Io`、`Setup`) は「内部エラー」として表示し、
     /// None を返す。
+    ///
+    /// 異常終了したのに再実行できなかったときは、入力を実行しなかったことを表示する。
+    /// 表示しないと、ユーザーは入力が実行されたのかどうか分からない。
     fn guard<T>(&mut self, f: impl Fn(&mut Engine) -> Result<T, EngineFault>) -> Option<T> {
+        self.guard_with(f, true)
+    }
+
+    /// `guard` と同じだが、入力を実行しなかったことは表示しない。呼び出し元が
+    /// 自分で表示するときと、ユーザーの入力ではないものを送るときに使う。
+    fn guard_quiet<T>(&mut self, f: impl Fn(&mut Engine) -> Result<T, EngineFault>) -> Option<T> {
+        self.guard_with(f, false)
+    }
+
+    fn guard_with<T>(
+        &mut self,
+        f: impl Fn(&mut Engine) -> Result<T, EngineFault>,
+        tell: bool,
+    ) -> Option<T> {
         let retry = match f(&mut self.eng) {
             Ok(v) => return Some(v),
             Err(EngineFault::Interrupted) => {
@@ -730,7 +747,13 @@ impl Repl {
             }
         };
 
-        self.revive()?;
+        if self.revive().is_none() {
+            if retry && tell {
+                self.out
+                    .write(&self.style.dim("  入力した行は実行しなかった"));
+            }
+            return None;
+        }
 
         if retry {
             match f(&mut self.eng) {
@@ -775,16 +798,18 @@ impl Repl {
     /// 1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の notation も
     /// 認識される。
     ///
-    /// guard が止めたら (Ctrl-C か、再起動したあとの再実行でも止まった) None を返す。
-    /// 問い合わせがエラーになったときと環境が無いときは `Some(None)` を返す。この
-    /// 2 つを混ぜると、環境が無いときにも入力を捨てることになる。
+    /// guard が結果を返さなかったら None を返す。Ctrl-C で止めたとき、再起動か
+    /// 再起動のあとの再実行が止まったとき、内部エラーのときである。呼び出し元は
+    /// 入力を送らずに捨てる。問い合わせがエラーになったときと環境が無いときは
+    /// `Some(None)` を返す。この 2 つを混ぜると、環境が無いときにも入力を捨てる
+    /// ことになる。
     fn parse(&mut self, src: &str) -> Option<Option<Json>> {
         let probe = fill(PARSE_PROBE, &[&lean_str(src)]);
-        let got = self.guard(|eng| eng.query(&probe))?;
+        let got = self.guard_quiet(|eng| eng.query(&probe))?;
         Some(last_json(got.as_deref()).filter(Json::is_object))
     }
 
-    /// 完結したかと、送り方。guard が止めたら None。
+    /// 完結したかと、送り方。guard が結果を返さなかったら None。
     fn probe(&mut self, src: &str) -> Option<(State, Kind)> {
         self.parse(src).map(|p| classify(p.as_ref()))
     }
@@ -1074,11 +1099,27 @@ impl Repl {
             self.held = held;
             return;
         }
-        if let Some(src) = undone.src {
-            // 保存しているあいだにエンジンが再起動された。保存した env id は無効に
-            // なっているので設定できない。テキストから再実行する。
+        let Some(src) = undone.src else {
+            return;
+        };
+        // 保存しているあいだにエンジンが再起動された。保存した env id は無効に
+        // なっているので設定できない。テキストから再実行する。
+        //
+        // 再起動の再実行を打ち切って保留が残っていたら、実行せずに保留の後ろに
+        // 並べる。取り消した宣言は保留の宣言より後ろにあったので、先に実行すると
+        // 順番が変わる。ユーザーが Ctrl-C で再実行を止めたときは、再実行を続ける
+        // ことにもなる。
+        if self.eng.unplayed().is_empty() {
             self.replay_into(&[src]);
+            return;
         }
+        self.out.write(&self.style.yellow(&format!(
+            "再実行しなかった宣言: {}",
+            head_line(&src, HEAD_WIDTH)
+        )));
+        self.out
+            .write(&self.style.dim(&format!("  {PENDING_HINT}")));
+        self.eng.defer(src);
     }
 
     // -- 送信 -------------------------------------------------------------

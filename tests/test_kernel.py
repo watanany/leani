@@ -285,6 +285,10 @@ def describe_Jupyter_の補完の形():
     def it_名前の前の記号で区切る():
         assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 
+    @story("J2", "D1")
+    def it_Lean_の名前に使えない文字で区切る():
+        assert jupyter("#check 定理Nat.su") == (len("#check 定理"), ["Nat.succ"])
+
     @story("J2")
     def it_候補が無ければカーソルの位置を返す():
         assert jupyter(":env ") == (len(":env "), [])

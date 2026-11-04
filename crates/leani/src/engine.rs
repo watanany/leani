@@ -860,6 +860,12 @@ impl Engine {
         out
     }
 
+    /// 宣言を実行せずに、保留の末尾に並べる。保留より後ろに入力した宣言を、保留より
+    /// 先に実行しないために使う。
+    pub fn defer(&mut self, src: String) {
+        self.unplayed.push(src);
+    }
+
     /// 環境に戻せなかった宣言を、保留の先頭に並べる。
     fn hold(&mut self, failed: &[String], skipped: &[String]) {
         let mut unplayed = failed.to_vec();
