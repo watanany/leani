@@ -91,7 +91,8 @@ pub fn cell_width(text: &str) -> usize {
     text.chars().map(char_width).sum()
 }
 
-fn char_width(c: char) -> usize {
+/// 端末で表示したときの 1 文字の幅。
+pub fn char_width(c: char) -> usize {
     let within = |table: &[(char, char)]| {
         table
             .binary_search_by(|&(lo, hi)| {

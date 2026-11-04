@@ -6,7 +6,9 @@
 use std::io::Write;
 use std::process::{Command, Stdio};
 
-use leani_core::pure::{Style, has_error, indent, messages, panic_line, sorries, span, text};
+use leani_core::pure::{
+    Style, caret_len, caret_pad, has_error, indent, messages, panic_line, sorries, span, text,
+};
 use leani_core::types::{Json, Output};
 use leani_read::places::Ctx;
 
@@ -150,12 +152,13 @@ pub fn render(
             None => paint(style, sev, data),
             Some((ln, col, width)) => {
                 let head = format!("{ln}:{}", col + 1);
+                let line = lines.get(ln - 1).copied().unwrap_or("");
+                let marks = "^".repeat(caret_len(line, col, width));
                 let caret =
-                    " ".repeat(head.len() + 2 + col) + &paint(style, sev, &"^".repeat(width));
+                    " ".repeat(head.len() + 2) + &caret_pad(line, col) + &paint(style, sev, &marks);
                 format!(
-                    "{}  {}\n{caret}\n{}",
+                    "{}  {line}\n{caret}\n{}",
                     style.dim(&head),
-                    lines.get(ln - 1).copied().unwrap_or(""),
                     paint(style, sev, &indent(data, "  "))
                 )
             }

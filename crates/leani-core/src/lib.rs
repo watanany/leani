@@ -14,7 +14,8 @@
 //! ```
 //!
 //! 位置は byte で扱う。Lean の `column` (コードポイント単位) との変換は `pure::offset`
-//! だけで行う。表示の幅や切り詰め (`pure::clip`、`pure::span`) は文字の数で数える。
+//! だけで行う。切り詰め (`pure::clip`) とエラーの範囲 (`pure::span`) は文字の数で数え、
+//! キャレットの位置 (`pure::caret_pad`) は端末で表示したときの幅で数える。
 
 pub mod abbrev;
 pub mod history;

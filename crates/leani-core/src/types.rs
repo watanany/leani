@@ -112,6 +112,15 @@ pub struct Scope {
     pub aliases: Vec<String>,
 }
 
+/// ファイルの先頭のヘッダ (`pure::scan_header`)。
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Header {
+    /// `module` の行があるか (Lean の module system のファイルか)。
+    pub module: bool,
+    /// import の行。`public`、`meta`、`all` を落とさないよう、行のまま持つ。
+    pub imports: Vec<String>,
+}
+
 /// Tab で何を補完するか。`pure::completion_target` がカーソルの前の文字列から決める。
 ///
 /// `start` はカーソルの前の文字列のうち、候補で置き換える範囲の先頭 (byte)。候補まで

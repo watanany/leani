@@ -28,6 +28,8 @@ leani -i Mathlib   # Mathlib を import して起動する
 ```
 
 REPL の中では `:help` でコマンドの一覧を表示する。
+`:l file.lean` でファイルを読み込む。
+`module` で始まるファイルも読み込めるが、その中の宣言は private が既定なので、`public` を付けていない名前は Tab の候補に出ない。評価はできる。
 
 > [!NOTE]
 > 初回は leanprover-community/repl をビルドするので、時間がかかる。

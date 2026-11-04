@@ -1694,6 +1694,68 @@ mod 読み込んだファイルの_import {
     }
 }
 
+mod module_のファイル {
+    //! Lean の module system のファイル。`module` の行は import より前に書く決まりで、
+    //! module から module でないファイルは import できない。
+    use super::*;
+
+    /// `public import Lean` が無いと、`elab` を書いたファイルは
+    /// "imported privately" で失敗する。
+    const SRC: &str = "module\n\npublic import Lean\n\n\
+        open Lean Elab Command in\n\
+        elab \"#hello\" : command => logInfo \"hello\"\n\n\
+        public def five := 5\n";
+
+    #[story("B4")]
+    #[test]
+    fn module_のファイルを_colon_l_できる() {
+        let mut repl = Driver::new();
+        let src = file(&repl, "Mod.lean", SRC);
+        let out = repl.feed(&[&format!(":l {src}")]);
+        assert!(!out.contains("読み込めなかった"), "{out}");
+        assert!(repl.feed(&["five"]).contains('5'));
+
+        // :save したファイルも module のままで、もう一度 :l できる。
+        let saved = repl.tmp().join("Saved.lean").display().to_string();
+        repl.feed(&[&format!(":save {saved}")]);
+        let text = std::fs::read_to_string(&saved).expect("read");
+        assert!(text.starts_with("module\n"), "{text}");
+        let out = repl.feed(&[&format!(":l {saved}")]);
+        assert!(!out.contains("読み込めなかった"), "{out}\n{text}");
+        assert!(repl.feed(&["five"]).contains('5'));
+    }
+
+    #[story("B4")]
+    #[test]
+    fn module_のファイルには設定の_import_を足さない() {
+        // 既定の core は設定の import が空なので、wide に切り替えてから確かめる。
+        // wide の import (Lean.Elab.Frontend) は module なので、読み込めるかどうか
+        // では確かめられない。送ったリクエストを見る。
+        let mut repl = Driver::new();
+        repl.feed(&[":env wide"]);
+        let src = file(&repl, "Plain.lean", "module\n\npublic def m := 1\n");
+        let sent = Arc::new(Mutex::new(Vec::new()));
+        let log = sent.clone();
+        repl.hook(move |stage| {
+            if let Stage::Before(obj) = stage
+                && fresh(obj)
+            {
+                log.lock().expect("lock").push(cmd(obj).to_string());
+            }
+            Hooked::Pass
+        });
+        repl.feed(&[&format!(":l {src}")]);
+        repl.unhook();
+        let sent = sent.lock().expect("lock");
+        let load = sent
+            .iter()
+            .find(|c| c.contains("public def m"))
+            .expect(":l のリクエストが無い");
+        assert!(load.starts_with("module\npublic import Lean\n"), "{load}");
+        assert!(!load.contains("Lean.Elab.Frontend"), "{load}");
+    }
+}
+
 mod コメントに書いた_import {
     use super::*;
 

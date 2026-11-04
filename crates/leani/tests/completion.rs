@@ -290,6 +290,29 @@ mod 名前空間ごとのキャッシュ {
 mod 候補 {
     use super::*;
 
+    #[story("D1", "F2")]
+    #[test]
+    fn colon_undo_で取り消した宣言は候補に出ない() {
+        // 宣言を実行したあとに問い合わせると、その宣言の名前もキャッシュに入る。
+        let mut repl = Driver::new();
+        repl.feed(&["def myUndone.helper := 1"]);
+        let got = repl.repl.complete_names("myUndone.he");
+        assert_eq!(got, ["myUndone.helper"]);
+        repl.feed(&[":undo"]);
+        assert!(repl.repl.complete_names("myUndone.he").is_empty());
+    }
+
+    #[story("D1", "F2")]
+    #[test]
+    fn colon_reset_で取り消した宣言は候補に出ない() {
+        let mut repl = Driver::new();
+        repl.feed(&["def myReset.helper := 1"]);
+        let got = repl.repl.complete_names("myReset.he");
+        assert_eq!(got, ["myReset.helper"]);
+        repl.feed(&[":reset"]);
+        assert!(repl.repl.complete_names("myReset.he").is_empty());
+    }
+
     #[story("D1")]
     #[test]
     fn 自分で実行した宣言も候補に表示される() {

@@ -22,9 +22,9 @@ use std::time::Instant;
 
 use leani_core::abbrev::{abbrev_lookup, abbrev_table};
 use leani_core::pure::{
-    Style, abspath, balanced, block_continues, classify, classify_tac, complete_hits, continues,
-    errors, expand_home, full_names, has_error, head_line, indent, int, last_json, lean_str,
-    lean_strs, list, loogle_text, messages, meta_names, name_chunk, nested_action,
+    Style, abspath, balanced, block_continues, cache_usable, classify, classify_tac, complete_hits,
+    continues, errors, expand_home, full_names, has_error, head_line, indent, int, last_json,
+    lean_str, lean_strs, list, loogle_text, messages, meta_names, name_chunk, nested_action,
     not_evaluable_reason, own_names, save_body, scope_of, sorries, splice_sorry, strip_imports,
     tactic_step, tactic_undo, text, try_this,
 };
@@ -142,6 +142,10 @@ impl io::Write for ToOutput<'_> {
     }
 }
 
+/// どのプロセスのどの環境か (世代, env)。補完のキャッシュと open の一覧が、
+/// 問い合わせたときの環境を覚えるのに使う。
+type EnvAt = (u64, Option<i64>);
+
 /// 1 つのセッション。
 ///
 /// セッションの状態 (入力バッファ、直前の入力、証明モード、保留した sorry) を持つのは
@@ -156,10 +160,10 @@ pub struct Repl {
     search: Box<dyn Search>,
 
     // 補完のキャッシュ
-    /// `name_chunk` ごとの定数名。base 環境に紐付ける (`chunks` を参照)。
-    comp_cache: HashMap<(Option<i64>, String), Vec<String>>,
+    /// `name_chunk` ごとの定数名と、取得したときの (世代, env) (`chunks` を参照)。
+    comp_cache: HashMap<String, (EnvAt, Vec<String>)>,
     /// 今の namespace と open。(世代, env) が変わったら問い合わせ直す。
-    scope: Option<((u64, Option<i64>), Scope)>,
+    scope: Option<(EnvAt, Scope)>,
     /// REPL で実行した宣言の名前。ログの長さが変わったら集め直す。
     own: (Option<usize>, Vec<String>),
 
@@ -409,15 +413,16 @@ impl Repl {
     /// 名前空間ごとの定数名の一覧。キャッシュに無いものは、定数を 1 回走査して
     /// まとめて取得する。
     ///
-    /// キャッシュは base 環境 (import / :l 直後の環境) に紐付ける。宣言を 1 つ
-    /// 実行するたびにキャッシュを捨てると Mathlib では毎回 1.1 秒かかるので、
-    /// REPL で実行した宣言の名前だけを leani 側で追加する。open する名前空間が
-    /// 増えても、定数の走査は 1 回で済ませる。
+    /// キャッシュは、取得したときの環境が今の環境の元になっている間だけ使う
+    /// (`cache_usable`)。宣言を 1 つ実行するたびにキャッシュを捨てると Mathlib では
+    /// 毎回 1.1 秒かかるので、REPL で実行した宣言の名前だけを leani 側で追加する。
+    /// open する名前空間が増えても、定数の走査は 1 回で済ませる。
     fn chunks(&mut self, keys: &BTreeSet<String>) -> BTreeMap<String, Vec<String>> {
-        let base = self.eng.base();
+        let now = (self.eng.generation(), self.eng.env());
+        let usable = |at: EnvAt| cache_usable(at, now.0, now.1, self.eng.stack());
         let missing: Vec<String> = keys
             .iter()
-            .filter(|k| !self.comp_cache.contains_key(&(base, (*k).clone())))
+            .filter(|k| !self.comp_cache.get(*k).is_some_and(|(at, _)| usable(*at)))
             .cloned()
             .collect();
         if !missing.is_empty() {
@@ -432,15 +437,15 @@ impl Repl {
             {
                 for (k, names) in missing.iter().zip(arrays) {
                     let names: Vec<String> = list_of_strings(names);
-                    self.comp_cache.insert((base, k.clone()), names);
+                    self.comp_cache.insert(k.clone(), (now, names));
                 }
             }
         }
         keys.iter()
             .filter_map(|k| {
                 self.comp_cache
-                    .get(&(base, k.clone()))
-                    .map(|names| (k.clone(), names.clone()))
+                    .get(k)
+                    .map(|(_, names)| (k.clone(), names.clone()))
             })
             .collect()
     }

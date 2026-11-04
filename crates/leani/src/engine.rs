@@ -11,10 +11,10 @@ use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
 use leani_core::pure::{
-    error_text, first_response, has_error, has_import, head_line, import_lines, indent, info_text,
-    int, signal_name, sorries, strip_imports, toolchain_warning,
+    error_text, first_response, has_error, head_line, indent, info_text, int, save_header,
+    scan_header, signal_name, sorries, strip_imports, toolchain_warning, with_header,
 };
-use leani_core::types::{EngineFault, Json};
+use leani_core::types::{EngineFault, Header, Json};
 use leani_read::config::{EnvConfig, read_text, which};
 use leani_read::places::{BOOT_PROBE, Ctx, PROBE_IMPORT};
 use nix::poll::{PollFd, PollFlags, PollTimeout, poll};
@@ -135,10 +135,10 @@ pub struct Engine {
     generation: u64,
     /// `:l` したファイル。
     loaded: Option<String>,
-    /// その中身 (import 行は除く)。
+    /// その中身 (`module` と import の行は除く)。
     loaded_src: Option<String>,
-    /// そのファイルが書いていた import。
-    loaded_imports: Vec<String>,
+    /// そのファイルの `module` と import。
+    loaded_header: Header,
     /// init で実行したソース。
     init_src: Option<String>,
     hook: Option<ExchangeHook>,
@@ -176,7 +176,7 @@ impl Engine {
             generation: 0,
             loaded: None,
             loaded_src: None,
-            loaded_imports: Vec::new(),
+            loaded_header: Header::default(),
             init_src: None,
             hook: None,
         };
@@ -604,20 +604,10 @@ impl Engine {
         self.unplayed = decls;
     }
 
-    /// `:save` が書き出すヘッダ。設定の import に、`:l` したファイルの import を追加する。
-    ///
-    /// 追加しないと、`:l` したファイルが import していたモジュールがヘッダに
-    /// 含まれなくなる。その場合 `:save` は「宣言 n 件を書き出した」と成功を報告するのに、
-    /// 書き出したファイルは `:l` でも lean でもエラーになる (Unknown identifier が並ぶ)。
+    /// `:save` が書き出すヘッダ。設定の import に、`:l` したファイルの import を
+    /// 追加する (`pure::save_header`)。
     pub fn save_header(&self) -> String {
-        let mut mods: Vec<&str> = vec!["Lean"];
-        mods.extend(self.cfg.imports.iter().map(String::as_str));
-        for m in &self.loaded_imports {
-            if !mods.contains(&m.as_str()) {
-                mods.push(m);
-            }
-        }
-        mods.iter().map(|m| format!("import {m}\n")).collect()
+        save_header(&self.cfg.imports, &self.loaded_header)
     }
 
     /// 今の環境を構成しているソース。`:save` はこれを書き出す。
@@ -743,7 +733,7 @@ impl Engine {
     ///
     /// 読み込み直せなかったのに loaded_src を残すと、`sources` が env に無い宣言を
     /// 返し続ける。そのまま `:save` すると、書き出したファイルを `:l` したときに
-    /// 「すでに宣言されている」というエラーになる。loaded_imports も同じで、残すと
+    /// 「すでに宣言されている」というエラーになる。loaded_header も同じで、残すと
     /// `:save` のヘッダに、もう環境に無いファイルの import を書く。
     fn reload(&mut self, loaded: Option<&str>) -> Result<Option<String>, EngineFault> {
         let Some(path) = loaded.filter(|p| !p.is_empty()) else {
@@ -757,7 +747,7 @@ impl Engine {
         };
         self.loaded = None;
         self.loaded_src = None;
-        self.loaded_imports.clear();
+        self.loaded_header = Header::default();
         Ok(Some(format!("{path} を読み込み直せなかった: {why}")))
     }
 
@@ -888,12 +878,7 @@ impl Engine {
             Some(s) => s.to_string(),
             None => std::fs::read_to_string(path).map_err(|e| EngineFault::Io(strerror(&e)))?,
         };
-        let body = if has_import(&raw) {
-            raw.clone()
-        } else {
-            format!("{}{raw}", self.cfg.header())
-        };
-        let src = format!("{PROBE_IMPORT}{body}");
+        let src = with_header(&raw, PROBE_IMPORT, &self.cfg.header());
 
         let keep = self.keep();
         self.env = None;
@@ -925,7 +910,7 @@ impl Engine {
             self.base = self.env;
             self.loaded = Some(path.to_string());
             self.loaded_src = Some(strip_imports(&raw));
-            self.loaded_imports = import_lines(&raw);
+            self.loaded_header = scan_header(&raw).0;
             // fresh で環境を作り直したので、init の内容は環境から消えている。
             // 再適用しないと、sources() が env に無い宣言を返し続ける。
             match self.reapply_init() {
@@ -954,7 +939,7 @@ impl Engine {
             unplayed: std::mem::take(&mut self.unplayed),
             loaded: self.loaded.clone(),
             loaded_src: self.loaded_src.clone(),
-            loaded_imports: self.loaded_imports.clone(),
+            loaded_header: self.loaded_header.clone(),
         }
     }
 
@@ -966,7 +951,7 @@ impl Engine {
         self.unplayed = keep.unplayed;
         self.loaded = keep.loaded;
         self.loaded_src = keep.loaded_src;
-        self.loaded_imports = keep.loaded_imports;
+        self.loaded_header = keep.loaded_header;
     }
 }
 
@@ -979,7 +964,7 @@ struct Kept {
     unplayed: Vec<String>,
     loaded: Option<String>,
     loaded_src: Option<String>,
-    loaded_imports: Vec<String>,
+    loaded_header: Header,
 }
 
 impl Drop for Engine {

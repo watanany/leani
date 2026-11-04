@@ -68,12 +68,15 @@ fn decoys() -> impl Strategy<Value = Vec<&'static str>> {
 const PANIC: &str = "PANIC at Foo.bar Foo:1:2: oops\nbacktrace:\n  ...";
 
 /// ヘッダ部分のデータ。import、コメント、本体と、import に見えるが import ではない行。
-const HEADERS: [&str; 11] = [
+const HEADERS: [&str; 14] = [
     "import Std",
     "import Lean.Elab",
     "  import Mathlib",
     "import",
     "import Foo -- メモ",
+    "module",
+    "public import Lean",
+    "public meta import all Qux",
     "-- import Bar",
     "/- ここから",
     "import Baz",
@@ -266,6 +269,41 @@ mod 補完する名前の切り出し {
     fn 区切り文字の直後から名前を切り出す() {
         assert_eq!(pure::name_start("#check (Nat.suc"), "#check (".len());
         assert_eq!(pure::name_start("Nat.suc"), 0, "`.` で区切った");
+    }
+
+    #[story("D1")]
+    #[test]
+    fn 名前の前の記号で区切る() {
+        // `@` や `¬` の直後から名前を補完する。区切り文字の一覧に無い記号を名前に
+        // 含めると、`@Nat.su` を `@Nat.su` という名前として問い合わせ、候補が出ない。
+        for (text, before) in [
+            ("@Nat.su", "@"),
+            ("¬Nat.su", "¬"),
+            ("f ∘ Nat.su", "f ∘ "),
+            ("x+Nat.su", "x+"),
+            ("λx", "λ"),
+            ("#check ⟨Nat.su", "#check ⟨"),
+        ] {
+            assert_eq!(pure::name_start(text), before.len(), "{text}");
+        }
+        // 名前に使える文字では区切らない。
+        for text in ["Nat.succ_le'", "x₁", "List.map!", "α.β", "ℕ"] {
+            assert_eq!(pure::name_start(text), 0, "{text}");
+        }
+        // `«` で囲んだ部分は名前の一部。閉じていなくても、カーソルまでを名前にする。
+        assert_eq!(pure::name_start("#check Foo.«ba"), "#check ".len());
+        assert_eq!(pure::name_start("(Foo.«a b».ba"), "(".len());
+    }
+
+    #[story("D1")]
+    #[proptest]
+    fn 記号のあとの名前をそのまま切り出す(
+        #[strategy(prop::sample::select(vec!["@", "¬", "(", "⟨", " ", "+", "λ", "∘", "↦", "\""]))]
+        sep: &'static str,
+        #[strategy("[A-Za-zα-κμ-ω_][A-Za-z0-9_'!?.₀-₉]{0,8}")] name: String,
+    ) {
+        let text = format!("x{sep}{name}");
+        prop_assert_eq!(&text[pure::name_start(&text)..], name.as_str());
     }
 }
 
@@ -473,6 +511,23 @@ mod エラー位置の範囲 {
         let m = json!({"pos": {"line": 1, "column": 1}, "endPos": {"line": 1, "column": 99}});
         assert_eq!(pure::span(&m, &["abc"], 0, 0), Some((1, 1, 2)));
     }
+
+    #[story("A5")]
+    #[test]
+    fn 全角文字の幅だけキャレットをずらす() {
+        // 端末では全角文字が 2 桁を占めるので、文字の数だけずらすとキャレットが
+        // 左にずれる。
+        assert_eq!(pure::caret_pad("あい x", 3), " ".repeat(5));
+        assert_eq!(pure::caret_len("x := あいう", 5, 3), 6);
+        assert_eq!(pure::caret_len("abc", 1, 2), 2);
+    }
+
+    #[story("A5")]
+    #[test]
+    fn タブはタブのまま残す() {
+        // タブの幅は端末が決めるので、同じ位置にタブを置けば列がそろう。
+        assert_eq!(pure::caret_pad("\tfoo bar", 5), "\t    ");
+    }
 }
 
 mod レスポンスの切り出し {
@@ -634,6 +689,17 @@ mod エンジンのバージョン {
         );
         // lean-toolchain が読めなかったときは比べない。
         assert_eq!(pure::toolchain_warning(true, "", "v4.34.0", "/e"), None);
+    }
+
+    #[story("G3", "G4")]
+    #[test]
+    fn 既定の配布元を省いた_toolchain_も同じバージョンと見なす() {
+        // elan は `v4.34.0` を `leanprover/lean4:v4.34.0` と同じ toolchain として扱う。
+        let short = "v4.34.0";
+        let full = "leanprover/lean4:v4.34.0";
+        assert_eq!(pure::toolchain_warning(true, short, full, "/e"), None);
+        assert_eq!(pure::toolchain_warning(true, full, short, "/e"), None);
+        assert!(pure::toolchain_warning(true, "v4.33.0", full, "/e").is_some());
     }
 
     #[story("G3")]
@@ -966,6 +1032,17 @@ mod 起動を中止する理由 {
         let why = config::problem(&ctx, &make(&ctx, Some(&proj), Some(&eng))).unwrap_or_default();
         assert!(why.contains("バージョンがプロジェクトと違う"), "{why}");
         assert!(why.contains("lake build repl"), "{why}");
+    }
+
+    #[story("G4")]
+    #[test]
+    fn 書き方だけが違う_toolchain_では起動を中止しない() {
+        let dir = tmp();
+        let eng = built_engine(dir.path(), "leanprover/lean4:v4.34.0");
+        let proj = toolchain_dir(dir.path(), "proj", "v4.34.0");
+        let ctx = ctx(dir.path());
+        let got = config::problem(&ctx, &make(&ctx, Some(&proj), Some(&eng)));
+        assert_eq!(got, None);
     }
 
     #[story("G4")]
@@ -1794,6 +1871,54 @@ mod ファイルの_import {
         assert_eq!(pure::import_lines(src), ["Real"]);
     }
 
+    #[story("B4")]
+    #[test]
+    fn 修飾子の付いた_import_も読む() {
+        let src = "module\n\npublic import Lean.Elab\nmeta import all Std\nimport all Foo\n\
+                   public meta import Bar\ndef x := 1";
+        assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std", "Foo", "Bar"]);
+        assert_eq!(
+            pure::import_decls(src),
+            [
+                "public import Lean.Elab",
+                "meta import all Std",
+                "import all Foo",
+                "public meta import Bar"
+            ]
+        );
+        // module の行も取り除く。既存の環境の上では module を宣言できない。
+        assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
+    }
+
+    #[story("B4")]
+    #[test]
+    fn module_の後ろに_import_を足す() {
+        let probe = "import Lean\n";
+        let cfg = "import Foo\n";
+        let got = pure::with_header("-- メモ\nmodule\nimport Std\ndef a := 1", probe, cfg);
+        assert!(
+            got.starts_with("module\npublic import Lean\nimport Std\n"),
+            "{got}"
+        );
+        assert!(!got.contains("import Foo"), "{got}");
+        assert_eq!(got.matches("module").count(), 1, "{got}");
+        assert!(
+            got.contains("-- メモ") && got.ends_with("def a := 1"),
+            "{got}"
+        );
+
+        // module でなければ、今までどおり先頭に足す。ファイルに import があれば、
+        // 設定の import は足さない。
+        assert_eq!(
+            pure::with_header("def a := 1", probe, cfg),
+            "import Lean\nimport Foo\ndef a := 1"
+        );
+        assert_eq!(
+            pure::with_header("import Std\ndef a := 1", probe, cfg),
+            "import Lean\nimport Std\ndef a := 1"
+        );
+    }
+
     #[story("B3", "B4")]
     #[proptest]
     fn 取り除くのは本物の_import_行だけ(
@@ -1801,16 +1926,18 @@ mod ファイルの_import {
         lines: Vec<&'static str>,
     ) {
         let src = lines.join("\n");
-        let (mods, at) = pure::scan_header(&src);
+        let (head, at) = pure::scan_header(&src);
         let stripped = pure::strip_imports(&src);
 
-        prop_assert_eq!(mods.len(), at.len());
+        let imports = at.iter().filter(|&&n| lines[n].trim() != "module");
+        prop_assert_eq!(head.imports.len(), imports.count());
         // コメントの中の import を取り出していない。取り出すと :save した
         // ファイルがおかしくなる。
-        prop_assert!(
-            at.iter()
-                .all(|&n| lines[n].split_whitespace().next() == Some("import"))
-        );
+        let header_line = |n: &usize| {
+            let first = lines[*n].split_whitespace().next();
+            matches!(first, Some("import" | "public" | "meta" | "module"))
+        };
+        prop_assert!(at.iter().all(header_line));
         // 取り除いたあとに新しい import 行が現れることはない。ヘッダの終わりは
         // 変わらないので、1 回ですべて取り除ける。
         prop_assert!(pure::import_lines(&stripped).is_empty());

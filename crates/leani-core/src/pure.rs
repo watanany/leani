@@ -11,11 +11,11 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::abbrev::{abbrev_candidates, abbrev_head};
+use crate::abbrev::{abbrev_candidates, abbrev_head, char_width};
 use crate::queries::{
     BLOCK_OPEN, CANNOT_EVAL, DECL_NAME, ERR_POS, INCOMPLETE, NESTED_ACTION, NO_REPR, NONCOMPUTABLE,
 };
-use crate::types::{EngineError, Json, Kind, Proof, Scope, State, Target};
+use crate::types::{EngineError, Header, Json, Kind, Proof, Scope, State, Target};
 
 // ------------------------------------------------------------------ 応答の読み取り
 
@@ -107,15 +107,46 @@ pub fn lean_strs<S: AsRef<str>>(xs: &[S]) -> String {
 
 // ------------------------------------------------------------------ 補完
 
-pub const COMPLETE_DELIMS: &str = " \t\n(),[]{};\"";
-
 /// text の末尾にある名前が始まる位置 (byte)。補完でカーソルの前の名前を切り出すため。
 ///
-/// Lean の名前は `.` を含むので、`.` では区切らない。
+/// 末尾から、名前に使える文字が続く範囲を名前にする。区切り文字を並べる方法では、
+/// 一覧に無い記号 (`@`、`¬`、`⟨` など) を名前に含めてしまう。Lean の名前は `.` を
+/// 含むので、`.` では区切らない。`«` で囲んだ部分は空白や記号を含んでも名前の一部で、
+/// 閉じていない `«` からカーソルまでも名前に含める。
 pub fn name_start(text: &str) -> usize {
-    // 区切り文字はすべて ASCII なので、見つけた位置の次の byte が名前の先頭になる
-    text.rfind(|c| COMPLETE_DELIMS.contains(c))
-        .map_or(0, |i| i + 1)
+    match open_guillemet(text) {
+        Some(i) => name_run(&text[..i]),
+        None => name_run(text),
+    }
+}
+
+/// 閉じていない `«` の位置。
+fn open_guillemet(text: &str) -> Option<usize> {
+    let open = text.rfind('«')?;
+    if text[open..].contains('»') {
+        None
+    } else {
+        Some(open)
+    }
+}
+
+/// text の末尾に続く名前の先頭。
+fn name_run(text: &str) -> usize {
+    match text.chars().next_back() {
+        Some('»') => match text.rfind('«') {
+            Some(open) => name_run(&text[..open]),
+            None => text.len(),
+        },
+        Some(c) if is_name_char(c) => name_run(&text[..text.len() - c.len_utf8()]),
+        _ => text.len(),
+    }
+}
+
+/// 名前に使える文字。英数字 (ギリシャ文字、`ℕ` などの記号の文字、下付き文字を含む)
+/// と `_ ' ! ? .`。λ、Π、Σ は Lean では名前に使えない。
+fn is_name_char(c: char) -> bool {
+    (c.is_alphanumeric() && !matches!(c, 'λ' | 'Π' | 'Σ'))
+        || matches!(c, '_' | '\'' | '!' | '?' | '.')
 }
 
 /// ヘルプに書いてある `:` コマンドの名前 (`:` は付けない)。補完の候補にする。
@@ -155,6 +186,23 @@ pub fn name_chunk(prefix: &str) -> &str {
             &prefix[..end]
         }
     }
+}
+
+/// 補完のキャッシュを今の環境で使えるか。`at` はキャッシュを取得したときの
+/// (世代, env)、`stack` は今の env の元になった環境。
+///
+/// 取得したときの env が今の env か `stack` にあれば、キャッシュの名前は今の環境にも
+/// ある。そのあとに実行した宣言の名前は、呼び出し側が log から足す。`:undo` や
+/// `:reset` で取り消した環境で取得したキャッシュは、取り消した宣言の名前を含むので
+/// 使わない。
+pub fn cache_usable(
+    at: (u64, Option<i64>),
+    generation: u64,
+    env: Option<i64>,
+    stack: &[i64],
+) -> bool {
+    let (made, cached) = at;
+    made == generation && (cached == env || cached.is_some_and(|e| stack.contains(&e)))
 }
 
 /// `ns` を open したとき (`ns` が空なら root) に使える、prefix で始まる短い名前。
@@ -421,15 +469,19 @@ pub fn comment_depth(line: &str, depth: usize) -> usize {
     depth
 }
 
-/// 先頭のヘッダ領域にある import を、モジュール名と行番号で返す。
+/// 先頭のヘッダ領域にある `module` と import を、行番号と一緒に返す。
 ///
-/// ヘッダ領域は、空行、コメント、`import` が続く範囲。行単位で `import` を
+/// ヘッダ領域は、空行、コメント、`module`、import が続く範囲。行単位で `import` を
 /// 探すと、doc コメントに書いた `import Foo` を本物の import と取り違える。
 /// それを :save のヘッダに書き出すと、repl はヘッダ全体を無視して起動するので、
 /// 書き出したファイルは :l でも lean でもエラーになる。import 行を取り除く処理
 /// でも同じで、コメントの行を消してコメントをおかしくする。
-pub fn scan_header(text: &str) -> (Vec<String>, BTreeSet<usize>) {
-    let mut mods = Vec::new();
+///
+/// Lean は `module` を import より前にしか認めないが、import の後ろにあっても
+/// ヘッダ領域に含める。ヘッダ領域を終わらせると、取り除いたあとの先頭に `module`
+/// が残る。
+pub fn scan_header(text: &str) -> (Header, BTreeSet<usize>) {
+    let mut head = Header::default();
     let mut at = BTreeSet::new();
     let mut depth = 0;
 
@@ -441,41 +493,128 @@ pub fn scan_header(text: &str) -> (Vec<String>, BTreeSet<usize>) {
             continue;
         } else if one.starts_with("/-") {
             depth = comment_depth(line, 0);
-        } else if let Some(module) = import_of(one) {
-            mods.push(module.to_string());
+        } else if one == "module" {
+            head.module = true;
+            at.insert(n);
+        } else if import_of(one).is_some() {
+            head.imports.push(one.to_string());
             at.insert(n);
         } else {
             break; // ヘッダ領域はここで終わり。以降の import は Lean も認めない
         }
     }
 
-    (mods, at)
+    (head, at)
 }
 
-/// `import X` の行なら X。前後の空白は取り除いてある行を受け取る。
+/// import の行ならモジュール名。前後の空白は取り除いてある行を受け取る。
+///
+/// module のファイルでは、`public`、`meta`、`all` を付けて書ける
+/// (`public meta import all X`)。
 fn import_of(one: &str) -> Option<&str> {
-    match one.split_once(char::is_whitespace) {
-        Some(("import", rest)) if !one.contains("/-") => Some(rest.trim()),
+    if one.contains("/-") {
+        None
+    } else {
+        let rest = drop_word(one, "public").unwrap_or(one);
+        let rest = drop_word(rest, "meta").unwrap_or(rest);
+        let rest = drop_word(rest, "import")?;
+        Some(drop_word(rest, "all").unwrap_or(rest).trim())
+    }
+}
+
+/// 先頭の語が `word` なら、その後ろ。
+fn drop_word<'a>(text: &'a str, word: &str) -> Option<&'a str> {
+    match text.split_once(char::is_whitespace) {
+        Some((first, rest)) if first == word => Some(rest.trim_start()),
         _ => None,
     }
 }
 
-/// `import X` の X を並べる。:save のヘッダに書き戻すため。
+/// import しているモジュールの名前を並べる。
 pub fn import_lines(text: &str) -> Vec<String> {
-    scan_header(text).0
+    scan_header(text)
+        .0
+        .imports
+        .iter()
+        .filter_map(|line| import_of(line))
+        .map(String::from)
+        .collect()
 }
 
-/// import 行を取り除く。既存の環境の上で実行するときに使う。
+/// import の行を、修飾子を付けたまま並べる。:save のヘッダに書き戻すため。
+pub fn import_decls(text: &str) -> Vec<String> {
+    scan_header(text).0.imports
+}
+
+/// `module` と import の行を取り除く。既存の環境の上で実行するときに使う。
 ///
-/// import はファイルの先頭にしか書けない。
+/// どちらもファイルの先頭にしか書けない。
 pub fn strip_imports(text: &str) -> String {
-    let at = scan_header(text).1;
+    drop_lines(text, &scan_header(text).1)
+}
+
+/// `at` の番号の行を取り除く。
+fn drop_lines(text: &str, at: &BTreeSet<usize>) -> String {
     text.lines()
         .enumerate()
         .filter(|(n, _)| !at.contains(n))
         .map(|(_, line)| line)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// module のファイルのヘッダ。完結判定と補完のクエリが使う Lean を足す。
+///
+/// module の中では、`import Lean` だけでは `elab` を書いたファイルや init が
+/// "imported privately" で失敗するので、`public import Lean` にする。
+pub fn module_header(imports: &[String]) -> String {
+    let own = imports
+        .iter()
+        .filter(|line| line.as_str() != MODULE_PROBE)
+        .map(|line| format!("{line}\n"))
+        .collect::<String>();
+    format!("module\n{MODULE_PROBE}\n{own}")
+}
+
+const MODULE_PROBE: &str = "public import Lean";
+
+/// `:l` で送るソース。`probe` は Lean の import、`imports` は設定の import の行。
+///
+/// module のファイルには、`module` の行、`public import Lean`、ファイルの import の
+/// 順に並べ、設定の import は足さない。module から module でないファイルを
+/// import すると、Lean は "cannot import non-`module`" で止まる。module でない
+/// ファイルは、先頭に足すだけにする。ファイルが import を書いていれば、設定の
+/// import は足さない。
+pub fn with_header(raw: &str, probe: &str, imports: &str) -> String {
+    let (head, at) = scan_header(raw);
+    match (head.module, head.imports.is_empty()) {
+        (true, _) => format!("{}{}", module_header(&head.imports), drop_lines(raw, &at)),
+        (false, false) => format!("{probe}{raw}"),
+        (false, true) => format!("{probe}{imports}{raw}"),
+    }
+}
+
+/// `:save` が書き出すヘッダ。`imports` は設定の import、`loaded` は `:l` した
+/// ファイルのヘッダ。
+///
+/// `:l` したファイルの import を足さないと、そのファイルが import していた
+/// モジュールがヘッダに含まれなくなる。その場合 `:save` は「宣言 n 件を書き出した」
+/// と成功を報告するのに、書き出したファイルは `:l` でも lean でもエラーになる
+/// (Unknown identifier が並ぶ)。module のファイルを `:l` していたら、`module` と
+/// その import をそのまま書き、設定の import は足さない (`with_header`)。
+pub fn save_header(imports: &[String], loaded: &Header) -> String {
+    if loaded.module {
+        module_header(&loaded.imports)
+    } else {
+        let own = loaded.imports.iter().filter_map(|line| import_of(line));
+        let mut mods: Vec<&str> = vec!["Lean"];
+        for m in imports.iter().map(String::as_str).chain(own) {
+            if !mods.contains(&m) {
+                mods.push(m);
+            }
+        }
+        mods.iter().map(|m| format!("import {m}\n")).collect()
+    }
 }
 
 /// ファイルが自分で import を書いているか。コメントの中のものは数えない。
@@ -755,6 +894,21 @@ pub fn toolchain_version(tc: &str) -> &str {
     }
 }
 
+/// toolchain の書き方をそろえる。elan は配布元を省いた `v4.34.0` を
+/// `leanprover/lean4:v4.34.0` と同じ toolchain として扱う。
+pub fn canonical_toolchain(tc: &str) -> String {
+    if tc.contains(':') {
+        tc.to_string()
+    } else {
+        format!("leanprover/lean4:{tc}")
+    }
+}
+
+/// 2 つの toolchain が、書き方を除いて同じか。
+pub fn same_toolchain(a: &str, b: &str) -> bool {
+    canonical_toolchain(a) == canonical_toolchain(b)
+}
+
 /// 自分でビルドしたエンジンの toolchain が、使うバージョンと違うときの警告の文。
 ///
 /// leani が用意したエンジン (own が false) は使うバージョンでビルドしてあるので、
@@ -762,7 +916,7 @@ pub fn toolchain_version(tc: &str) -> &str {
 /// いたら警告する (leani がビルドし直すことはしない)。engine_tc が空なら、
 /// エンジンの lean-toolchain が読めなかったので比べない。
 pub fn toolchain_warning(own: bool, engine_tc: &str, tc: &str, engine_dir: &str) -> Option<String> {
-    if own && !engine_tc.is_empty() && engine_tc != tc {
+    if own && !engine_tc.is_empty() && !same_toolchain(engine_tc, tc) {
         Some(format!(
             "警告: toolchain が違う (使うバージョン={tc} / エンジン={engine_tc})。\n  cd {engine_dir} && lake build repl"
         ))
@@ -1058,6 +1212,29 @@ pub fn span<S: AsRef<str>>(
         usize::try_from(col).ok()?,
         usize::try_from(width).ok()?,
     ))
+}
+
+/// キャレットの前に置く空白。`line` の先頭から `col` 文字分の表示の幅にそろえる。
+///
+/// 全角文字は 2 桁分の空白にする。タブの幅は端末が決めるので、タブはタブのまま残す。
+pub fn caret_pad(line: &str, col: usize) -> String {
+    line.chars()
+        .take(col)
+        .map(|c| match c {
+            '\t' => "\t".to_string(),
+            c => " ".repeat(char_width(c)),
+        })
+        .collect()
+}
+
+/// `^` の数。`line` の `col` 文字目から `width` 文字分の表示の幅。1 より小さくしない。
+pub fn caret_len(line: &str, col: usize, width: usize) -> usize {
+    line.chars()
+        .skip(col)
+        .take(width)
+        .map(char_width)
+        .sum::<usize>()
+        .max(1)
 }
 
 // ------------------------------------------------------------------ 定理検索

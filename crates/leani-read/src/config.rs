@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::sync::LazyLock;
 
-use leani_core::pure::abspath;
+use leani_core::pure::{abspath, same_toolchain};
 use leani_core::types::ConfigError;
 use regex::Regex;
 use toml::{Table, Value};
@@ -305,7 +305,7 @@ fn version_problem(cfg: &EnvConfig) -> Option<String> {
     let proj = read_toolchain(cfg.project.as_deref())?;
     let eng = read_toolchain(cfg.engine.as_deref())?;
     let engine = cfg.engine.as_deref().unwrap_or("");
-    if proj != eng {
+    if !same_toolchain(&proj, &eng) {
         Some(format!(
             "エンジンのバージョンがプロジェクトと違う (プロジェクト={proj} / エンジン={eng})。\n  \
              {proj} でビルドし直す: cd {engine} && echo {proj} > lean-toolchain && lake build repl\n  \
