@@ -22,6 +22,7 @@ from jupyter_client.manager import start_new_kernel
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
+import leani.boot
 import leani.kernel
 from leani.repl import NameCompleter
 
@@ -455,6 +456,41 @@ def describe_起動と再起動の失敗():
         assert "内部エラー: ValueError: 想定外" in capsys.readouterr().err
         assert k.repl is fake
         assert fake.discard.called
+
+
+def describe_Lean_のバージョン():
+    # 起動の用意も別のプロセスでは確かめられないので、lean を差し替えて boot を
+    # 直接呼ぶ。
+
+    @pytest.fixture
+    def lean(mocker):
+        """`lean --version` の差し替え。呼んだ引数を見られるようにする。"""
+        run = mocker.patch.object(leani.boot.subprocess, "run")
+        run.return_value.stdout = "Lean (version 4.34.0, arm64-apple-darwin, Release)\n"
+        return run
+
+    @story("J1", "G3")
+    def it_lean_の_version_は時間を区切らずに待つ(lean):
+        assert leani.boot.local_toolchain() == "leanprover/lean4:v4.34.0"
+        assert "timeout" not in lean.call_args.kwargs
+
+    @story("J1", "G3")
+    def it_stable_の_toolchain_は今のバージョンに置き換える(lean, tmp_path):
+        (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
+        cfg = leani.config.EnvConfig.make("t", project=str(tmp_path))
+        assert leani.boot.guess_toolchain(cfg) == "leanprover/lean4:v4.34.0"
+        assert lean.call_args.args[0] == [
+            "lean",
+            "+leanprover/lean4:stable",
+            "--version",
+        ]
+
+    @story("J1", "G3")
+    def it_自分で指定したエンジンの_stable_は置き換えない(lean, tmp_path):
+        (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
+        cfg = leani.config.EnvConfig.make("t", engine=str(tmp_path))
+        assert leani.boot.guess_toolchain(cfg) == "leanprover/lean4:stable"
+        lean.assert_not_called()
 
 
 def describe_カーネルの登録():

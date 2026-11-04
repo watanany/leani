@@ -23,8 +23,9 @@ ENGINE_CACHE = f"{STATE}/engine"
 # そのまま使う。
 ENGINE = os.environ.get("LEANI_ENGINE")
 NO_SETUP = bool(os.environ.get("LEANI_NO_SETUP"))
-# エンジンを用意するときの、外部との通信のタイムアウト (秒)。応答が返らないまま
-# 何も表示せずに止まらないように。
+# エンジンを用意するときの、`git ls-remote` と `lake env` のタイムアウト (秒)。
+# 応答が返らないまま何も表示せずに止まらないように。`lean --version` (elan が
+# toolchain を取得することがある) は時間を区切らず、Ctrl-C で止める。
 SETUP_TIMEOUT = 120
 # git に認証情報を入力させない。capture_output だと、入力を求めるプロンプトが
 # 表示されないまま止まる。

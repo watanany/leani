@@ -9,7 +9,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 43 件、テスト 439 件。括弧の中はテストの場所
+ストーリー 43 件、テスト 442 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -533,6 +533,9 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
 ### G3 Lake プロジェクト無しで、バージョンごとのエンジンを leani に用意してほしい
 
+- lean の version は時間を区切らずに待つ (kernel / Lean のバージョン)
+- stable の toolchain は今のバージョンに置き換える (kernel / Lean のバージョン)
+- 自分で指定したエンジンの stable は置き換えない (kernel / Lean のバージョン)
 - toolchain からバージョンだけ取る (parsing / エンジンのバージョン)
 - 既定の配布元を省いた toolchain も同じバージョンと見なす (parsing / エンジンのバージョン)
 - rc は同じバージョンの正式リリースより前 (parsing / エンジンのバージョン)
@@ -711,6 +714,9 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - :q はノートブックでは何もしない (kernel / セルの実行)
 - 改ページを含む文字列も式として評価する (kernel / セルの実行)
 - 設定のエラーはセルに表示して次のセルでもう一度起動する (kernel / 起動と再起動の失敗)
+- lean の version は時間を区切らずに待つ (kernel / Lean のバージョン)
+- stable の toolchain は今のバージョンに置き換える (kernel / Lean のバージョン)
+- 自分で指定したエンジンの stable は置き換えない (kernel / Lean のバージョン)
 - 今の Python で leani kernel を起動するカーネルを登録する (kernel / カーネルの登録)
 
 ### J2 ノートブックでも、名前と略記を Tab で補完したい

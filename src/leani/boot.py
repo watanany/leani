@@ -17,6 +17,7 @@ from leani.places import ENGINE_REPO, NO_SETUP, SETUP_ENV, SETUP_TIMEOUT, STATE
 from leani.pure import (
     dim,
     engine_dir,
+    is_channel,
     parse_env_lines,
     pick_tag,
     toolchain_of_version,
@@ -26,20 +27,30 @@ from leani.pure import (
 from leani.types import EngineError
 
 
-def local_toolchain() -> str | None:
-    """elan が今選択しているバージョン。プロジェクトも指定も無いときに使う。"""
+def lean_toolchain(args: Sequence[str]) -> str | None:
+    """
+    `lean <args>` が出すバージョンの toolchain。分からなければ None。
+
+    elan は lean --version の中で toolchain を取得することがあるので、時間がかかる
+    ことがある。時間を区切ると、取得が終わる前に「分からない」と表示することになる
+    ので、区切らない。Ctrl-C で止める。
+    """
     try:
         r = subprocess.run(
-            ["lean", "--version"],
+            ["lean", *args],
             capture_output=True,
             text=True,
             check=False,
-            timeout=SETUP_TIMEOUT,
         )
-    except (OSError, subprocess.TimeoutExpired):
+    except OSError:
         return None
 
     return toolchain_of_version(r.stdout)
+
+
+def local_toolchain() -> str | None:
+    """elan が今選択しているバージョン。プロジェクトも指定も無いときに使う。"""
+    return lean_toolchain(["--version"])
 
 
 def guess_toolchain(cfg: EnvConfig) -> str | None:
@@ -51,10 +62,22 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
     合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
     用意したエンジンなら engine が None なので、2 番目は飛ばして elan のデフォルトの
     バージョンを使う。
+
+    `stable` のようなチャンネルは、今のバージョンに置き換える。エンジンのディレクトリは
+    toolchain の名前で決まるので、チャンネルの名前のままだと、チャンネルが新しい
+    バージョンに進んでも、前のバージョンでビルドしたエンジンを使い続ける。今の
+    バージョンを取得できなければ、チャンネルの名前のまま使う。自分で指定した
+    エンジンのディレクトリは toolchain で決まらないので置き換えない。置き換えると、
+    エンジンの lean-toolchain と名前が違うことになり、起動のたびに toolchain が違う
+    という警告が出る。
     """
-    return (
-        read_toolchain(cfg.project) or read_toolchain(cfg.engine) or local_toolchain()
-    )
+    tc = read_toolchain(cfg.project) or read_toolchain(cfg.engine)
+    if tc is None:
+        return local_toolchain()
+    if is_channel(tc) and cfg.engine is None:
+        return lean_toolchain([f"+{tc}", "--version"]) or tc
+
+    return tc
 
 
 def toolchain(cfg: EnvConfig) -> str:

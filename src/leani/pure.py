@@ -492,6 +492,14 @@ def toolchain_of_version(out: str) -> str | None:
     return None
 
 
+def is_channel(tc: str) -> bool:
+    """
+    elan のチャンネル (`stable`、`beta`、`nightly`) か。チャンネルが指すバージョンは
+    新しいリリースが出ると変わる。
+    """
+    return toolchain_version(tc) in ("stable", "beta", "nightly")
+
+
 def toolchain_warning(
     own: bool, engine_tc: str, tc: str, engine_dir: str
 ) -> str | None:
