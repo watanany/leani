@@ -9,6 +9,7 @@ import json
 import re
 import signal
 import textwrap
+import unicodedata
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from typing import cast
@@ -69,9 +70,24 @@ def dim(s: str) -> str:
 def lean_str(s: str) -> str:
     """
     Python の文字列を Lean の文字列リテラルにする。
-    JSON のエスケープは Lean の \\n \\t \\\\ \\" \\uXXXX と互換。
+
+    JSON のエスケープは使わない。JSON の \\b と \\f を、Lean は受け付けない。
     """
-    return json.dumps(s, ensure_ascii=False)
+    return '"' + "".join(lean_char(ch) for ch in s) + '"'
+
+
+# 文字列リテラルの中で書き換える文字。ほかの制御文字は \uXXXX にする。
+LEAN_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\t": "\\t", "\r": "\\r"}
+
+
+def lean_char(ch: str) -> str:
+    """文字列リテラルの中に書く 1 文字。"""
+    if ch in LEAN_ESCAPES:
+        return LEAN_ESCAPES[ch]
+    elif unicodedata.category(ch) == "Cc":
+        return f"\\u{ord(ch):04x}"
+    else:
+        return ch
 
 
 def lean_strs(xs: Sequence[str]) -> str:
@@ -79,16 +95,50 @@ def lean_strs(xs: Sequence[str]) -> str:
     return "#[" + ", ".join(lean_str(x) for x in xs) + "]"
 
 
-COMPLETE_DELIMS = ' \t\n(),[]{};"'
+def indent(text: str, pad: str) -> str:
+    """
+    空白だけの行を除くすべての行の先頭に pad を付ける。
+
+    行は `\\n` だけで区切る。`textwrap.indent` は `\\f` なども行の区切りと見なすので、
+    文字列リテラルの中の `\\f` の後ろに pad を入れてしまう。
+    """
+    return "\n".join(pad + line if line.strip() else line for line in text.split("\n"))
 
 
 def name_start(text: str) -> int:
     """
     text の末尾にある名前が始まる位置。補完でカーソルの前の名前を切り出すため。
 
-    Lean の名前は `.` を含むので、`.` では区切らない。
+    末尾から、名前に使える文字が続く範囲を名前にする。区切り文字を並べる方法では、
+    一覧に無い記号 (`@`、`¬`、`⟨` など) を名前に含めてしまう。Lean の名前は `.` を
+    含むので、`.` では区切らない。`«` で囲んだ部分は空白や記号を含んでも名前の一部で、
+    閉じていない `«` からカーソルまでも名前に含める。
     """
-    return max(text.rfind(d) for d in COMPLETE_DELIMS) + 1
+    open_ = text.rfind("«")
+    unclosed = open_ >= 0 and "»" not in text[open_:]
+    return name_run(text[:open_] if unclosed else text)
+
+
+def name_run(text: str) -> int:
+    """text の末尾に続く名前の先頭。"""
+    at = len(text)
+    while at > 0:
+        ch = text[at - 1]
+        if ch == "»" and "«" in text[: at - 1]:
+            at = text.rfind("«", 0, at - 1)
+        elif ch != "»" and is_name_char(ch):
+            at -= 1
+        else:
+            break
+    return at
+
+
+def is_name_char(ch: str) -> bool:
+    """
+    名前に使える文字。英数字 (ギリシャ文字、`ℕ` などの記号の文字、下付き文字を含む)
+    と `_ ' ! ? .`。λ、Π、Σ は Lean では名前に使えない。
+    """
+    return (ch.isalnum() and ch not in "λΠΣ") or ch in "_'!?."
 
 
 def meta_names(help_text: str) -> tuple[str, ...]:

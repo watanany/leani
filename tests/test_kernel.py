@@ -215,6 +215,15 @@ def fib : Nat → Nat
         _, out, _ = run(kernel, "#eval 3 + 3")
         assert "6" in out, out
 
+    @story("J1")
+    def it_改ページを含む文字列も式として評価する(kernel):
+        # 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
+        # エラーになり、式を宣言として送ってしまう。#eval に包むときに \f を行の
+        # 区切りと見なすと、文字列の中にインデントが入る。
+        status, out, err = run(kernel, '"a\fb".length')
+        assert status == "ok", err
+        assert "3" in out.split(), out
+
 
 def describe_補完():
 
@@ -271,6 +280,10 @@ def describe_Jupyter_の補完の形():
     @story("J2", "D1")
     def it_定数名はそのまま置き換える():
         assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
+
+    @story("J2", "D1")
+    def it_名前の前の記号で区切る():
+        assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 
     @story("J2")
     def it_候補が無ければカーソルの位置を返す():

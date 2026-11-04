@@ -55,6 +55,7 @@ from leani.pure import (
     green,
     has_error,
     head_line,
+    indent,
     last_json,
     lean_str,
     lean_strs,
@@ -1014,9 +1015,7 @@ class Repl:
     def submit_term(self, src: str) -> bool:
         """式として #eval に包んで送る。環境は進めない。"""
         is_do, head, col = src.lstrip().startswith("do"), "", 2
-        resp = self.guard(
-            lambda: self.eng.send_cmd("#eval\n" + textwrap.indent(src, "  "))
-        )
+        resp = self.guard(lambda: self.eng.send_cmd("#eval\n" + indent(src, "  ")))
         if resp is None or panic_check(self.out, resp):
             return False
 
@@ -1029,9 +1028,7 @@ class Repl:
         if errs and not is_do and nested_action(blob):
             is_do, head, col = True, " do", 4
             resp = self.guard(
-                lambda: self.eng.send_cmd(
-                    f"#eval{head}\n" + textwrap.indent(src, " " * col)
-                )
+                lambda: self.eng.send_cmd(f"#eval{head}\n" + indent(src, " " * col))
             )
             if resp is None or panic_check(self.out, resp):
                 return False
@@ -1041,7 +1038,7 @@ class Repl:
         # `do` を単体で書くと、Lean は最初の action からモナドを決めてしまう
         # (IO.getEnv なら BaseIO)。GHCi と同じく IO として読み直す。
         if errs and is_do and "BaseIO" in blob:
-            retry = f"#eval show IO _ from{head}\n" + textwrap.indent(src, " " * col)
+            retry = f"#eval show IO _ from{head}\n" + indent(src, " " * col)
             again = self.guard(lambda: self.eng.send_cmd(retry))
             if again is not None and panic_check(self.out, again):
                 return False
@@ -1054,9 +1051,7 @@ class Repl:
         reason = not_evaluable_reason(blob) if errs else None
         if reason is not None:
             out = self.guard(
-                lambda: self.eng.query(
-                    f"#check{head}\n" + textwrap.indent(src, " " * col)
-                )
+                lambda: self.eng.query(f"#check{head}\n" + indent(src, " " * col))
             )
             if out:
                 self.out.write(out.rstrip())
@@ -1401,9 +1396,7 @@ class Repl:
             self.out.fail(red(":t には式が必要"))
             return
 
-        out = self.guard(
-            lambda: self.eng.query("#check\n" + textwrap.indent(arg, "  "))
-        )
+        out = self.guard(lambda: self.eng.query("#check\n" + indent(arg, "  ")))
         if out:
             self.out.write(out.rstrip())
         else:
