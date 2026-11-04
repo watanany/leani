@@ -66,6 +66,8 @@ pub struct Replay {
     pub notes: Vec<String>,
     /// 最後に成功した宣言に残っている sorry。
     pub sorries: Vec<Json>,
+    /// Ctrl-C で途中で止めたか。
+    pub interrupted: bool,
 }
 
 impl Replay {
@@ -838,7 +840,7 @@ impl Engine {
         for (n, src) in log.iter().enumerate() {
             let resp = match self.send_cmd(src, false) {
                 Ok(resp) => resp,
-                Err(_) => {
+                Err(e) => {
                     // まだ実行していない宣言は unplayed に保留する。エンジンを直せば
                     // :restart でやり直せる。ここで捨てると、入力した宣言が失われる。
                     //
@@ -846,6 +848,7 @@ impl Engine {
                     // stack と 1 対 1 に対応している。env に無い宣言を加えると、
                     // :undo と sorry の置き換えが別の宣言を消してしまう。
                     out.skipped = log[n..].to_vec();
+                    out.interrupted = matches!(e, EngineFault::Interrupted);
                     self.hold(&out.failed, &out.skipped);
                     return out;
                 }

@@ -101,6 +101,16 @@ mod 式の評価 {
         assert!(repl.feed(&["1 + 1"]).contains('2'));
     }
 
+    #[story("A1", "C1")]
+    #[test]
+    fn 改ページを含む文字列も式として評価する() {
+        // 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
+        // エラーになり、式を宣言として送ってしまう。
+        let mut repl = Driver::new();
+        let out = repl.feed(&["\"a\u{c}b\".length"]);
+        assert!(out.lines().any(|l| l.trim() == "3"), "{out}");
+    }
+
     #[story("A1", "B1")]
     #[test]
     fn IO_の式はそのまま実行される() {
@@ -572,6 +582,39 @@ mod replay_が途中で止まったとき {
         assert!(out.contains("宣言 2 件"), "{out}");
         assert!(repl.feed(&["#check @s2"]).contains("s2 : Nat"));
         assert!(repl.repl.eng().unplayed().is_empty());
+    }
+
+    #[story("A4", "F1")]
+    #[test]
+    fn 異常終了後の再実行を_Ctrl_C_で止めたら入力を再実行しない() {
+        // ユーザーは再実行を止めたいので、入力した行も送らない。送ると、止めた
+        // はずのエンジンに書いて「再実行しても異常終了した」と表示し、もう一度
+        // 再起動する。
+        let mut repl = Driver::new();
+        for one in ["def r1 := 1", "def r2 := 2", "def r3 := 3"] {
+            repl.feed(&[one]);
+        }
+
+        let (mut died, mut hit) = (false, false);
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if !died && cmd(obj).starts_with("def r4") => {
+                died = true;
+                Hooked::Kill
+            }
+            Stage::Written(obj) if died && !hit && cmd(obj).starts_with("def r2") => {
+                hit = true;
+                Hooked::Interrupt
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&["def r4 := 4"]);
+        repl.unhook();
+
+        assert!(out.contains("再実行を中断した"), "{out}");
+        assert!(!out.contains("再実行しても"), "{out}");
+        assert_eq!(out.matches("件を再実行した").count(), 1, "{out}");
+        assert_eq!(repl.declarations(), ["def r1 := 1"]);
+        assert_eq!(repl.repl.eng().unplayed(), ["def r2 := 2", "def r3 := 3"]);
     }
 }
 
@@ -1165,6 +1208,39 @@ mod 書き直しをやめたとき {
             "確定した書き直しが巻き戻された"
         );
         assert_eq!(repl.declarations().len(), 1);
+    }
+
+    #[story("C2", "E1")]
+    #[test]
+    fn タクティクの続きを捨てたら直前のタクティクが戻る() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem keepTac : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        repl.feed(&["constructor"]);
+        repl.feed(&["  <;> rfl"]); // 前のタクティクの続きを書く (タクティクは取り消されている)
+        repl.feed_with("discard", Repl::discard); // Ctrl-C
+
+        assert!(
+            !repl.feed(&[":goals"]).contains('∧'),
+            "取り消したタクティクが戻っていない"
+        );
+        assert!(repl.feed(&[":script"]).contains("constructor"));
+    }
+
+    #[story("C2", "E1")]
+    #[test]
+    fn タクティクの書き直しが確定したら戻さない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem doneTac : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        repl.feed(&["constructor"]);
+        assert!(repl.block(&["  <;> rfl"]).contains("証明完了"));
+        repl.feed_with("discard", Repl::discard);
+
+        assert!(
+            repl.feed(&[":goals"]).contains("証明モードではない"),
+            "確定した書き直しが巻き戻された"
+        );
+        let decl = repl.declarations().pop().expect("宣言が無い");
+        assert!(!decl.contains("sorry"), "{decl}");
     }
 
     #[story("C2", "E1")]
@@ -2343,6 +2419,65 @@ mod 入力の判定の途中でエンジンが異常終了する {
             repl.feed(&[":prove"]).contains('⊢'),
             "案内どおりに再開できない"
         );
+    }
+}
+
+mod 完結の判定を中断したとき {
+    //! Ctrl-C で判定を止めたら、ユーザーは入力を送りたくない。判定の結果が無いまま
+    //! 送ると、式も宣言として送ることになる。
+    use super::*;
+
+    /// 完結の判定のリクエストで、src を含むものか。
+    fn probes(obj: &Json, src: &str) -> bool {
+        cmd(obj).contains("runParserCategory") && cmd(obj).contains(src)
+    }
+
+    #[story("A4", "C1")]
+    #[test]
+    fn 判定を_Ctrl_C_で止めたら入力を送らない() {
+        let mut repl = Driver::new();
+        let hit = interrupt_after_write(&mut repl, |o| probes(o, "stopped"));
+        let out = repl.feed(&["def stopped := 1"]);
+        assert!(hit.load(SeqCst), "判定を止めていない");
+        repl.unhook();
+
+        assert!(out.contains("実行しなかった"), "{out}");
+        assert!(repl.declarations().is_empty(), "{:?}", repl.declarations());
+    }
+
+    #[story("A4", "C6")]
+    #[test]
+    fn 途中のブロックを確定する判定を止めたら取り消した宣言を戻す() {
+        let mut repl = Driver::new();
+        repl.feed(&["def a := 1"]);
+
+        // 同じ src の判定は、続きの行を受け取ったときにも送る。空行で確定するときの
+        // 2 回目を止める。
+        let hit = Arc::new(AtomicBool::new(false));
+        let seen = hit.clone();
+        let mut n = 0;
+        repl.hook(move |stage| match stage {
+            Stage::Written(obj) if probes(obj, "+ (") => {
+                n += 1;
+                if n == 2 {
+                    seen.store(true, SeqCst);
+                    Hooked::Interrupt
+                } else {
+                    Hooked::Pass
+                }
+            }
+            _ => Hooked::Pass,
+        });
+        repl.feed(&["  + ("]); // 前の宣言の続き。宣言は取り消され、続きを待つ
+        repl.feed(&[""]);
+        assert!(hit.load(SeqCst), "確定の判定を止めていない");
+        repl.unhook();
+
+        assert!(
+            repl.feed(&["a"]).contains('1'),
+            "取り消した宣言が戻っていない"
+        );
+        assert_eq!(repl.declarations().len(), 1);
     }
 }
 

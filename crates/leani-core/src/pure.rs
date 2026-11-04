@@ -77,9 +77,26 @@ impl Style {
 // ------------------------------------------------------------------ Lean の文字列
 
 /// 文字列を Lean の文字列リテラルにする。
-/// JSON のエスケープは Lean の \n \t \\ \" \uXXXX と互換。
+///
+/// JSON のエスケープは使わない。JSON は制御文字を `\b` や `\f` と書くが、Lean は
+/// これを受け付けない。Lean が読めるのは `\\ \" \n \t \r \uXXXX` などなので、
+/// ほかの制御文字は `\uXXXX` にする。
 pub fn lean_str(s: &str) -> String {
-    serde_json::to_string(s).expect("文字列は必ず JSON にできる")
+    let body: String = s.chars().map(lean_char).collect();
+    format!("\"{body}\"")
+}
+
+/// 文字列リテラルの中に書く 1 文字。
+fn lean_char(c: char) -> String {
+    match c {
+        '\\' => "\\\\".to_string(),
+        '"' => "\\\"".to_string(),
+        '\n' => "\\n".to_string(),
+        '\t' => "\\t".to_string(),
+        '\r' => "\\r".to_string(),
+        c if c.is_control() => format!("\\u{:04x}", u32::from(c)),
+        c => c.to_string(),
+    }
 }
 
 /// 文字列の列を Lean の `#[...]` にする。

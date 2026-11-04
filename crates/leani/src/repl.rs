@@ -108,6 +108,15 @@ pub struct Last {
     pub env_before: Option<i64>,
 }
 
+/// rewind で取り消したもの。書き直さずにやめたら `restore_undone` が戻す。
+#[derive(Clone, Debug)]
+enum Rewound {
+    /// 取り消した宣言と、その宣言の sorry の保留。
+    Decl(Undone, Option<Held>),
+    /// タクティクを取り消す前の証明モードの状態。
+    Tactic(Proof),
+}
+
 /// `feed_*` が 1 行をどう扱ったか。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Step {
@@ -161,8 +170,8 @@ pub struct Repl {
     last: Option<Last>,
     /// `:{ ... :}` の中か。
     explicit: bool,
-    /// rewind で取り消した宣言と、その宣言の sorry の保留。
-    undone: Option<(Undone, Option<Held>)>,
+    /// rewind で取り消したもの。
+    undone: Option<Rewound>,
     show_time: bool,
     /// このセッションで `:save` したパス。同じパスへの 2 回目以降は上書きする。
     saved: HashSet<String>,
@@ -327,7 +336,7 @@ impl Repl {
     #[cfg(feature = "testing")]
     #[doc(hidden)]
     pub fn set_undone(&mut self, undone: Undone) {
-        self.undone = Some((undone, None));
+        self.undone = Some(Rewound::Decl(undone, None));
     }
 
     /// 次の入力のプロンプト。ブロックの途中なら ` | `、証明モードでは `⊢> `。
@@ -520,7 +529,8 @@ impl Repl {
 
     // -- 再起動 -----------------------------------------------------------
 
-    /// エンジンを再起動して宣言を replay する。再起動できなければ None を返す。
+    /// エンジンを再起動して宣言を replay する。再起動できなかったときと、replay を
+    /// 途中で打ち切ったとき (Ctrl-C か異常終了) は None を返す。
     ///
     /// boot が失敗する (import に問題がある / Ctrl-C で中断した) ことはよくある。
     /// 宣言は `Engine` 側に残るので、ユーザーは原因を直してから `:restart` で再実行
@@ -559,9 +569,16 @@ impl Repl {
             out.done.len(),
             env_text(self.eng.env())
         )));
+        if out.interrupted {
+            self.out.write(&self.style.yellow("^C 再実行を中断した"));
+        }
         self.report_replay(&out);
         self.reattach(&out);
-        Some(out)
+        if out.skipped.is_empty() {
+            Some(out)
+        } else {
+            None
+        }
     }
 
     /// 再起動に失敗したときの後始末。環境が無いので、直前の入力に戻ることもできない。
@@ -679,7 +696,9 @@ impl Repl {
     /// エンジンが異常終了したり中断されたりしたら、再起動して replay する。
     ///
     /// 異常終了した場合は、再起動したうえで `f` を 1 回だけ再実行する。ユーザーが
-    /// Ctrl-C で止めた場合は再実行しない (ユーザーは止めたいので)。
+    /// Ctrl-C で止めた場合は再実行しない (ユーザーは止めたいので)。再起動の replay を
+    /// 途中で打ち切ったときも再実行しない。Ctrl-C で止めたならユーザーは止めたいので、
+    /// 異常終了したなら同じエンジンに送っても失敗するので。
     ///
     /// 再実行でもエンジンが終了したら、もう一度だけ再起動して、再実行はしない。
     /// 同じ入力でエンジンが毎回異常終了する場合がある。再起動しないと、終了した
@@ -750,18 +769,23 @@ impl Repl {
     /// src が command / term / tacticSeq として読めるかを Lean のパーサに問い合わせる。
     /// 1 回のやりとりで 3 つとも取得する。実行はしない。ユーザー定義の notation も
     /// 認識される。
-    fn parse(&mut self, src: &str) -> Option<Json> {
+    ///
+    /// guard が止めたら (Ctrl-C か、再起動したあとの再実行でも止まった) None を返す。
+    /// 問い合わせがエラーになったときと環境が無いときは `Some(None)` を返す。この
+    /// 2 つを混ぜると、環境が無いときにも入力を捨てることになる。
+    fn parse(&mut self, src: &str) -> Option<Option<Json>> {
         let probe = fill(PARSE_PROBE, &[&lean_str(src)]);
         let got = self.guard(|eng| eng.query(&probe))?;
-        last_json(got.as_deref()).filter(Json::is_object)
+        Some(last_json(got.as_deref()).filter(Json::is_object))
     }
 
-    fn probe(&mut self, src: &str) -> (State, Kind) {
-        classify(self.parse(src).as_ref())
+    /// 完結したかと、送り方。guard が止めたら None。
+    fn probe(&mut self, src: &str) -> Option<(State, Kind)> {
+        self.parse(src).map(|p| classify(p.as_ref()))
     }
 
-    fn probe_tac(&mut self, src: &str) -> (State, Kind) {
-        classify_tac(self.parse(src).as_ref())
+    fn probe_tac(&mut self, src: &str) -> Option<(State, Kind)> {
+        self.parse(src).map(|p| classify_tac(p.as_ref()))
     }
 
     // -- ループから呼ぶもの -----------------------------------------------
@@ -867,25 +891,30 @@ impl Repl {
 
         let src = self.buf.join("\n");
         let proving = self.proof.is_some();
-        let (state, kind) = if proving {
+        let judged = if proving {
             self.probe_tac(&src)
         } else {
             self.probe(&src)
         };
-        if proving && self.proof.is_none() {
-            // probe の最中に guard がエンジンの異常終了を検出し、revive が証明モードを
-            // 終了した。このまま submit すると proof が None なので command として
-            // 処理され、タクティクの行が宣言として送られて
+        let left_proof = proving && self.proof.is_none();
+        let Some((state, kind)) = judged.filter(|_| !left_proof) else {
+            // 判定を止めた (Ctrl-C) ので、ユーザーは入力を送りたくない。判定の結果が
+            // 無いまま送ると、式も宣言として送ることになる。
+            //
+            // 判定の途中で guard がエンジンの異常終了を検出し、revive が証明モードを
+            // 終了したときも送らない。このまま submit すると proof が None なので
+            // command として処理され、タクティクの行が宣言として送られて
             // "unexpected identifier; expected command" になる。さらに
             // submit_cmd の clear_pending が reattach で設定した値を消すので、直前に
-            // 表示した「:prove で再開できる」も正しくなくなる。入力した行は送らずに
-            // 捨て、案内だけを表示する。
-            self.remember(&src);
-            self.buf.clear();
-            self.ready = None;
+            // 表示した「:prove で再開できる」も正しくなくなる。
+            //
+            // 入力した行は送らずに捨て、案内だけを表示する。
+            self.discard();
             self.out
                 .write(&self.style.dim("  入力した行は実行しなかった"));
-        } else if state == State::More {
+            return false;
+        };
+        if state == State::More {
             self.ready = None;
         } else if block_continues(&self.buf, &src) {
             self.ready = Some(kind); // 完結。ただし続きがありうるので空行を待つ
@@ -999,26 +1028,40 @@ impl Repl {
         if !last.advanced {
             return;
         }
+        // 書き直しをやめたときに戻せるよう保存しておく
+        // (Ctrl-C / Ctrl-D / ブロックの入力をやめたとき)。
         if last.proof {
             // 証明モードのタクティクは環境を進めていない。証明モードが終了していても、
             // ここで宣言を pop してはいけない (直前の実際の宣言が消える)。
-            if let Some(proof) = &self.proof {
-                self.proof = tactic_undo(proof).or_else(|| Some(proof.clone()));
+            if let Some(proof) = self.proof.take() {
+                self.proof = tactic_undo(&proof).or_else(|| Some(proof.clone()));
+                self.undone = Some(Rewound::Tactic(proof));
             }
             return;
         }
-        // 書き直しをやめたときに戻せるよう保存しておく
-        // (Ctrl-C / Ctrl-D / ブロックの入力をやめたとき)。取り消した宣言の
-        // sorry の保留も、今の環境のものではなくなるので一緒に保存する。
+        // 取り消した宣言の sorry の保留も、今の環境のものではなくなるので一緒に保存する。
         let undone = self.eng.pop_decl();
-        self.undone = Some((undone, self.held.take()));
+        self.undone = Some(Rewound::Decl(undone, self.held.take()));
     }
 
-    /// rewind で取り消した宣言を戻す。書き直さずにやめたとき。
+    /// rewind で取り消したものを戻す。書き直さずにやめたとき。
     pub fn restore_undone(&mut self) {
-        let Some((undone, held)) = self.undone.take() else {
-            return;
-        };
+        match self.undone.take() {
+            None => {}
+            Some(Rewound::Tactic(proof)) => {
+                // 保存しているあいだにエンジンが再起動されたら、保存した proofState は
+                // 前のプロセスのものなので戻さない。証明モードが終了していたら、
+                // 終了した証明モードを戻すことになるので、これも戻さない。
+                if proof.generation == self.eng.generation() && self.proof.is_some() {
+                    self.proof = Some(proof);
+                }
+            }
+            Some(Rewound::Decl(undone, held)) => self.restore_decl(undone, held),
+        }
+    }
+
+    /// rewind で取り消した宣言を戻す。
+    fn restore_decl(&mut self, undone: Undone, held: Option<Held>) {
         if self.eng.push_decl(undone.clone()) {
             self.held = held;
             return;
@@ -1050,16 +1093,26 @@ impl Repl {
             return;
         }
 
-        self.undone = None; // 書き直しが確定した。もう戻さない
         if self.proof.is_some() {
+            self.undone = None; // 書き直しが確定した。もう戻さない
             self.tactic(src);
             return;
         }
 
         let kind = match kind {
-            Some(kind) => kind,
-            None => self.probe(src).1,
+            Some(kind) => Some(kind),
+            None => self.probe(src).map(|(_, kind)| kind),
         };
+        let Some(kind) = kind else {
+            // 判定を止めた (Ctrl-C) ので送らない。書き直しも確定していないので、
+            // 取り消した宣言を戻す。guard が再起動したので世代が違い、restore_undone は
+            // 宣言をテキストから再実行する。
+            self.discard();
+            self.out
+                .write(&self.style.dim("  入力した行は実行しなかった"));
+            return;
+        };
+        self.undone = None; // 書き直しが確定した。もう戻さない
 
         let t0 = Instant::now();
         self.last = None;

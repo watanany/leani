@@ -289,6 +289,30 @@ mod 補完の候補をまとめて取得する単位 {
     }
 }
 
+mod Lean_の文字列リテラル {
+    use super::*;
+
+    #[story("C1")]
+    #[proptest]
+    fn バックスラッシュの後ろには_Lean_が読む文字だけを書く(
+        #[strategy("[\\x00-\\x1f\\x7f\\\\\"aあ]{0,12}")] s: String,
+    ) {
+        // Lean の文字列は \b や \f を受け付けない。読めないエスケープを書くと
+        // 完結の判定がエラーになり、式を宣言として送ってしまう。
+        let escape = regex::Regex::new(r#"\\(?:[\\"ntr]|u[0-9a-f]{4})"#).expect("正規表現");
+        let lit = pure::lean_str(&s);
+        let body = lit
+            .strip_prefix('"')
+            .and_then(|l| l.strip_suffix('"'))
+            .expect("引用符で囲む");
+        let rest = escape.replace_all(body, "");
+        prop_assert!(
+            !rest.contains(['\\', '"']) && !rest.chars().any(char::is_control),
+            "{lit}"
+        );
+    }
+}
+
 mod エンジンの出力の_JSON {
     //! 問い合わせの結果はエンジンの出力の最後の行にある。
     use super::*;
