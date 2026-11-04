@@ -14,7 +14,7 @@ use leani_core::abbrev::{
 };
 use leani_core::pure::{self, PAIRS, Style};
 use leani_core::queries::{BLOCK_OPEN, DECL_NAME, INCOMPLETE};
-use leani_core::types::{EngineFault, Json, Kind, Proof, SearchError, State};
+use leani_core::types::{EngineFault, Json, Kind, Proof, SearchError, State, Target};
 use leani_read::args::{Args, parse_args};
 use leani_read::config::{self, EnvConfig};
 use leani_read::places::Ctx;
@@ -1965,6 +1965,14 @@ mod ファイルの_import {
 
     #[story("B4")]
     #[test]
+    fn 行の中のブロックコメントを除いて_import_を読む() {
+        let src = "import A /- c -/\n/- c -/ import B\n/- c -/\nimport C -- m\ndef x := 1";
+        assert_eq!(pure::import_lines(src), ["A", "B", "C"]);
+        assert_eq!(pure::strip_imports(src).trim(), "/- c -/\ndef x := 1");
+    }
+
+    #[story("B4")]
+    #[test]
     fn 修飾子の付いた_import_も読む() {
         let src = "module\n\npublic import Lean.Elab\nmeta import all Std\nimport all Foo\n\
                    public meta import Bar\ndef x := 1";
@@ -2135,6 +2143,20 @@ mod 略記の候補 {
     fn 略記の途中でなければ名前を取り出さない() {
         assert_eq!(abbrev_head("Nat.suc"), None);
         assert_eq!(abbrev_head("\\to x"), None, "空白のあとは略記ではない");
+    }
+
+    #[story("D1")]
+    #[test]
+    fn 文字列のエスケープの後ろでは名前を補完する() {
+        // `\n",Nat.su` で始まる略記は無いので、`\` から後ろは略記ではない。
+        let text = r#"#eval ("a\n",Nat.su"#;
+        assert_eq!(
+            pure::completion_target(text),
+            Target::Name {
+                start: text.len() - "Nat.su".len(),
+                prefix: "Nat.su".to_string()
+            }
+        );
     }
 
     #[story("C8", "J2")]

@@ -300,6 +300,12 @@ def describe_Jupyter_の補完の形():
         assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
 
     @story("J2", "D1")
+    def it_文字列のエスケープの後ろでは名前を補完する():
+        # `\n",Nat.su` で始まる略記は無いので、`\` から後ろは略記ではない。
+        text = '#eval ("a\\n",Nat.su'
+        assert jupyter(text) == (len(text) - len("Nat.su"), ["Nat.succ"])
+
+    @story("J2", "D1")
     def it_名前の前の記号で区切る():
         assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 

@@ -34,15 +34,19 @@ pub fn expand_abbrev(head: &str) -> Option<(&'static str, usize)> {
 
 /// カーソルの手前が `\name` の途中なら、name を返す。Tab で略記を補完するときに使う。
 ///
-/// name は直前の `\` より後ろで、空白を含まない。`\` の直後なら空文字列を返す。
-/// 略記の途中でなければ None を返す。
+/// name は直前の `\` より後ろで、どれかのキーの接頭辞になっている。`\` の直後なら
+/// 空文字列を返す。略記の途中でなければ None を返す。`"a\n".leng` の `\n".leng` の
+/// ような文字列のエスケープを略記と読むと、名前を補完しなくなる。
 pub fn abbrev_head(head: &str) -> Option<&str> {
     let cut = head.rfind('\\')?;
     let name = &head[cut + 1..];
-    if name.chars().any(char::is_whitespace) {
-        None
-    } else {
+    let key = ABBREV
+        .range::<str, _>((Bound::Included(name), Bound::Unbounded))
+        .next();
+    if key.is_some_and(|(k, _)| k.starts_with(name)) {
         Some(name)
+    } else {
+        None
     }
 }
 

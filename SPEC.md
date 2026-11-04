@@ -9,7 +9,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 43 件、テスト 430 件。括弧の中はテストの場所
+ストーリー 43 件、テスト 433 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -129,6 +129,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - import の行だけを取り出す (parsing / ファイルの import)
 - コメントの中の import は数えない (parsing / ファイルの import)
 - 入れ子のコメントの終わりを正しく判定する (parsing / ファイルの import)
+- 行の中のブロックコメントを除いて import を読む (parsing / ファイルの import)
 - 修飾子の付いた import も読む (parsing / ファイルの import)
 - コメントの付いた module の行も読む (parsing / ファイルの import)
 - module の後ろに import を足す (parsing / ファイルの import)
@@ -262,6 +263,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 補完ではエンジンを再起動せず次の入力で再起動する (completion / エンジンが異常終了したあとの Tab 補完)
 - 名前を補完する (kernel / 補完)
 - 定数名はそのまま置き換える (kernel / Jupyter の補完の形)
+- 文字列のエスケープの後ろでは名前を補完する (kernel / Jupyter の補完の形)
 - 名前の前の記号で区切る (kernel / Jupyter の補完の形)
 - Lean の名前に使えない文字で区切る (kernel / Jupyter の補完の形)
 - 修飾子や属性が付いていても名前を取り出せる (parsing / 宣言の名前の取り出し)
@@ -275,6 +277,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 名前空間が無ければ先頭 2 文字 (parsing / 補完の候補をまとめて取得する単位)
 - 出力の最後の行を JSON として読む (parsing / エンジンの出力の JSON)
 - 出力が空か最後の行が JSON でなければ None を返す (parsing / エンジンの出力の JSON)
+- 文字列のエスケープの後ろでは名前を補完する (parsing / 略記の候補)
 - 略記でなければ Tab は名前を補完する (terminal / 略記の入力)
 
 ### D2 関数の型と docstring を見たい
@@ -712,6 +715,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 続きの文字だけの候補を語全体に直す (kernel / Jupyter の補完の形)
 - ディレクトリには slash を付ける (kernel / Jupyter の補完の形)
 - 定数名はそのまま置き換える (kernel / Jupyter の補完の形)
+- 文字列のエスケープの後ろでは名前を補完する (kernel / Jupyter の補完の形)
 - 名前の前の記号で区切る (kernel / Jupyter の補完の形)
 - Lean の名前に使えない文字で区切る (kernel / Jupyter の補完の形)
 - 候補が無ければカーソルの位置を返す (kernel / Jupyter の補完の形)

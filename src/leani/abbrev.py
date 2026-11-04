@@ -52,12 +52,13 @@ def abbrev_head(head: str) -> str | None:
     """
     カーソルの手前が `\\name` の途中なら、name を返す。Tab で略記を補完するときに使う。
 
-    name は直前の `\\` より後ろで、空白を含まない。`\\` の直後なら空文字列を返す。
-    略記の途中でなければ None を返す。
+    name は直前の `\\` より後ろで、どれかのキーの接頭辞になっている。`\\` の直後なら
+    空文字列を返す。略記の途中でなければ None を返す。`"a\\n".leng` の `\\n".leng` の
+    ような文字列のエスケープを略記と読むと、名前を補完しなくなる。
     """
     cut = head.rfind("\\")
     name = head[cut + 1 :]
-    if cut < 0 or any(c.isspace() for c in name):
+    if cut < 0 or not any(k.startswith(name) for k in ABBREV):
         return None
     else:
         return name

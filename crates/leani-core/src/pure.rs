@@ -491,9 +491,39 @@ pub fn comment_depth(line: &str, depth: usize) -> usize {
     depth
 }
 
+/// 行からコメントを取り除いた残り。行の中で閉じないブロックコメントがあれば None。
+///
+/// `import X /- c -/` や `/- c -/ import X` も import の行として読むため。
+fn code_of(line: &str) -> Option<String> {
+    // `comment_depth` と同じく、ASCII の 2 文字だけを見るので byte で読む
+    let bytes = line.as_bytes();
+    let (mut i, mut depth, mut code) = (0, 0, Vec::new());
+    while i < bytes.len() {
+        match (bytes.get(i..i + 2), depth) {
+            (Some(b"--"), 0) => break,
+            (Some(b"/-"), _) => {
+                depth += 1;
+                i += 1;
+            }
+            (Some(b"-/"), 1..) => {
+                depth -= 1;
+                i += 1;
+            }
+            (_, 0) => code.push(bytes[i]),
+            (_, _) => {}
+        }
+        i += 1;
+    }
+    match depth {
+        0 => Some(String::from_utf8_lossy(&code).trim().to_string()),
+        _ => None,
+    }
+}
+
 /// 先頭のヘッダ領域にある `module` と import を、行番号と一緒に返す。
 ///
-/// ヘッダ領域は、空行、コメント、`module`、import が続く範囲。行単位で `import` を
+/// ヘッダ領域は、空行、コメント、`module`、import が続く範囲。行の中で閉じるコメントは
+/// 取り除いてから判定し、import の行はコメントを除いた形で返す。行単位で `import` を
 /// 探すと、doc コメントに書いた `import Foo` を本物の import と取り違える。
 /// それを :save のヘッダに書き出すと、repl はヘッダ全体を無視して起動するので、
 /// 書き出したファイルは :l でも lean でもエラーになる。import 行を取り除く処理
@@ -509,20 +539,19 @@ pub fn scan_header(text: &str) -> (Header, BTreeSet<usize>) {
 
     for (n, line) in text.lines().enumerate() {
         let one = line.trim();
-        if depth > 0 {
-            depth = comment_depth(line, depth);
-        } else if one.is_empty() || one.starts_with("--") {
-            continue;
-        } else if one.starts_with("/-") {
-            depth = comment_depth(line, 0);
-        } else if is_module_line(one) {
-            head.module = true;
-            at.insert(n);
-        } else if import_of(one).is_some() {
-            head.imports.push(one.to_string());
-            at.insert(n);
-        } else {
-            break; // ヘッダ領域はここで終わり。以降の import は Lean も認めない
+        match (depth, code_of(one).as_deref()) {
+            (1.., _) => depth = comment_depth(line, depth),
+            (0, None) if one.starts_with("/-") => depth = comment_depth(line, 0),
+            (0, Some("")) => {}
+            (0, Some(code)) if is_module_line(code) => {
+                head.module = true;
+                at.insert(n);
+            }
+            (0, Some(code)) if import_of(code).is_some() => {
+                head.imports.push(code.to_string());
+                at.insert(n);
+            }
+            _ => break, // ヘッダ領域はここで終わり。以降の import は Lean も認めない
         }
     }
 

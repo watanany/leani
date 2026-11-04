@@ -245,11 +245,35 @@ def comment_depth(line: str, depth: int) -> int:
     return depth
 
 
+def code_of(line: str) -> str | None:
+    """
+    行からコメントを取り除いた残り。行の中で閉じないブロックコメントがあれば None。
+
+    `import X /- c -/` や `/- c -/ import X` も import の行として読むため。
+    """
+    i, depth, code = 0, 0, []
+    while i < len(line):
+        two = line[i : i + 2]
+        if two == "--" and not depth:
+            break
+        if two == "/-":
+            depth += 1
+            i += 1
+        elif two == "-/" and depth:
+            depth -= 1
+            i += 1
+        elif not depth:
+            code.append(line[i])
+        i += 1
+    return None if depth else "".join(code).strip()
+
+
 def scan_header(text: str) -> tuple[list[str], set[int]]:
     """
     先頭のヘッダ領域にある import を、モジュール名と行番号で返す。
 
-    ヘッダ領域は、空行、コメント、`import` が続く範囲。行単位で `import` を
+    ヘッダ領域は、空行、コメント、`import` が続く範囲。行の中で閉じるコメントは
+    取り除いてから判定する。行単位で `import` を
     探すと、doc コメントに書いた `import Foo` を本物の import と取り違える。
     それを :save のヘッダに書き出すと、repl はヘッダ全体を無視して起動するので、
     書き出したファイルは :l でも lean でもエラーになる。import 行を取り除く処理
@@ -261,14 +285,15 @@ def scan_header(text: str) -> tuple[list[str], set[int]]:
 
     for n, line in enumerate(text.splitlines()):
         one = line.strip()
-        head = one.split(None, 1)
+        code = code_of(one)
+        head = (code or "").split(None, 1)
         if depth:
             depth = comment_depth(line, depth)
-        elif not one or one.startswith("--"):
-            continue
-        elif one.startswith("/-"):
+        elif code is None and one.startswith("/-"):
             depth = comment_depth(line, 0)
-        elif head[0] == "import" and len(head) == 2 and "/-" not in one:
+        elif code == "":
+            continue
+        elif head and head[0] == "import" and len(head) == 2:
             mods.append(head[1].strip())
             at.add(n)
         else:
