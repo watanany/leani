@@ -14,7 +14,7 @@ use leani_core::abbrev::{
 };
 use leani_core::pure::{self, PAIRS, Style};
 use leani_core::queries::{BLOCK_OPEN, DECL_NAME, INCOMPLETE};
-use leani_core::types::{Json, Kind, Proof, SearchError, State};
+use leani_core::types::{EngineFault, Json, Kind, Proof, SearchError, State};
 use leani_read::args::{Args, parse_args};
 use leani_read::config::{self, EnvConfig};
 use leani_read::places::Ctx;
@@ -25,8 +25,10 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use std::sync::atomic::Ordering::SeqCst;
 use std::sync::mpsc;
-use std::time::Duration;
+use std::thread;
+use std::time::{Duration, Instant};
 use story::story;
 use test_strategy::proptest;
 
@@ -778,6 +780,33 @@ fn sink() -> Vec<u8> {
     Vec::new()
 }
 
+/// 用意の失敗 (`Setup`) の理由。ほかの結果ならテストを失敗にする。
+fn setup_why<T: std::fmt::Debug>(got: Result<T, EngineFault>) -> String {
+    match got {
+        Err(EngineFault::Setup(why)) => why,
+        other => panic!("Setup にならない: {other:?}"),
+    }
+}
+
+/// `mark` のファイルができたら、Ctrl-C が押されたことにする。偽のコマンドが
+/// 動き始めてから止めるため。
+fn interrupt_when(ctx: &Ctx, mark: &Path) -> thread::JoinHandle<()> {
+    let flag = ctx.interrupted.clone();
+    let mark = mark.to_path_buf();
+    thread::spawn(move || {
+        let end = Instant::now() + Duration::from_secs(30);
+        while !mark.exists() && Instant::now() < end {
+            thread::sleep(Duration::from_millis(10));
+        }
+        flag.store(true, SeqCst);
+    })
+}
+
+/// 印のファイルを作ってから終わらずに待つ、偽のコマンドの中身。
+fn hang_after(mark: &Path) -> String {
+    format!(": > {}; sleep 30", path_str(mark))
+}
+
 mod 設定の値の型 {
     //! TOML には何でも書ける。型が違う値は panic ではなく ConfigError にする。
     use super::*;
@@ -1030,7 +1059,7 @@ mod 使うバージョンの決め方 {
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
         let cfg = EnvConfig::make(&ctx, "t", Some(&proj), &[], None, Some(&eng));
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
             Some("leanprover/lean4:v4.34.0-rc2")
         );
     }
@@ -1047,9 +1076,22 @@ mod 使うバージョンの決め方 {
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v4.33.0");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&eng));
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
             Some("leanprover/lean4:v4.33.0")
         );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn lean_のバージョンを調べている途中の_Ctrl__C_は中断を返す() {
+        let dir = tmp();
+        let mark = dir.path().join("started");
+        let path = fake_tools(dir.path(), &[("lean", &hang_after(&mark))]);
+        let ctx = ctx_with(&[("PATH", &path)], "/");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
+        let pressed = interrupt_when(&ctx, &mark);
+        assert_eq!(boot::toolchain(&ctx, &cfg), Err(EngineFault::Interrupted));
+        pressed.join().expect("join");
     }
 
     #[story("G3")]
@@ -1061,7 +1103,7 @@ mod 使うバージョンの決め方 {
         let ctx = ctx_with(&[("PATH", &path)], "/");
         let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
         assert_eq!(
-            boot::guess_toolchain(&ctx, &cfg).as_deref(),
+            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
             Some("leanprover/lean4:v4.9.0")
         );
     }
@@ -1151,8 +1193,13 @@ mod エンジンを用意するときの安全対策 {
         let dir = tmp();
         let ctx = ctx_with(&[("PATH", &path_str(dir.path()))], "/");
         let eng = toolchain_dir(dir.path(), "eng", TC);
-        let got = boot::ensure_engine(&ctx, &mut sink(), Some(&eng), TC, false);
-        let why = got.expect_err("用意してしまった").0;
+        let why = setup_why(boot::ensure_engine(
+            &ctx,
+            &mut sink(),
+            Some(&eng),
+            TC,
+            false,
+        ));
         assert!(why.contains("未ビルド"), "{why}");
         assert!(Path::new(&eng).join("lean-toolchain").is_file());
     }
@@ -1231,8 +1278,7 @@ mod エンジンを自動で用意できないとき {
             let path = fake_tools(dir.path(), &git.into_iter().collect::<Vec<_>>());
             let mut ctx = ctx_with(&[("PATH", &path)], "/");
             ctx.setup_timeout = Duration::from_millis(200);
-            let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
-            let why = got.expect_err("用意できてしまった").0;
+            let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
             assert!(why.contains("手動で用意する場合"), "{why}");
             assert!(why.contains("git clone --branch"), "{why}");
             let _ = fs::remove_file(dir.path().join("bin/git"));
@@ -1241,29 +1287,55 @@ mod エンジンを自動で用意できないとき {
 
     #[story("G3")]
     #[test]
-    fn 時間内に終わらないコマンドは孫プロセスごと止める() {
+    fn Ctrl__C_で止めたら手順を付けずに中断を返す() {
+        // 利用者が止めたので、手動で用意する手順は要らない。
+        let dir = tmp();
+        let mark = dir.path().join("started");
+        let path = fake_tools(dir.path(), &[("git", &hang_after(&mark))]);
+        let ctx = ctx_with(&[("PATH", &path)], "/");
+        let pressed = interrupt_when(&ctx, &mark);
+        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
+        pressed.join().expect("join");
+        assert_eq!(got, Err(EngineFault::Interrupted));
+    }
+
+    #[story("G3")]
+    #[test]
+    fn 止めたコマンドは孫プロセスごと止める() {
         // 偽の git が起動した孫プロセス (sleep) の pid を記録しておき、止めたあとに
         // 残っていないことを確かめる。孫が残ると出力のパイプを閉じないので、
         // 出力をためる読み取りが孫の終了まで待ち続ける。
+        // シェルはファイルを作ってから書くので、pid は別のファイルに書いてから
+        // mv で置く。直接書くと、空のファイルを読むことがある。
         let dir = tmp();
-        let pidfile = dir.path().join("grandchild.pid");
-        let body = format!("sleep 5 & echo $! > {}; wait", path_str(&pidfile));
+        let pidfile = path_str(&dir.path().join("grandchild.pid"));
+        let body =
+            format!("sleep 30 & echo $! > {pidfile}.tmp && mv {pidfile}.tmp {pidfile}; wait");
         let path = fake_tools(dir.path(), &[("git", &body)]);
         let mut ctx = ctx_with(&[("PATH", &path)], "/");
-        ctx.setup_timeout = Duration::from_millis(300);
-        let started = std::time::Instant::now();
-        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
-        assert!(got.is_err(), "用意できてしまった");
+        // 時間切れでは止めず、Ctrl-C だけで止める。止める処理は時間切れと同じ。
+        ctx.setup_timeout = Duration::from_secs(60);
+        let flag = ctx.interrupted.clone();
+        let task = thread::spawn(move || boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
+
+        let end = Instant::now() + Duration::from_secs(30);
+        let pid = loop {
+            let read = fs::read_to_string(&pidfile).ok();
+            if let Some(pid) = read.and_then(|t| t.trim().parse::<i32>().ok()) {
+                break pid;
+            }
+            assert!(Instant::now() < end, "孫プロセスが起動しない");
+            thread::sleep(Duration::from_millis(10));
+        };
+        let stopped = Instant::now();
+        flag.store(true, SeqCst);
+        let got = task.join().expect("join");
+
+        assert_eq!(got, Err(EngineFault::Interrupted));
         assert!(
-            started.elapsed() < Duration::from_secs(3),
+            stopped.elapsed() < Duration::from_secs(3),
             "孫プロセスが終わるまで待った"
         );
-
-        let pid = fs::read_to_string(&pidfile)
-            .expect("pid")
-            .trim()
-            .parse::<i32>()
-            .expect("pid");
         assert!(
             gone(pid, Duration::from_secs(1)),
             "孫プロセス {pid} が残っている"
@@ -1272,16 +1344,16 @@ mod エンジンを自動で用意できないとき {
 
     /// pid のプロセスが `within` のうちに消えるか。
     fn gone(pid: i32, within: Duration) -> bool {
-        let deadline = std::time::Instant::now() + within;
+        let deadline = Instant::now() + within;
         loop {
             let alive = nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None).is_ok();
             if !alive {
                 return true;
             }
-            if std::time::Instant::now() >= deadline {
+            if Instant::now() >= deadline {
                 return false;
             }
-            std::thread::sleep(Duration::from_millis(20));
+            thread::sleep(Duration::from_millis(20));
         }
     }
 
@@ -1312,8 +1384,7 @@ mod エンジンを自動で用意できないとき {
     fn 対応するタグが無ければ起動を中止する() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.40.0"], &[]);
-        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
-        let why = got.expect_err("用意できてしまった").0;
+        let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
         assert!(why.contains("repl に v4.33.0 用のタグが無い"), "{why}");
         assert!(why.contains("以下で一番新しいタグ"), "{why}");
         assert!(!git_log(dir.path()).contains("clone"), "ビルドしてしまった");
@@ -1324,8 +1395,7 @@ mod エンジンを自動で用意できないとき {
     fn LEANI_NO_SETUP_のときはエンジンを用意しない() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.33.0"], &[("LEANI_NO_SETUP", "1")]);
-        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
-        let why = got.expect_err("用意できてしまった").0;
+        let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
         assert!(why.contains("LEANI_NO_SETUP"), "{why}");
         assert_eq!(git_log(dir.path()), "", "git を呼んでしまった");
 
@@ -1341,8 +1411,7 @@ mod エンジンを自動で用意できないとき {
         let ctx = setup_ctx(dir.path(), &["v4.32.0"], &[]);
         let git = fake_git(&dir.path().join("git.log"), &["v4.32.0"]);
         fake_tools(dir.path(), &[("git", &git), ("lake", "exit 1")]);
-        let got = boot::ensure_engine(&ctx, &mut sink(), None, TC, false);
-        let why = got.expect_err("用意できてしまった").0;
+        let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
         assert!(why.contains("--branch v4.32.0"), "{why}");
     }
 }
@@ -1369,7 +1438,10 @@ mod lake_env_の取得 {
     fn プロジェクトが無ければ_lake_env_を実行しない() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[]);
-        assert_eq!(boot::lake_env(&ctx, None, TC), Ok(Default::default()));
+        assert_eq!(
+            boot::lake_env(&ctx, &mut sink(), None, TC),
+            Ok(Default::default())
+        );
         assert_eq!(lake_count(dir.path()), 0);
     }
 
@@ -1382,7 +1454,8 @@ mod lake_env_の取得 {
         let proj = project(dir.path());
         let lean_path = |project: Option<&str>| {
             let cfg = EnvConfig::make(&ctx, "t", project, &[], None, None);
-            let env = leani::engine::proc_env(&ctx, &cfg, TC, "/eng").expect("proc_env");
+            let env =
+                leani::engine::proc_env(&ctx, &mut sink(), &cfg, TC, "/eng").expect("proc_env");
             env.get("LEAN_PATH").cloned().unwrap_or_default()
         };
         assert_eq!(lean_path(None), "/eng/.lake/build/lib/lean:/inherited");
@@ -1397,8 +1470,12 @@ mod lake_env_の取得 {
         let proj = project(dir.path());
         let want: std::collections::BTreeMap<_, _> =
             [("LEAN_PATH".to_string(), "/a".to_string())].into();
-        assert_eq!(boot::lake_env(&ctx, Some(&proj), TC), Ok(want.clone()));
-        assert_eq!(boot::lake_env(&ctx, Some(&proj), TC), Ok(want));
+        let mut out = sink();
+        assert_eq!(
+            boot::lake_env(&ctx, &mut out, Some(&proj), TC),
+            Ok(want.clone())
+        );
+        assert_eq!(boot::lake_env(&ctx, &mut out, Some(&proj), TC), Ok(want));
         assert_eq!(lake_count(dir.path()), 1);
     }
 
@@ -1408,7 +1485,6 @@ mod lake_env_の取得 {
         let dir = tmp();
         let proj = project(dir.path());
         let fails = [
-            (Some("exec sleep 5"), "秒で終わらなかった"),
             (None, "実行できなかった"),
             (Some("echo boom >&2; exit 1"), "失敗した"),
         ];
@@ -1416,17 +1492,56 @@ mod lake_env_の取得 {
             let lake = fail.map(|body| ("lake", body));
             let path = fake_tools(dir.path(), &lake.into_iter().collect::<Vec<_>>());
             let state = path_str(&dir.path().join("state"));
-            let mut ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
-            // 200 ms にすると、テストを並列で実行したときに、失敗する偽の lake も
-            // 時間内に終わらないことがある。
-            ctx.setup_timeout = Duration::from_secs(1);
-            let got = boot::lake_env(&ctx, Some(&proj), TC)
-                .expect_err("取得できてしまった")
-                .0;
+            let ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
+            let got = setup_why(boot::lake_env(&ctx, &mut sink(), Some(&proj), TC));
             assert!(got.starts_with("lake env "), "{got}");
             assert!(got.contains(why), "{got}");
             let _ = fs::remove_file(dir.path().join("bin/lake"));
         }
+    }
+
+    #[story("G6")]
+    #[test]
+    fn lake_env_を実行する前に案内を表示する() {
+        // 初回の lake env は依存パッケージを取得することがあり、何も表示しないと
+        // 止まったように見える。
+        let dir = tmp();
+        let ctx = setup_ctx(dir.path(), &[], &[]);
+        let proj = project(dir.path());
+        let mut out = sink();
+        boot::lake_env(&ctx, &mut out, Some(&proj), TC).expect("lake env");
+        let shown = String::from_utf8_lossy(&out);
+        assert!(shown.contains("Ctrl-C で中断できる"), "{shown}");
+    }
+
+    #[story("G6")]
+    #[test]
+    fn lake_env_は時間を区切らずに待つ() {
+        // 依存パッケージの取得は、外部との通信のタイムアウトより長くかかることがある。
+        let dir = tmp();
+        let proj = project(dir.path());
+        let lake = "sleep 1; printf 'LEAN_PATH=/a\\n'";
+        let path = fake_tools(dir.path(), &[("lake", lake)]);
+        let state = path_str(&dir.path().join("state"));
+        let mut ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
+        ctx.setup_timeout = Duration::from_millis(200);
+        let got = boot::lake_env(&ctx, &mut sink(), Some(&proj), TC).expect("lake env");
+        assert_eq!(got.get("LEAN_PATH").map(String::as_str), Some("/a"));
+    }
+
+    #[story("G6")]
+    #[test]
+    fn lake_env_を_Ctrl__C_で止めたら中断を返す() {
+        let dir = tmp();
+        let proj = project(dir.path());
+        let mark = dir.path().join("started");
+        let path = fake_tools(dir.path(), &[("lake", &hang_after(&mark))]);
+        let state = path_str(&dir.path().join("state"));
+        let ctx = ctx_with(&[("PATH", &path), ("XDG_STATE_HOME", &state)], "/");
+        let pressed = interrupt_when(&ctx, &mark);
+        let got = boot::lake_env(&ctx, &mut sink(), Some(&proj), TC);
+        pressed.join().expect("join");
+        assert_eq!(got, Err(EngineFault::Interrupted));
     }
 
     #[story("G6")]
@@ -1442,9 +1557,7 @@ mod lake_env_の取得 {
         let cache = format!("{}/lake-env/proj-{}", ctx.state, &key[..12]);
         fs::create_dir_all(&cache).expect("mkdir");
 
-        let got = boot::lake_env(&ctx, Some(&proj), TC)
-            .expect_err("取得できてしまった")
-            .0;
+        let got = setup_why(boot::lake_env(&ctx, &mut sink(), Some(&proj), TC));
         assert!(got.contains("保存できなかった"), "{got}");
         let left = fs::read_dir(format!("{}/lake-env", ctx.state))
             .expect("read_dir")
@@ -2107,6 +2220,14 @@ mod 起動オプション {
     fn ファイル名は読み込むファイルとして受け取る() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
     }
+
+    #[story("B4")]
+    #[test]
+    fn ファイルを_2_つ指定するとエラーで終了する() {
+        // 後のファイルだけを読み込むと、前のファイルを読み込んでいないことに気づけない。
+        let why = parse_args(&["a.lean", "b.lean"]).expect_err("エラーにならない");
+        assert!(why.contains("ファイルは 1 つだけ"), "{why}");
+    }
 }
 
 mod 起動 {
@@ -2276,6 +2397,78 @@ mod 起動 {
         // パイプの入力は表示されないので、プロンプトと結果が同じ行に並ぶ。
         let answered = got.out.lines().any(|l| l.trim_start_matches("λ> ") == "13");
         assert!(answered, "{}", got.out);
+    }
+
+    #[story("F4")]
+    #[test]
+    fn 出力先が閉じたら_panic_せずに終了コード_0_で終わる() {
+        // `leani < file | head -1` で head が先に終了したとき。書けないまま続けても
+        // 誰も読まないので、入力の残りは実行せずに終わる。
+        let dir = tmp();
+        config(dir.path(), NO_ENGINE);
+        let mut child = real(dir.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("spawn");
+        drop(child.stdout.take());
+        let mut stdin = child.stdin.take().expect("stdin");
+        // leani が先に終了していたら書けないが、そのときも終了コードで確かめる。
+        let _ = stdin.write_all(b"1 + 1\n2 + 2\n");
+        drop(stdin);
+        let got = child.wait_with_output().expect("wait");
+        let err = String::from_utf8_lossy(&got.stderr);
+        assert!(!err.contains("panicked"), "{err}");
+        assert_eq!(got.status.code(), Some(0), "{err}");
+    }
+
+    /// 端末の Ctrl-C は leani にだけ届く (子プロセスは別のセッションにある)。
+    /// そこで、偽のコマンドから leani に SIGINT を送る。
+    const SEND_SIGINT: &str = "kill -INT $PPID; sleep 30";
+
+    #[story("G3")]
+    #[test]
+    fn 用意の途中の_Ctrl__C_は_exit_130_で終わる() {
+        let dir = tmp();
+        config(dir.path(), NO_ENGINE);
+        let lean = "echo 'Lean (version 4.1.0, arm64-apple-darwin, commit 0, Release)'";
+        let path = fake_tools(
+            dir.path(),
+            &[
+                ("elan", ""),
+                ("git", SEND_SIGINT),
+                ("lake", ""),
+                ("lean", lean),
+            ],
+        );
+
+        let got = run(isolated(dir.path(), &[("PATH", &path)]).arg("--setup"), "");
+
+        assert_eq!(got.code, 130, "{}{}", got.out, got.err);
+        assert!(!got.err.contains("手動で用意する場合"), "{}", got.err);
+    }
+
+    #[story("G3")]
+    #[test]
+    fn バージョンを調べている途中の_Ctrl__C_も中断を返す() {
+        // elan は lean --version の中で toolchain を取得することがあるので、ここでも
+        // 時間がかかる。中断を「バージョンが分からない」にすると exit 1 で終わる。
+        let dir = tmp();
+        config(dir.path(), NO_ENGINE);
+        let path = fake_tools(
+            dir.path(),
+            &[
+                ("elan", ""),
+                ("git", ""),
+                ("lake", ""),
+                ("lean", SEND_SIGINT),
+            ],
+        );
+
+        let got = run(isolated(dir.path(), &[("PATH", &path)]).arg("--setup"), "");
+
+        assert_eq!(got.code, 130, "{}{}", got.out, got.err);
     }
 
     #[story("G7")]

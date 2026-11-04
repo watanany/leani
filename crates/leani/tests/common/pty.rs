@@ -293,6 +293,19 @@ impl Terminal {
         self.wait_prompt(PROMPT, 40)
     }
 
+    /// 子プロセスが終了するまで待つ。`timeout` 秒で終了しなければ false を返す。
+    pub fn wait_exit(&mut self, timeout: u64) -> bool {
+        let end = Instant::now() + Duration::from_secs(timeout);
+        while Instant::now() < end {
+            if matches!(self.child.try_wait(), Ok(Some(_))) {
+                self.closed = true;
+                return true;
+            }
+            self.pump(Duration::from_millis(100));
+        }
+        false
+    }
+
     /// 履歴ファイルを入力した順のリストにする。`leani` と同じ実装で読み込む。
     pub fn saved_history(&self) -> Vec<String> {
         BlockHistory::new(&self.history).load()

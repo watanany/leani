@@ -7,8 +7,9 @@
 //! 入力を読むループ (`run`) も `Repl` の外のここに置く。`Repl` は入力を持たず、
 //! 1 行ずつ `feed_line` で受け取るだけにする。入力の元は `LineSource` で差し替え、
 //! 端末、パイプ、テストの列を同じループで動かす。
-
-#![allow(clippy::print_stdout)]
+//!
+//! stdout には `print!` で書かない。出力先が閉じていると (`leani | head` の head が
+//! 終了した) `print!` は panic するので、書けなくても続ける `emit` で書く。
 
 use std::io::{self, Write};
 use std::os::fd::{AsFd, AsRawFd};
@@ -60,8 +61,10 @@ Lean 本体だけで起動する。init ファイルは {init}。
 }
 
 /// `-V` の表示。エンジンが未ビルドでも、設定が無くても、場所だけは表示する。
-pub fn version_text(ctx: &Ctx, cfg: &EnvConfig) -> String {
-    let tc = guess_toolchain(ctx, cfg);
+///
+/// Lean のバージョンを調べているあいだに Ctrl-C が押されたら `Interrupted` を返す。
+pub fn version_text(ctx: &Ctx, cfg: &EnvConfig) -> Result<String, EngineFault> {
+    let tc = guess_toolchain(ctx, cfg)?;
     let engine = tc
         .as_deref()
         .and_then(|tc| engine_dir(cfg.engine.as_deref(), tc, &ctx.engine_cache).ok())
@@ -76,7 +79,7 @@ pub fn version_text(ctx: &Ctx, cfg: &EnvConfig) -> String {
     } else {
         " (無し)"
     };
-    format!(
+    Ok(format!(
         "leani\n  \
          環境:     {cfg}\n  \
          プロジェクト: {}\n  \
@@ -90,7 +93,7 @@ pub fn version_text(ctx: &Ctx, cfg: &EnvConfig) -> String {
         ctx.config,
         ctx.init,
         ctx.hist,
-    )
+    ))
 }
 
 fn has_repl(engine: &str) -> bool {
@@ -102,7 +105,7 @@ fn has_repl(engine: &str) -> bool {
 /// 入力の元は、`Repl` を起動したあとに `source` で作る。端末の Tab 補完が `Repl` を
 /// 使うためである。起動しなかったとき (`-h`、`-V`、`--setup`、起動の失敗) は作らない。
 ///
-/// Ctrl-C で起動を中断したときは、改行を出して 130 で終わる。
+/// Ctrl-C で起動を中断したときは、改行を出して 130 で終わる。`--setup` と `-V` も同じ。
 pub fn main(
     ctx: &Ctx,
     argv: &[String],
@@ -110,7 +113,7 @@ pub fn main(
 ) -> Result<i32, String> {
     let args = parse_args(argv)?;
     if args.help {
-        print!("{}{HELP}", usage(ctx));
+        emit(&format!("{}{HELP}", usage(ctx)));
         return Ok(0);
     }
 
@@ -125,14 +128,22 @@ pub fn main(
     .map_err(|e| e.0)?;
 
     if args.version {
-        print!("{}", version_text(ctx, &cfg));
-        return Ok(0);
+        return match version_text(ctx, &cfg) {
+            Ok(text) => {
+                emit(&text);
+                Ok(0)
+            }
+            Err(e) => give_up(&e),
+        };
     }
     if let Some(why) = problem(ctx, &cfg) {
         return Err(why);
     }
     if args.setup {
-        return setup(ctx, &cfg);
+        return match setup(ctx, &cfg) {
+            Ok(()) => Ok(0),
+            Err(e) => give_up(&e),
+        };
     }
 
     let started = Repl::new(
@@ -144,11 +155,7 @@ pub fn main(
     );
     let repl = match started {
         Ok(repl) => repl,
-        Err(EngineFault::Interrupted) => {
-            println!();
-            return Ok(130);
-        }
-        Err(e) => return Err(start_failure(&e)),
+        Err(e) => return give_up(&e),
     };
     let repl = Arc::new(Mutex::new(repl));
     let mut src = source(&repl);
@@ -158,16 +165,35 @@ pub fn main(
 }
 
 /// `--setup`。用意済みならそう表示するだけで、エンジンを作り直さない。
-fn setup(ctx: &Ctx, cfg: &EnvConfig) -> Result<i32, String> {
-    let tc = toolchain(ctx, cfg).map_err(|e| e.0)?;
-    let path = engine_dir(cfg.engine.as_deref(), &tc, &ctx.engine_cache).map_err(|e| e.0)?;
+fn setup(ctx: &Ctx, cfg: &EnvConfig) -> Result<(), EngineFault> {
+    let tc = toolchain(ctx, cfg)?;
+    let path = engine_dir(cfg.engine.as_deref(), &tc, &ctx.engine_cache)?;
     if has_repl(&path) {
         let style = Style { color: ctx.color };
-        println!("{}", style.dim(&format!("用意済み: {path}")));
-        return Ok(0);
+        emit(&format!("{}\n", style.dim(&format!("用意済み: {path}"))));
+        return Ok(());
     }
-    ensure_engine(ctx, &mut io::stdout(), cfg.engine.as_deref(), &tc, true).map_err(|e| e.0)?;
-    Ok(0)
+    ensure_engine(ctx, &mut io::stdout(), cfg.engine.as_deref(), &tc, true)?;
+    Ok(())
+}
+
+/// 起動しなかったときの終了コード。Ctrl-C で中断したときは、改行を出して 130 を返す。
+fn give_up(e: &EngineFault) -> Result<i32, String> {
+    match e {
+        EngineFault::Interrupted => {
+            emit("\n");
+            Ok(130)
+        }
+        _ => Err(start_failure(e)),
+    }
+}
+
+/// stdout に書く。書けなくても (出力先が閉じていても) 何もしない。
+fn emit(text: &str) {
+    let mut stdout = io::stdout().lock();
+    let _ = stdout
+        .write_all(text.as_bytes())
+        .and_then(|()| stdout.flush());
 }
 
 /// 起動できなかった理由。用意の失敗 (`Setup`) は理由がそのまま読めるので、そのまま
@@ -203,13 +229,22 @@ pub enum Line {
 
 /// 入力を 1 行ずつ `Repl` に渡す。戻り値は終了コード。
 ///
+/// 入力の終わり (パイプの EOF、端末の Ctrl-D) では、入力途中のブロックがあれば
+/// 空行を入力したときと同じく確定して、ループを続ける。無ければ終わる。パイプは次も
+/// 入力の終わりを返すので、そこで終わる。端末では、もう一度 Ctrl-D を押すと終わる。
+///
+/// 出力先が閉じたら、残りの入力は実行せずに終わる。結果を読む人がいないためである。
+///
 /// `:env` で元の環境にも戻れなくなったときは、環境が無いので続けず、理由を `Err` で
 /// 返す。`read_line` のあいだはロックを持たない。端末の
 /// Tab 補完が同じ `Mutex` をロックしてエンジンに問い合わせるためである。
 pub fn run(repl: &Mutex<Repl>, src: &mut dyn LineSource) -> Result<i32, String> {
     loop {
         let prompt = {
-            let r = lock(repl);
+            let mut r = lock(repl);
+            if r.out().closed() {
+                return Ok(0);
+            }
             // 評価のあとに押された Ctrl-C は feed_line のあとで消している。
             // 補完や表示の途中で押されたものが残っていても、次の入力には関係ない。
             r.take_interrupt();
@@ -218,14 +253,11 @@ pub fn run(repl: &Mutex<Repl>, src: &mut dyn LineSource) -> Result<i32, String> 
         match src.read_line(&prompt) {
             Line::End => {
                 let mut r = lock(repl);
-                let pending = r.pending();
-                if pending {
-                    r.discard();
-                }
                 r.out().write("");
-                if !pending {
+                if !r.pending() {
                     return Ok(0);
                 }
+                r.end_block();
             }
             Line::Interrupt => lock(repl).cancel(),
             Line::Text(line) => {
@@ -321,8 +353,7 @@ fn decode(bytes: &[u8]) -> String {
 
 impl LineSource for Stdin {
     fn read_line(&mut self, prompt: &str) -> Line {
-        print!("{prompt}");
-        let _ = io::stdout().flush();
+        emit(prompt);
         loop {
             if let Some(line) = self.take_line() {
                 return Line::Text(line);

@@ -61,6 +61,23 @@ mod 行編集 {
         assert!(shows(&out, "2"), "入力途中の内容が残っている: {out}");
     }
 
+    #[story("C6")]
+    #[test]
+    fn Ctrl__D_で入力途中のブロックを実行する() {
+        // reedline は空の行でだけ Ctrl-D を返すので、` | ` の空の行で押す。
+        // ブロックを実行したあとは入力途中ではないので、もう一度押すと終了する。
+        let mut term = Terminal::start();
+        for one in ["#eval", "  41 + 1"] {
+            term.type_keys(&format!("{one}\r"));
+            term.wait_prompt("|", 20);
+        }
+        term.type_keys("\x04");
+        let out = term.wait_prompt(PROMPT, 40);
+        assert!(shows(&out, "42"), "{out}");
+        term.type_keys("\x04");
+        assert!(term.wait_exit(10), "もう一度 Ctrl-D を押しても終了しない");
+    }
+
     #[story("A4")]
     #[test]
     fn Ctrl__C_で評価中の計算を止めても宣言が残る() {
@@ -259,6 +276,15 @@ mod 端末でない入力 {
             &[],
         );
         assert!(out.contains("42"), "{out}");
+    }
+
+    #[story("F4")]
+    #[test]
+    fn 末尾に空行が無くても最後のブロックを実行する() {
+        // 最後のブロックは、空行で確定する前に EOF になる。
+        let dir = tempfile::tempdir().expect("tempdir");
+        let out = piped(b"#eval\n  41 + 1\n", dir.path(), &[]);
+        assert!(shows(&out, "42"), "{out}");
     }
 
     #[story("B4")]

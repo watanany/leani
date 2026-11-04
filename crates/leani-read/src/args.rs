@@ -41,6 +41,9 @@ pub fn parse_args<S: AsRef<str>>(argv: &[S]) -> Result<Args, String> {
             _ if a.starts_with('-') => {
                 return Err(format!("不明なオプション: {a}  (-h で使い方)"));
             }
+            _ if args.preload.is_some() => {
+                return Err(format!("ファイルは 1 つだけ指定できる: {a}  (-h で使い方)"));
+            }
             _ => args.preload = Some(a.to_string()),
         }
     }

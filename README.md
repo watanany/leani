@@ -32,3 +32,4 @@ REPL の中では `:help` でコマンドの一覧を表示する。
 > [!NOTE]
 > 初回は leanprover-community/repl をビルドするので、時間がかかる。
 > Lake プロジェクトの中では、先に `lake build` (Mathlib なら `lake exe cache get`) を実行しておく。
+> Lake プロジェクトの中で初めて起動したときは、`lake env` が依存パッケージを取得することがある。

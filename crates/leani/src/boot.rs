@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 use leani_core::pure::{
     Style, engine_dir, parse_env_lines, pick_tag, toolchain_version, version_key,
 };
-use leani_core::types::EngineError;
+use leani_core::types::EngineFault;
 use leani_read::config::{EnvConfig, read_text, read_toolchain, which};
 use leani_read::places::{Ctx, ENGINE_REPO};
 use nix::sys::signal::{Signal, killpg};
@@ -29,6 +29,9 @@ static LEAN_VERSION: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)").expect("regex"));
 
 /// 進み具合を 1 行、薄い色で表示する。表示に失敗しても起動の用意は続ける。
+///
+/// 用意の途中で Ctrl-C が押されたら、どの関数も `EngineFault::Interrupted` を返す。
+/// ほかの失敗は `EngineFault::Setup` に理由を書いて返す。
 fn say(out: &mut dyn Write, ctx: &Ctx, text: &str) {
     let style = Style { color: ctx.color };
     let _ = writeln!(out, "{}", style.dim(text));
@@ -160,19 +163,18 @@ fn secs(d: Duration) -> u64 {
 // ------------------------------------------------------------------ バージョン
 
 /// elan が今選択しているバージョン。プロジェクトも指定も無いときに使う。
-pub fn local_toolchain(ctx: &Ctx) -> Option<String> {
-    let got = run(
-        ctx,
-        "lean",
-        &["--version"],
-        None,
-        true,
-        Some(ctx.setup_timeout),
-    )
-    .ok()?;
-    LEAN_VERSION
-        .captures(&got.stdout)
-        .map(|m| format!("leanprover/lean4:v{}", &m[1]))
+///
+/// elan は lean --version の中で toolchain を取得することがあるので、時間がかかる
+/// ことがある。そのあいだの Ctrl-C は、分からないことにせず `Interrupted` で返す。
+pub fn local_toolchain(ctx: &Ctx) -> Result<Option<String>, EngineFault> {
+    let args = ["--version"];
+    match run(ctx, "lean", &args, None, true, Some(ctx.setup_timeout)) {
+        Ok(got) => Ok(LEAN_VERSION
+            .captures(&got.stdout)
+            .map(|m| format!("leanprover/lean4:v{}", &m[1]))),
+        Err(Stopped::Interrupted) => Err(EngineFault::Interrupted),
+        Err(Stopped::Timeout | Stopped::Spawn(_)) => Ok(None),
+    }
 }
 
 /// 使う Lean のバージョン。プロジェクト、ユーザーが指定したエンジン、elan の
@@ -182,10 +184,11 @@ pub fn local_toolchain(ctx: &Ctx) -> Option<String> {
 /// 合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
 /// 用意したエンジンなら engine が None なので、2 番目は飛ばして elan のデフォルトの
 /// バージョンを使う。
-pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Option<String> {
-    read_toolchain(cfg.project.as_deref())
-        .or_else(|| read_toolchain(cfg.engine.as_deref()))
-        .or_else(|| local_toolchain(ctx))
+pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<Option<String>, EngineFault> {
+    match read_toolchain(cfg.project.as_deref()).or_else(|| read_toolchain(cfg.engine.as_deref())) {
+        Some(tc) => Ok(Some(tc)),
+        None => local_toolchain(ctx),
+    }
 }
 
 /// 使うバージョンを決める。分からなければ leani は起動を中止する。
@@ -194,9 +197,9 @@ pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Option<String> {
 /// プロジェクトの外から実行するとデフォルトのバージョンが選ばれて .olean を読めなく
 /// なる。ここで決めたバージョンを elan run で固定し、エンジンもそのバージョンで
 /// ビルドする。
-pub fn toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<String, EngineError> {
-    guess_toolchain(ctx, cfg).ok_or_else(|| {
-        EngineError(
+pub fn toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<String, EngineFault> {
+    guess_toolchain(ctx, cfg)?.ok_or_else(|| {
+        EngineFault::Setup(
             "Lean のバージョンが分からない (lean-toolchain が無く、lean --version からも取得できない)"
                 .to_string(),
         )
@@ -224,18 +227,18 @@ pub fn manual_setup(path: &str, tc: &str, tag: Option<&str>) -> String {
 }
 
 /// repl のタグ一覧。clone せずにリモートに問い合わせる。
-pub fn fetch_tags(ctx: &Ctx) -> Result<Vec<String>, EngineError> {
+pub fn fetch_tags(ctx: &Ctx) -> Result<Vec<String>, EngineFault> {
     let args = ["ls-remote", "--tags", "--refs", ENGINE_REPO];
     let got = run(ctx, "git", &args, None, true, Some(ctx.setup_timeout)).map_err(|e| match e {
-        Stopped::Timeout => EngineError(format!(
+        Stopped::Timeout => EngineFault::Setup(format!(
             "repl のタグの取得が {} 秒で終わらなかった",
             secs(ctx.setup_timeout)
         )),
-        Stopped::Spawn(e) => EngineError(format!("git を実行できなかった: {e}")),
-        Stopped::Interrupted => EngineError("^C 中断した".to_string()),
+        Stopped::Spawn(e) => EngineFault::Setup(format!("git を実行できなかった: {e}")),
+        Stopped::Interrupted => EngineFault::Interrupted,
     })?;
     if !got.status.success() {
-        return Err(EngineError(format!(
+        return Err(EngineFault::Setup(format!(
             "repl のタグを取得できなかった:\n{}",
             got.stderr.trim()
         )));
@@ -255,19 +258,24 @@ pub fn run_setup(
     out: &mut dyn Write,
     cmd: &[&str],
     cwd: Option<&str>,
-) -> Result<(), EngineError> {
+) -> Result<(), EngineFault> {
     let line = cmd.join(" ");
     say(out, ctx, &format!("  {line}"));
     // ビルドには時間がかかるので、タイムアウトは設けない。
     let got = run(ctx, cmd[0], &cmd[1..], cwd, false, None).map_err(|e| match e {
-        Stopped::Spawn(e) => EngineError(format!("{} を実行できなかった: {e}", cmd[0])),
-        Stopped::Interrupted => EngineError(format!("^C 中断した: {line}")),
-        Stopped::Timeout => EngineError(format!("終わらなかった: {line}")),
+        Stopped::Spawn(e) => EngineFault::Setup(format!("{} を実行できなかった: {e}", cmd[0])),
+        Stopped::Interrupted => EngineFault::Interrupted,
+        Stopped::Timeout => EngineFault::Setup(format!("終わらなかった: {line}")),
     })?;
     match got.status.code() {
         _ if got.status.success() => Ok(()),
-        Some(code) => Err(EngineError(format!("失敗した (exit {code}): {line}"))),
-        None => Err(EngineError(format!("失敗した ({}): {line}", got.status))),
+        Some(code) => Err(EngineFault::Setup(format!(
+            "失敗した (exit {code}): {line}"
+        ))),
+        None => Err(EngineFault::Setup(format!(
+            "失敗した ({}): {line}",
+            got.status
+        ))),
     }
 }
 
@@ -286,7 +294,7 @@ pub fn build_engine(
     path: &str,
     tc: &str,
     tag: &str,
-) -> Result<(), EngineError> {
+) -> Result<(), EngineFault> {
     let version = toolchain_version(tc);
     let note = if tag == version {
         String::new()
@@ -305,7 +313,7 @@ pub fn build_engine(
     let parent = place.parent().unwrap_or(place);
     let name = place.file_name().map(|n| n.to_string_lossy().into_owned());
     fs::create_dir_all(parent).map_err(|e| {
-        EngineError(format!(
+        EngineFault::Setup(format!(
             "ディレクトリを作れなかった ({}): {e}",
             parent.display()
         ))
@@ -315,7 +323,7 @@ pub fn build_engine(
         .suffix(".tmp")
         .tempdir_in(parent)
         .map_err(|e| {
-            EngineError(format!(
+            EngineFault::Setup(format!(
                 "作業用のディレクトリを作れなかった ({}): {e}",
                 parent.display()
             ))
@@ -338,10 +346,12 @@ pub fn build_engine(
         None,
     )?;
     fs::write(format!("{tmp}/lean-toolchain"), format!("{tc}\n"))
-        .map_err(|e| EngineError(format!("lean-toolchain を書けなかった ({tmp}): {e}")))?;
+        .map_err(|e| EngineFault::Setup(format!("lean-toolchain を書けなかった ({tmp}): {e}")))?;
     run_setup(ctx, out, &["lake", "build", "repl"], Some(&tmp))?;
     if !has_repl(&tmp) {
-        return Err(EngineError(format!("ビルドしたのに repl が無い: {tmp}")));
+        return Err(EngineFault::Setup(format!(
+            "ビルドしたのに repl が無い: {tmp}"
+        )));
     }
 
     // ビルドしているあいだに別の leani がエンジンを配置していたら、そのエンジンは
@@ -356,13 +366,13 @@ pub fn build_engine(
     }
     let _ = fs::remove_dir_all(path);
     fs::rename(&tmp, path)
-        .map_err(|e| EngineError(format!("エンジンを配置できなかった ({path}): {e}")))?;
+        .map_err(|e| EngineFault::Setup(format!("エンジンを配置できなかった ({path}): {e}")))?;
     say(out, ctx, &format!("用意した: {path}"));
     Ok(())
 }
 
 /// ビルドに使うタグ。無ければ理由を返す。
-fn choose_tag(ctx: &Ctx, out: &mut dyn Write, version: &str) -> Result<String, EngineError> {
+fn choose_tag(ctx: &Ctx, out: &mut dyn Write, version: &str) -> Result<String, EngineFault> {
     match (pick_tag(version, &fetch_tags(ctx)?), version_key(version)) {
         (Some(tag), _) => Ok(tag),
         (None, None) => {
@@ -375,13 +385,21 @@ fn choose_tag(ctx: &Ctx, out: &mut dyn Write, version: &str) -> Result<String, E
             );
             Ok("master".to_string())
         }
-        (None, Some(_)) => Err(EngineError(format!("repl に {version} 用のタグが無い"))),
+        (None, Some(_)) => Err(EngineFault::Setup(format!(
+            "repl に {version} 用のタグが無い"
+        ))),
     }
 }
 
 /// 自動で用意できなくても、手動なら成功することがある。使うタグも含めて手順を添える。
-fn with_manual(e: EngineError, path: &str, tc: &str, tag: Option<&str>) -> EngineError {
-    EngineError(format!("{}\n{}", e.0, manual_setup(path, tc, tag)))
+/// Ctrl-C で中断したときは、利用者が止めたので手順を添えない。
+fn with_manual(e: EngineFault, path: &str, tc: &str, tag: Option<&str>) -> EngineFault {
+    match e {
+        EngineFault::Setup(why) => {
+            EngineFault::Setup(format!("{why}\n{}", manual_setup(path, tc, tag)))
+        }
+        other => other,
+    }
 }
 
 /// 使うエンジンのディレクトリを返す。leani が管理するエンジンは、無ければ用意する。
@@ -396,18 +414,18 @@ pub fn ensure_engine(
     engine: Option<&str>,
     tc: &str,
     asked: bool,
-) -> Result<String, EngineError> {
+) -> Result<String, EngineFault> {
     let path = engine_dir(engine, tc, &ctx.engine_cache)?;
     if has_repl(&path) {
         return Ok(path);
     }
     if engine.is_some() {
-        return Err(EngineError(format!(
+        return Err(EngineFault::Setup(format!(
             "repl が未ビルド: cd {path} && lake build repl"
         )));
     }
     if ctx.no_setup && !asked {
-        return Err(EngineError(format!(
+        return Err(EngineFault::Setup(format!(
             "エンジンが無い: {path}\n  \
              LEANI_NO_SETUP が設定されているので自動で用意しない (leani --setup で用意する)\n{}",
             manual_setup(&path, tc, None)
@@ -431,14 +449,17 @@ const LAKE_ENV_KEYS: [&str; 4] = [
 /// lake env が設定する環境変数。
 ///
 /// lake env は起動に 1 秒近くかかるので、新しいキャッシュがあれば再利用する。
+/// 初回の lake env は依存パッケージを取得することがあり、Mathlib では数分かかる。
+/// そのため時間は区切らず、実行する前に Ctrl-C で中断できることを `out` に表示する。
 /// LEAN_PATH は core の .olean を指すので、toolchain ごとに別のキーでキャッシュする。
 /// 同じキーを使うと、rc のバージョンを変更したときに前のバージョンの .olean を
 /// 指したままになり、repl は起動するのに import がすべて失敗する。
 pub fn lake_env(
     ctx: &Ctx,
+    out: &mut dyn Write,
     project: Option<&str>,
     tc: &str,
-) -> Result<BTreeMap<String, String>, EngineError> {
+) -> Result<BTreeMap<String, String>, EngineFault> {
     let Some(project) = project.filter(|p| !p.is_empty()) else {
         return Ok(BTreeMap::new());
     };
@@ -451,7 +472,7 @@ pub fn lake_env(
         .unwrap_or_default();
     let cache = format!("{}/lake-env/{name}-{}", ctx.state, &key[..12]);
     if lake_env_stale(&cache, project) {
-        write_lake_env(ctx, &cache, project)?;
+        write_lake_env(ctx, out, &cache, project)?;
     }
     Ok(parse_env_lines(&read_text(&cache).unwrap_or_default()))
 }
@@ -483,37 +504,39 @@ pub fn lake_env_stale(cache: &str, project: &str) -> bool {
 }
 
 /// lake env を実行して、結果をキャッシュに保存する。
-pub fn write_lake_env(ctx: &Ctx, cache: &str, project: &str) -> Result<(), EngineError> {
+pub fn write_lake_env(
+    ctx: &Ctx,
+    out: &mut dyn Write,
+    cache: &str,
+    project: &str,
+) -> Result<(), EngineFault> {
     let script = LAKE_ENV_KEYS
         .iter()
         .map(|k| format!("printf \"{k}=%s\\n\" \"${{{k}-}}\""))
         .collect::<Vec<_>>()
         .join("\n");
     let args = ["env", "sh", "-c", &script];
-    let got = run(
+    say(out, ctx, &format!("lake env を実行する: {project}"));
+    say(
+        out,
         ctx,
-        "lake",
-        &args,
-        Some(project),
-        true,
-        Some(ctx.setup_timeout),
-    )
-    .map_err(|e| match e {
-        Stopped::Timeout => EngineError(format!(
-            "lake env が {} 秒で終わらなかった ({project})",
-            secs(ctx.setup_timeout)
-        )),
-        Stopped::Spawn(e) => EngineError(format!("lake env を実行できなかった ({project}): {e}")),
-        Stopped::Interrupted => EngineError(format!("^C 中断した: lake env ({project})")),
+        "  依存パッケージを取得することがある。Ctrl-C で中断できる",
+    );
+    let got = run(ctx, "lake", &args, Some(project), true, None).map_err(|e| match e {
+        Stopped::Spawn(e) => {
+            EngineFault::Setup(format!("lake env を実行できなかった ({project}): {e}"))
+        }
+        Stopped::Interrupted => EngineFault::Interrupted,
+        Stopped::Timeout => EngineFault::Setup(format!("lake env が終わらなかった ({project})")),
     })?;
     if !got.status.success() {
-        return Err(EngineError(format!(
+        return Err(EngineFault::Setup(format!(
             "lake env が失敗した ({project}):\n{}",
             got.stderr.trim()
         )));
     }
     save(cache, &got.stdout)
-        .map_err(|e| EngineError(format!("lake env を保存できなかった ({cache}): {e}")))
+        .map_err(|e| EngineFault::Setup(format!("lake env を保存できなかった ({cache}): {e}")))
 }
 
 /// 一時ファイルに書いてから rename で置く。同時に起動した別の leani と同じファイルに
@@ -534,9 +557,9 @@ fn save(cache: &str, text: &str) -> std::io::Result<()> {
 /// Engine を作る前に呼べる。:env の切り替えでは今のエンジンを終了させる前に
 /// 実行するので、ここでエラーになった場合は何も変えずに済む。lake env の結果も
 /// 先に取得してキャッシュしておく (Engine の中で失敗させない)。
-pub fn prepare(ctx: &Ctx, out: &mut dyn Write, cfg: &EnvConfig) -> Result<(), EngineError> {
+pub fn prepare(ctx: &Ctx, out: &mut dyn Write, cfg: &EnvConfig) -> Result<(), EngineFault> {
     let tc = toolchain(ctx, cfg)?;
     ensure_engine(ctx, out, cfg.engine.as_deref(), &tc, false)?;
-    lake_env(ctx, cfg.project.as_deref(), &tc)?;
+    lake_env(ctx, out, cfg.project.as_deref(), &tc)?;
     Ok(())
 }

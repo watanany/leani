@@ -17,8 +17,9 @@ pub const PROMPT: &str = "λ> ";
 // ディレクトリを作る。
 pub const ENGINE_REPO: &str = "https://github.com/leanprover-community/repl";
 
-// エンジンを用意するときの、外部との通信のタイムアウト。応答が返らないまま
-// 何も表示せずに止まらないように。
+// エンジンを用意するときの、すぐに終わるはずのコマンド (`lean --version` と
+// `git ls-remote`) のタイムアウト。応答が返らないまま何も表示せずに止まらない
+// ように。clone、ビルド、`lake env` は時間を区切らず、Ctrl-C で止める。
 pub const SETUP_TIMEOUT: Duration = Duration::from_secs(120);
 
 // 完結判定と補完のクエリが Lean.Parser / CoreM / Json を使うので、ユーザーの

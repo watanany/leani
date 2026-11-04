@@ -314,6 +314,61 @@ mod ノートブックのセルの終わり {
     }
 }
 
+/// 決めた行を順に返し、尽きたら入力の終わりを返す入力。
+struct Script(std::vec::IntoIter<&'static str>);
+
+impl LineSource for Script {
+    fn read_line(&mut self, _prompt: &str) -> Line {
+        match self.0.next() {
+            Some(line) => Line::Text(line.to_string()),
+            None => Line::End,
+        }
+    }
+}
+
+/// パイプの EOF と端末の Ctrl-D。どちらも `Line::End` になる。
+mod 入力の終わり {
+    use super::*;
+
+    /// `lines` を `cli::run` に渡す。戻り値は、`run` の結果、表示、宣言の数。
+    fn run(lines: Vec<&'static str>) -> (Result<i32, String>, String, usize) {
+        let sb = sandbox();
+        let table = load_config(&sb.ctx.config).expect("config");
+        let cfg = resolve(&sb.ctx, None, None, &[], &table).expect("resolve");
+        let out = Sink::default();
+        let search = FakeSearch::default();
+        let repl = Repl::new(&sb.ctx, cfg, None, Box::new(out.clone()), Box::new(search))
+            .expect("起動できない");
+        let repl = Mutex::new(repl);
+        let got = leani::cli::run(&repl, &mut Script(lines.into_iter()));
+        let mut repl = repl.into_inner().expect("repl");
+        let decls = repl.eng().log().len();
+        repl.close();
+        let shown = out.0.lock().expect("sink").clone();
+        (got, shown, decls)
+    }
+
+    #[story("C6", "F4")]
+    #[test]
+    fn 入力の終わりで入力途中のブロックを実行する() {
+        // ファイルの末尾に空行が無いと、最後のブロックは入力途中のまま EOF になる。
+        // 捨てると、ファイルの最後の宣言だけが表示なしに実行されない。
+        let (got, out, _) = run(vec!["#eval", "  41 + 1"]);
+        assert_eq!(got, Ok(0));
+        assert!(out.lines().any(|l| l.trim() == "42"), "{out}");
+    }
+
+    #[story("C6")]
+    #[test]
+    fn 入力の終わりで閉じていない複数行ブロックは実行せずに知らせる() {
+        // `:}` を書き忘れたのか、ここで終わるつもりだったのかは区別できない。
+        let (got, out, decls) = run(vec![":{", "def unclosed := 1"]);
+        assert_eq!(got, Ok(0));
+        assert!(out.contains(":} が無い"), "{out}");
+        assert_eq!(decls, 0);
+    }
+}
+
 mod エンジンが異常終了してもセッションが続く {
     use super::*;
 
@@ -2744,18 +2799,6 @@ mod 切り替えに失敗したとき {
 
         let why = repl.repl.env_lost().expect("理由が無い");
         assert!(why.contains("にも戻れなくなった"), "{why}");
-    }
-
-    /// 決めた行を順に返し、尽きたら入力の終わりを返す入力。
-    struct Script(std::vec::IntoIter<&'static str>);
-
-    impl LineSource for Script {
-        fn read_line(&mut self, _prompt: &str) -> Line {
-            match self.0.next() {
-                Some(line) => Line::Text(line.to_string()),
-                None => Line::End,
-            }
-        }
     }
 
     #[story("G4", "G5")]

@@ -159,7 +159,7 @@ impl Engine {
             &tc,
             &dir,
         );
-        let proc_env = proc_env(ctx, &cfg, &tc, &dir)?;
+        let proc_env = proc_env(ctx, out, &cfg, &tc, &dir)?;
         let mut eng = Engine {
             ctx: ctx.clone(),
             cfg,
@@ -995,11 +995,12 @@ impl Drop for Engine {
 /// 環境変数 (`ctx.lean_path`) を使う。
 pub fn proc_env(
     ctx: &Ctx,
+    out: &mut dyn Write,
     cfg: &EnvConfig,
     tc: &str,
     dir: &str,
 ) -> Result<BTreeMap<String, String>, EngineFault> {
-    let mut env = lake_env(ctx, cfg.project.as_deref(), tc)?;
+    let mut env = lake_env(ctx, out, cfg.project.as_deref(), tc)?;
     let inherited = ctx.lean_path.clone().unwrap_or_default();
     let lean_path = env.get("LEAN_PATH").cloned().unwrap_or(inherited);
     env.insert(

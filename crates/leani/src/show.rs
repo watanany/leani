@@ -3,8 +3,6 @@
 //! 組み立てた表示を `Output` に出す。組み立ての処理は `leani_core::pure` にある。
 //! 端末の幅と高さもここで読む (`:abbrev` の表と `:loogle` の結果を端末の幅に合わせる)。
 
-#![allow(clippy::print_stdout)]
-
 use std::io::Write;
 use std::process::{Command, Stdio};
 
@@ -13,6 +11,9 @@ use leani_core::types::{Json, Output};
 use leani_read::places::Ctx;
 
 /// 端末用の `Output`。`leani | tee log` で log に残すため、エラーも stdout に出す。
+///
+/// stdout に書けなくなったら (`leani | head` の head が終了した)、それを覚えて、
+/// 以後は何も書かない。`print!` は書けないと panic するので使わない。
 pub struct Console {
     /// stdout が端末か。端末でなければ pager を使わない。
     tty: bool,
@@ -21,6 +22,8 @@ pub struct Console {
     /// `sh` に渡す PATH とカレントディレクトリ。プロセスの状態は `Ctx` だけから読む。
     path: String,
     cwd: String,
+    /// stdout に書けなかったか。
+    closed: bool,
 }
 
 impl Console {
@@ -30,6 +33,7 @@ impl Console {
             pager: ctx.pager.clone(),
             path: ctx.path.clone(),
             cwd: ctx.cwd.clone(),
+            closed: false,
         }
     }
 
@@ -45,13 +49,22 @@ impl Console {
 
 impl Output for Console {
     fn put(&mut self, text: &str) {
-        print!("{text}");
-        let _ = std::io::stdout().flush();
+        if self.closed {
+            return;
+        }
+        let mut stdout = std::io::stdout().lock();
+        self.closed = stdout
+            .write_all(text.as_bytes())
+            .and_then(|()| stdout.flush())
+            .is_err();
     }
 
     fn fail(&mut self, text: &str) {
-        println!("{text}");
-        let _ = std::io::stdout().flush();
+        self.write(text);
+    }
+
+    fn closed(&self) -> bool {
+        self.closed
     }
 
     fn shell(&mut self, cmd: &str) {

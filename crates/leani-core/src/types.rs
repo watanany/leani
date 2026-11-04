@@ -78,6 +78,12 @@ pub trait Output: Send {
 
     /// 長くなることがある表示 (`:abbrev` の一覧)。端末では pager で表示する。
     fn page(&mut self, text: &str);
+
+    /// 表示を受け取る側が閉じたか (`leani | head` の head が終了した)。閉じたら、
+    /// 入力のループは残りの入力を実行せずに終わる。
+    fn closed(&self) -> bool {
+        false
+    }
 }
 
 /// エンジンを用意できない。起動時なら起動を中止する。起動後なら REPL は続ける。
@@ -150,8 +156,8 @@ pub enum EngineFault {
     /// repl のプロセスが応答しなくなった。呼び出し側は repl を再起動する。
     #[error("{0}")]
     Died(String),
-    /// 評価中に Ctrl-C が押された。repl とのやりとりがずれているので、呼び出し側は
-    /// repl を再起動する。
+    /// Ctrl-C が押された。評価中なら repl とのやりとりがずれているので、呼び出し側は
+    /// repl を再起動する。エンジンを用意している途中 (`boot`) なら、用意をやめる。
     #[error("^C")]
     Interrupted,
     /// 環境が無いのに、環境の上で入力を実行しようとした。呼び出し側のバグ。
