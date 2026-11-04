@@ -417,13 +417,13 @@ impl Repl {
     /// キャッシュは、取得したときの環境が今の環境の元になっている間だけ使う
     /// (`cache_usable`)。宣言を 1 つ実行するたびにキャッシュを捨てると Mathlib では
     /// 毎回 1.1 秒かかるので、REPL で実行した宣言の名前だけを leani 側で追加する。
-    /// open する名前空間が増えても、定数の走査は 1 回で済ませる。
+    /// open する名前空間が増えても、定数の走査は 1 回で済ませる。問い合わせ直しに
+    /// 失敗したときも、使えないキャッシュは返さない。
     fn chunks(&mut self, keys: &BTreeSet<String>) -> BTreeMap<String, Vec<String>> {
         let now = (self.eng.generation(), self.eng.env());
-        let usable = |at: EnvAt| cache_usable(at, now.0, now.1, self.eng.stack());
         let missing: Vec<String> = keys
             .iter()
-            .filter(|k| !self.comp_cache.get(*k).is_some_and(|(at, _)| usable(*at)))
+            .filter(|k| self.cached(k).is_none())
             .cloned()
             .collect();
         if !missing.is_empty() {
@@ -443,12 +443,15 @@ impl Repl {
             }
         }
         keys.iter()
-            .filter_map(|k| {
-                self.comp_cache
-                    .get(k)
-                    .map(|(_, names)| (k.clone(), names.clone()))
-            })
+            .filter_map(|k| self.cached(k).map(|names| (k.clone(), names.clone())))
             .collect()
+    }
+
+    /// `key` のキャッシュ。取得したときの環境が今の環境の元になっていなければ None。
+    fn cached(&self, key: &str) -> Option<&Vec<String>> {
+        let (at, names) = self.comp_cache.get(key)?;
+        let eng = &self.eng;
+        cache_usable(*at, eng.generation(), eng.env(), eng.stack()).then_some(names)
     }
 
     /// 今の namespace と open。環境が変わったときだけ問い合わせ直す。
@@ -1816,6 +1819,11 @@ impl Repl {
             .and_then(|conf| resolve(&self.ctx, Some(arg), None, &[], &conf));
         let target = match found {
             Ok(target) => target,
+            Err(_) if arg == self.eng.cfg().name => {
+                // -p から推測した環境のように、設定に無い環境で起動したとき。
+                self.out.write(&self.style.dim(&format!("すでに {arg}")));
+                return;
+            }
             Err(e) => {
                 self.out.fail(&self.style.red(&e.to_string()));
                 return;

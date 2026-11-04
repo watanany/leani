@@ -25,6 +25,7 @@ use leani_core::queries::COMPLETE_QUERY;
 use leani_read::complete::candidates;
 use leani_read::config::config_envs;
 use leani_read::places::Ctx;
+use serde_json::json;
 use story::story;
 
 /// 定数を全件たどる問い合わせを数える差し込み口を入れる。重いのはこの問い合わせだけ。
@@ -312,6 +313,22 @@ mod 候補 {
         repl.feed(&[":undo", "def myKept := 2"]);
         assert!(repl.repl.complete_names("myGone.he").is_empty());
         assert_eq!(repl.repl.complete_names("myKep"), ["myKept"]);
+    }
+
+    #[story("D1", "F2")]
+    #[test]
+    fn 問い合わせ直しに失敗しても_colon_undo_で取り消した名前は候補に出ない() {
+        // キャッシュを使えないときに問い合わせ直しに失敗しても、前の環境の名前を返さない。
+        let mut repl = Driver::new();
+        repl.feed(&["def myLost.helper := 1"]);
+        assert_eq!(repl.repl.complete_names("myLost.he"), ["myLost.helper"]);
+        repl.feed(&[":undo"]);
+        let head = COMPLETE_QUERY.split("%s").next().unwrap_or("").to_string();
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if cmd(obj).starts_with(&head) => Hooked::Reply(json!({})),
+            _ => Hooked::Pass,
+        });
+        assert!(repl.repl.complete_names("myLost.he").is_empty());
     }
 
     #[story("D1", "F2")]

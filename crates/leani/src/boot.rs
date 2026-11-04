@@ -183,10 +183,12 @@ fn lean_toolchain(ctx: &Ctx, args: &[&str]) -> Result<Option<String>, EngineFaul
 /// `stable` のようなチャンネルは、今のバージョンに置き換える。エンジンのディレクトリは
 /// toolchain の名前で決まるので、チャンネルの名前のままだと、チャンネルが新しい
 /// バージョンに進んでも、前のバージョンでビルドしたエンジンを使い続ける。今の
-/// バージョンを取得できなければ、チャンネルの名前のまま使う。
+/// バージョンを取得できなければ、チャンネルの名前のまま使う。自分で指定したエンジンの
+/// ディレクトリは toolchain で決まらないので置き換えない。置き換えると、エンジンの
+/// lean-toolchain と名前が違うので、toolchain が違うという警告を表示する。
 pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<Option<String>, EngineFault> {
     match read_toolchain(cfg.project.as_deref()).or_else(|| read_toolchain(cfg.engine.as_deref())) {
-        Some(tc) if is_channel(&tc) => {
+        Some(tc) if is_channel(&tc) && cfg.engine.is_none() => {
             let now = lean_toolchain(ctx, &[&format!("+{tc}"), "--version"])?;
             Ok(Some(now.unwrap_or(tc)))
         }

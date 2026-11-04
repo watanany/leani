@@ -507,13 +507,15 @@ class Repl:
         キャッシュは、取得したときの環境が今の環境の元になっている間だけ使う
         (`cache_usable`)。宣言を 1 つ実行するたびにキャッシュを捨てると Mathlib では
         毎回 1.1 秒かかるので、REPL で実行した宣言の名前だけを Python 側で追加する。
-        open する名前空間が増えても、定数の走査は 1 回で済ませる。
+        open する名前空間が増えても、定数の走査は 1 回で済ませる。問い合わせ直しに
+        失敗したときも、使えないキャッシュは返さない。
         """
         now = (self.eng.gen, self.eng.env)
 
         def usable(k: str) -> bool:
             got = self._comp_cache.get(k)
-            return got is not None and cache_usable(got[0], *now, self.eng.stack)
+            eng = self.eng
+            return got is not None and cache_usable(got[0], eng.gen, eng.env, eng.stack)
 
         missing = sorted(k for k in keys if not usable(k))
         if missing:
@@ -527,7 +529,7 @@ class Repl:
                 for k, names in zip(missing, got, strict=True):
                     self._comp_cache[k] = (now, names)
 
-        return {k: self._comp_cache[k][1] for k in keys if k in self._comp_cache}
+        return {k: self._comp_cache[k][1] for k in keys if usable(k)}
 
     def _scope_now(self) -> Scope:
         """

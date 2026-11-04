@@ -1276,6 +1276,23 @@ esac"#;
             Some("leanprover/lean4:stable")
         );
     }
+
+    #[story("G3")]
+    #[test]
+    fn 自分で指定したエンジンの_stable_は置き換えない() {
+        // 自分でビルドしたエンジンの lean-toolchain は stable のままなので、置き換えると
+        // toolchain が違うという警告を起動のたびに表示する。
+        let dir = tmp();
+        let lean = "echo 'Lean (version 4.30.0, arm64-apple-darwin, commit abc, Release)'";
+        let path = fake_tools(dir.path(), &[("lean", lean)]);
+        let ctx = ctx_with(&[("PATH", &path)], "/");
+        let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:stable");
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, Some(&eng));
+        assert_eq!(
+            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            Some("leanprover/lean4:stable")
+        );
+    }
 }
 
 mod 手動でエンジンを用意する手順 {

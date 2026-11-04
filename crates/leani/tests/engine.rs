@@ -2905,6 +2905,32 @@ mod 環境の切り替え {
         repl.close();
     }
 
+    #[story("G5")]
+    #[test]
+    fn 設定に無い環境でも今の名前なら_colon_env_はすでにと表示する() {
+        // -p から推測した環境は設定に無いので、設定から探すと見つからない。
+        let sb = sandbox();
+        let table = load_config(&sb.ctx.config).expect("config");
+        let mut cfg = resolve(&sb.ctx, Some("core"), None, &[], &table).expect("resolve");
+        cfg.name = "myproj".to_string();
+        let out = Sink::default();
+        let mut repl = Repl::new(
+            &sb.ctx,
+            cfg,
+            None,
+            Box::new(out.clone()),
+            Box::new(FakeSearch::default()),
+        )
+        .expect("起動できない");
+        let shown = || std::mem::take(&mut *out.0.lock().expect("sink"));
+        shown();
+
+        repl.feed(":env myproj");
+        let got = shown();
+        assert!(got.contains("すでに myproj"), "{got}");
+        repl.close();
+    }
+
     #[story("G1", "G5")]
     #[test]
     fn 切り替えても設定と読み込んだファイルが残る() {
