@@ -102,8 +102,15 @@ impl Search for FakeSearch {
     }
 }
 
-static ANSI: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"\x1b\[[0-9;]*[A-Za-z]|\x1b[()][A-Za-z0-9]").expect("regex"));
+/// CSI (`\x1b[?2004h` のように `?` を含むものも)、OSC、文字集合の指定、
+/// キーパッドとカーソルの保存。`?` を含む CSI を残すと、その中の数字が出力の値に
+/// 見えて、`contains('2')` のような assert が直す前から通ってしまう。
+static ANSI: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r"\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]|\x1b[=>78]",
+    )
+    .expect("regex")
+});
 
 /// 色とカーソルの制御を取り除く。
 pub fn strip_ansi(s: &str) -> String {

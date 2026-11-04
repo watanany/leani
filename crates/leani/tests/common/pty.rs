@@ -331,6 +331,12 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
     hay.windows(needle.len()).position(|w| w == needle)
 }
 
+/// `out` に、`value` だけが書かれた行があるか。`contains` で見ると、入力の行や
+/// プロンプトの中の数字でも通ってしまう。
+pub fn shows(out: &str, value: &str) -> bool {
+    out.lines().any(|l| l.trim() == value)
+}
+
 /// パイプ越しに `leani` へ渡して、出力 (stdout と stderr) をすべて返す。
 ///
 /// 端末が無いときの処理を確認するためのもの。読めないバイトの扱いはここでしか

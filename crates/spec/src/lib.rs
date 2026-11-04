@@ -220,33 +220,58 @@ fn descend(items: &[Item], layer: &str, place: &str) -> Vec<Test> {
         .collect()
 }
 
+/// 行の中で開いたまま閉じていない三重引用符。`"""` と `'''` のうち先に出てくるほうを
+/// 見て、その数が奇数なら開いたままになる。1 行で閉じる docstring は偶数になる。
+fn opens_string(line: &str) -> Option<&'static str> {
+    ["\"\"\"", "'''"]
+        .into_iter()
+        .filter_map(|q| line.find(q).map(|at| (at, q)))
+        .min()
+        .and_then(|(_, q)| (line.matches(q).count() % 2 == 1).then_some(q))
+}
+
 /// Python のテストファイルを行単位で読む。describe はインデントで入れ子にする。
-fn python_tests(text: &str, layer: &str) -> Vec<Test> {
+///
+/// 三重引用符の中の行は読まない。セルの中身として書いた `def fib` を関数と見なすと、
+/// インデントが 0 なので、開いている describe を閉じてしまう。
+fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
     struct Scan {
         /// 開いている describe の (インデント, 名前)。
         describes: Vec<(usize, String)>,
         /// 次の `def` に付く `@story` の番号。
         pending: Vec<String>,
+        /// 開いている三重引用符。閉じるまで行を読まない。
+        string: Option<&'static str>,
         out: Vec<Test>,
     }
     let start = Scan {
         describes: Vec::new(),
         pending: Vec::new(),
+        string: None,
         out: Vec::new(),
     };
-    let done = text.lines().fold(start, |mut scan, line| {
+    let done = text.lines().try_fold(start, |mut scan, line| {
+        if let Some(q) = scan.string {
+            if line.contains(q) {
+                scan.string = None;
+            }
+            return Ok(scan);
+        }
+        scan.string = opens_string(line);
         let body = line.trim_start();
         let indent = line.len() - body.len();
         let name = body
+            .strip_prefix("async ")
+            .unwrap_or(body)
             .strip_prefix("def ")
             .and_then(|rest| rest.split('(').next());
         if body.starts_with("@story(") {
             scan.pending
                 .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
-            return scan;
+            return Ok(scan);
         }
         let Some(name) = name else {
-            return scan;
+            return Ok(scan);
         };
         scan.describes.retain(|(at, _)| *at < indent);
         let stories = std::mem::take(&mut scan.pending);
@@ -259,10 +284,14 @@ fn python_tests(text: &str, layer: &str) -> Vec<Test> {
                 place: format!("{layer} / {place}"),
                 stories,
             });
+        } else if !stories.is_empty() {
+            return Err(format!(
+                "テストでない関数に @story が付いている: {layer} / {name}"
+            ));
         }
-        scan
-    });
-    done.out
+        Ok(scan)
+    })?;
+    Ok(done.out)
 }
 
 /// ディレクトリにある、名前が `prefix` で始まり拡張子が `ext` のファイルを、
@@ -289,7 +318,7 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
         .map(|(layer, path)| {
             let text = fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
             if path.extension().is_some_and(|x| x == "py") {
-                return Ok(python_tests(&text, layer));
+                return python_tests(&text, layer);
             }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
             Ok(descend(&file.items, layer, layer))
@@ -298,8 +327,59 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
         .map(|v| v.into_iter().flatten().collect())
 }
 
-/// 生成を止める理由。`#[story]` の付け忘れと、ストーリー番号の書き間違い。
+/// 2 回以上出てくる値。出てきた順に 1 回ずつ返す。
+fn repeated<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
+    let all: Vec<&str> = items.collect();
+    all.iter()
+        .enumerate()
+        .filter(|&(i, x)| all[..i].iter().filter(|y| *y == x).count() == 1)
+        .map(|(_, x)| *x)
+        .collect()
+}
+
+/// `stories.toml` の中だけで分かる誤り。ID の重複と、どの group にも入らないストーリー。
+/// group に入らないストーリーは `SPEC.md` に出てこないので、テストがあっても気づけない。
+fn story_complaints(stories: &Stories) -> Vec<String> {
+    let dup_story = repeated(stories.story.iter().map(|s| s.id.as_str()))
+        .into_iter()
+        .map(|id| format!("story の番号が重複している: {id}"));
+    let dup_group = repeated(stories.group.iter().map(|g| g.id.as_str()))
+        .into_iter()
+        .map(|id| format!("group の番号が重複している: {id}"));
+    let orphan = stories
+        .story
+        .iter()
+        .filter(|s| !stories.group.iter().any(|g| s.id.starts_with(&g.id)))
+        .map(|s| format!("どの group にも入らない: {}", s.id));
+    dup_story.chain(dup_group).chain(orphan).collect()
+}
+
+/// 生成を止める理由。`#[story]` の付け忘れ、ストーリー番号の書き間違い、
+/// `stories.toml` の誤り、同じ場所の同じ名前のテスト。
+/// 同じ名前の Python の関数は後の定義が前の定義を隠すので、前のテストは実行されない。
 pub fn complaints(stories: &Stories, tests: &[Test]) -> Vec<String> {
+    let built = stories
+        .unbuilt
+        .iter()
+        .filter(|sid| tests.iter().any(|t| t.stories.contains(sid)))
+        .map(|sid| format!("unbuilt にあるのにテストがある: {sid}"));
+    let places: Vec<String> = tests
+        .iter()
+        .map(|t| format!("{} / {}", t.place, t.what))
+        .collect();
+    let same = repeated(places.iter().map(String::as_str))
+        .into_iter()
+        .map(|p| format!("同じ名前のテストがある: {p}"));
+    story_complaints(stories)
+        .into_iter()
+        .chain(built)
+        .chain(same)
+        .chain(test_complaints(stories, tests))
+        .collect()
+}
+
+/// テストごとの誤りと、`unbuilt` の番号の書き間違い。
+fn test_complaints(stories: &Stories, tests: &[Test]) -> Vec<String> {
     let per_test = tests.iter().flat_map(|t| {
         let missing = t
             .stories
@@ -470,6 +550,7 @@ def describe_カーネルの登録():
         pass
 "#;
         let got: Vec<(String, String, Vec<String>)> = python_tests(text, "kernel")
+            .unwrap()
             .into_iter()
             .map(|t| (t.place, t.what, t.stories))
             .collect();
@@ -486,6 +567,89 @@ def describe_カーネルの登録():
                     "複数行の".to_string(),
                     vec!["J1".to_string()],
                 ),
+            ]
+        );
+    }
+    #[test]
+    fn 三重引用符の中の_def_は読まない() {
+        let text = r#"
+def helper():
+    """1 行で閉じる docstring。"""
+
+def describe_セルの実行():
+
+    @story("J1")
+    def it_前のセルの宣言を使える(kernel):
+        cell = """\
+def fib : Nat → Nat
+  | 0 => 0"""
+        pass
+
+    @story("J2")
+    async def it_後ろのテスト(kernel):
+        pass
+"#;
+        let got: Vec<(String, String)> = python_tests(text, "kernel")
+            .unwrap()
+            .into_iter()
+            .map(|t| (t.place, t.what))
+            .collect();
+        let place = "kernel / セルの実行".to_string();
+        assert_eq!(
+            got,
+            [
+                (place.clone(), "前のセルの宣言を使える".to_string()),
+                (place, "後ろのテスト".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn テストでない関数の_story_はエラーにする() {
+        let text = "@story(\"J1\")\ndef helper():\n    pass\n";
+        assert!(python_tests(text, "kernel").is_err());
+    }
+
+    #[test]
+    fn stories_toml_の誤りと同じ名前のテストを見つける() {
+        let stories: Stories = toml::from_str(
+            r#"
+unbuilt = ["A2"]
+[[group]]
+id = "A"
+title = "式"
+[[group]]
+id = "A"
+title = "式"
+[[story]]
+id = "A1"
+text = "a"
+[[story]]
+id = "A1"
+text = "a"
+[[story]]
+id = "A2"
+text = "b"
+[[story]]
+id = "Z1"
+text = "z"
+"#,
+        )
+        .unwrap();
+        let test = |what: &str, sid: &str| Test {
+            what: what.to_string(),
+            place: "kernel / 補完".to_string(),
+            stories: vec![sid.to_string()],
+        };
+        let tests = [test("同じ", "A1"), test("同じ", "A1"), test("別", "A2")];
+        assert_eq!(
+            complaints(&stories, &tests),
+            [
+                "story の番号が重複している: A1",
+                "group の番号が重複している: A",
+                "どの group にも入らない: Z1",
+                "unbuilt にあるのにテストがある: A2",
+                "同じ名前のテストがある: kernel / 補完 / 同じ",
             ]
         );
     }

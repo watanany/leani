@@ -13,7 +13,7 @@ mod common;
 
 use std::time::{Duration, Instant};
 
-use common::pty::{PROMPT, Terminal, WIDE_PROMPT, piped};
+use common::pty::{PROMPT, Terminal, WIDE_PROMPT, piped, shows};
 use story::story;
 
 mod 行編集 {
@@ -44,7 +44,8 @@ mod 行編集 {
         term.settle(0.2);
         let line = term.cursor_line();
         assert!(line.trim_end().ends_with("1 + 1"), "{line}");
-        assert!(term.line("").contains('2'));
+        let out = term.line("");
+        assert!(shows(&out, "2"), "{out}");
     }
 
     #[story("F4")]
@@ -56,10 +57,8 @@ mod 行編集 {
         assert!(term.cursor_line().contains("def half"));
         term.type_keys("\x03");
         assert!(term.wait_prompt(PROMPT, 30).contains("^C"));
-        assert!(
-            term.line("1 + 1").contains('2'),
-            "入力途中の内容が残っている"
-        );
+        let out = term.line("1 + 1");
+        assert!(shows(&out, "2"), "入力途中の内容が残っている: {out}");
     }
 
     #[story("A4")]
@@ -85,7 +84,8 @@ mod 行編集 {
             t0.elapsed() < Duration::from_secs(30),
             "中断しても止まらず、評価が最後まで実行された"
         );
-        assert!(term.line("before").contains('5'));
+        let out = term.line("before");
+        assert!(shows(&out, "5"), "{out}");
     }
 
     #[story("C3", "F3")]
