@@ -182,6 +182,22 @@ def name_chunk(prefix: str) -> str:
     return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
 
 
+def cache_usable(
+    at: tuple[int, int | None], gen: int, env: int | None, stack: Sequence[int]
+) -> bool:
+    """
+    補完のキャッシュを今の環境で使えるか。`at` はキャッシュを取得したときの
+    (世代, env)、`stack` は今の env の元になった環境。
+
+    取得したときの env が今の env か `stack` にあれば、キャッシュの名前は今の環境にも
+    ある。そのあとに実行した宣言の名前は、呼び出し側が log から足す。`:undo` や
+    `:reset` で取り消した環境で取得したキャッシュは、取り消した宣言の名前を含むので
+    使わない。
+    """
+    made, cached = at
+    return made == gen and (cached == env or (cached is not None and cached in stack))
+
+
 def shorten(
     chunk: Sequence[str], prefix: str, ns: str, hidden: Sequence[str]
 ) -> list[str]:

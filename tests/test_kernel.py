@@ -252,6 +252,27 @@ def describe_補完():
         assert head == "Nat.add_c"
         assert "Nat.add_comm" in matches, matches
 
+    @story("J2", "D1")
+    def it_colon_undo_で取り消した宣言は候補に出ない(kernel):
+        run(kernel, "def undoneOnly := 1")
+        assert "undoneOnly" in complete(kernel, "#check undoneO")[1]
+        run(kernel, ":undo")
+        _, matches = complete(kernel, "#check undoneO")
+        assert "undoneOnly" not in matches, matches
+
+    @story("J2", "D1")
+    def it_colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない(
+        kernel,
+    ):
+        # 宣言の数だけを見ると、取り消す前の名前を使い続ける。
+        run(kernel, "def swappedA := 1")
+        assert "swappedA" in complete(kernel, "#check swapped")[1]
+        run(kernel, ":undo")
+        run(kernel, "def swappedB := 2")
+        _, matches = complete(kernel, "#check swapped")
+        assert "swappedB" in matches, matches
+        assert "swappedA" not in matches, matches
+
     @story("J2", "C5")
     def it_略記を記号に補完する(kernel):
         head, matches = complete(kernel, "theorem x : p \\to")

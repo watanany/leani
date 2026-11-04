@@ -47,6 +47,7 @@ from leani.pure import (
     balanced,
     block_continues,
     c,
+    cache_usable,
     classify,
     classify_tac,
     continues,
@@ -379,8 +380,8 @@ class Repl:
         self.held: Held | None = None
 
         # 補完と履歴
-        self._comp_cache: dict[tuple[int | None, str], list[str]] = {}
-        self._own: tuple[int, list[str]] = (-1, [])
+        self._comp_cache: dict[str, tuple[tuple[int, int | None], list[str]]] = {}
+        self._own: tuple[list[str] | None, list[str]] = (None, [])
         self._scope: tuple[tuple[int, int | None] | None, Scope] = (None, {})
 
         self.eng = Engine(cfg)
@@ -503,13 +504,18 @@ class Repl:
         名前空間ごとの定数名の一覧を返す。キャッシュに無いものは、定数を 1 回
         走査してまとめて取得する。
 
-        キャッシュは base 環境 (import / :l 直後の環境) に紐付ける。宣言を 1 つ
-        実行するたびにキャッシュを捨てると Mathlib では毎回 1.1 秒かかるので、
-        REPL で実行した宣言の名前だけを Python 側で追加する。open する名前空間が
-        増えても、定数の走査は 1 回で済ませる。
+        キャッシュは、取得したときの環境が今の環境の元になっている間だけ使う
+        (`cache_usable`)。宣言を 1 つ実行するたびにキャッシュを捨てると Mathlib では
+        毎回 1.1 秒かかるので、REPL で実行した宣言の名前だけを Python 側で追加する。
+        open する名前空間が増えても、定数の走査は 1 回で済ませる。
         """
-        base = self.eng.base
-        missing = sorted(k for k in keys if (base, k) not in self._comp_cache)
+        now = (self.eng.gen, self.eng.env)
+
+        def usable(k: str) -> bool:
+            got = self._comp_cache.get(k)
+            return got is not None and cache_usable(got[0], *now, self.eng.stack)
+
+        missing = sorted(k for k in keys if not usable(k))
         if missing:
             out = self.guard(
                 lambda: self.eng.query(
@@ -519,13 +525,9 @@ class Repl:
             got = last_json(out)
             if isinstance(got, list) and len(got) == len(missing):
                 for k, names in zip(missing, got, strict=True):
-                    self._comp_cache[(base, k)] = names
+                    self._comp_cache[k] = (now, names)
 
-        return {
-            k: self._comp_cache[(base, k)]
-            for k in keys
-            if (base, k) in self._comp_cache
-        }
+        return {k: self._comp_cache[k][1] for k in keys if k in self._comp_cache}
 
     def _scope_now(self) -> Scope:
         """
@@ -545,12 +547,16 @@ class Repl:
         return self._scope[1]
 
     def _own_names(self) -> list[str]:
-        """REPL で実行した宣言の名前を返す。ログが増えたときだけ集め直す。"""
-        if self._own[0] != len(self.eng.log):
+        """
+        REPL で実行した宣言の名前を返す。ログが変わったときだけ集め直す。
+
+        長さだけを覚えると、`:undo` のあとに同じ数の宣言を足したときに気づかない。
+        """
+        if self._own[0] != self.eng.log:
             names: set[str] = set()
             for src in self.eng.log:
                 names.update(DECL_NAME.findall(src))
-            self._own = (len(self.eng.log), sorted(names))
+            self._own = (list(self.eng.log), sorted(names))
 
         return self._own[1]
 
