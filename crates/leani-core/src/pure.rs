@@ -783,12 +783,27 @@ pub fn indent(text: &str, pad: &str) -> String {
 }
 
 /// スクリプトの 2 行目以降を pad の桁にそろえる。1 行目は呼び出し側が置く。
+/// 文字列の中で始まる行には空白を足さない (`indent_code` と同じ)。
 pub fn hang(script: &str, pad: &str) -> String {
-    script
-        .split('\n')
+    pad_lines(script, pad, 1)
+}
+
+/// Lean のコードの、空白だけの行と文字列の中で始まる行を除くすべての行の先頭に
+/// pad を付ける。
+///
+/// 複数行の文字列の 2 行目以降に空白を足すと、文字列の値が変わる。コードを
+/// `#eval` などに包むときと、sorry をスクリプトに置き換えるときに使う。
+pub fn indent_code(text: &str, pad: &str) -> String {
+    pad_lines(text, pad, 0)
+}
+
+/// from 行目以降の、空白だけの行と文字列の中で始まる行を除く行に pad を付ける。
+fn pad_lines(text: &str, pad: &str, from: usize) -> String {
+    text.split('\n')
+        .zip(outside_strings(text))
         .enumerate()
-        .map(|(n, one)| {
-            if n > 0 && !one.trim().is_empty() {
+        .map(|(n, (one, outside))| {
+            if n >= from && outside && !one.trim().is_empty() {
                 format!("{pad}{one}")
             } else {
                 one.to_string()
@@ -796,6 +811,163 @@ pub fn hang(script: &str, pad: &str) -> String {
         })
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// 字句を読んでいる途中で開いているもの。
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Open {
+    /// 文字列。`s!` などの後ろの文字列なら true で、`{}` の中はコードになる
+    Str(bool),
+    /// raw 文字列。`#` の数を持つ
+    Raw(usize),
+    /// ブロックコメント。入れ子にできる
+    Comment,
+    /// コードの中の `{`
+    Brace,
+}
+
+/// Lean のコードの各行 (`\n` で区切る) が、文字列の外で始まるか。
+///
+/// 文字列の外で始まる行なら、先頭に空白を足してもコードの意味は変わらない。
+/// ブロックコメントの中で始まる行も、空白を足してよいので true にする。
+/// コメントの中と `'"'` の引用符、`«»` の中の引用符では文字列は始まらない。
+pub fn outside_strings(text: &str) -> Vec<bool> {
+    let cs: Vec<char> = text.chars().collect();
+    let (mut i, mut stack, mut out) = (0, Vec::new(), vec![true]);
+    while i < cs.len() {
+        if cs[i] == '\n' {
+            out.push(!matches!(stack.last(), Some(Open::Str(_) | Open::Raw(_))));
+            i += 1;
+        } else {
+            i = lex_step(&cs, i, &mut stack);
+        }
+    }
+    out
+}
+
+/// cs[i] から 1 つの字句を読み、開いたものと閉じたものを stack に反映する。
+/// 返すのは次に読む位置。`\n` は読まずに手前で止まる。
+fn lex_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
+    match stack.last().copied() {
+        Some(Open::Str(interp)) => str_step(cs, i, stack, interp),
+        Some(Open::Raw(hashes)) => raw_step(cs, i, stack, hashes),
+        Some(Open::Comment) => comment_step(cs, i, stack),
+        Some(Open::Brace) | None => code_step(cs, i, stack),
+    }
+}
+
+fn str_step(cs: &[char], i: usize, stack: &mut Vec<Open>, interp: bool) -> usize {
+    match (cs[i], cs.get(i + 1)) {
+        // 行末の `\` は次の行の先頭の空白を読み飛ばす。`\n` は読まずに残す
+        ('\\', Some(&next)) if next != '\n' => i + 2,
+        ('"', _) => {
+            stack.pop();
+            i + 1
+        }
+        ('{', _) if interp => {
+            stack.push(Open::Brace);
+            i + 1
+        }
+        _ => i + 1,
+    }
+}
+
+fn raw_step(cs: &[char], i: usize, stack: &mut Vec<Open>, hashes: usize) -> usize {
+    let closes = cs[i] == '"' && (1..=hashes).all(|k| cs.get(i + k) == Some(&'#'));
+    if closes {
+        stack.pop();
+        i + 1 + hashes
+    } else {
+        i + 1
+    }
+}
+
+fn comment_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
+    match (cs[i], cs.get(i + 1)) {
+        ('/', Some('-')) => {
+            stack.push(Open::Comment);
+            i + 2
+        }
+        ('-', Some('/')) => {
+            stack.pop();
+            i + 2
+        }
+        _ => i + 1,
+    }
+}
+
+fn code_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
+    let after_name = i > 0 && name_char(cs[i - 1]);
+    match (cs[i], cs.get(i + 1)) {
+        ('-', Some('-')) => cs[i..]
+            .iter()
+            .position(|&c| c == '\n')
+            .map_or(cs.len(), |n| i + n),
+        ('/', Some('-')) => {
+            stack.push(Open::Comment);
+            i + 2
+        }
+        ('"', _) => {
+            stack.push(Open::Str(i > 0 && cs[i - 1] == '!'));
+            i + 1
+        }
+        ('r', Some('"' | '#')) if !after_name => raw_open(cs, i, stack),
+        ('\'', Some(_)) if !after_name => char_end(cs, i),
+        ('«', _) => name_end(cs, i),
+        ('{', _) => {
+            stack.push(Open::Brace);
+            i + 1
+        }
+        ('}', _) => {
+            if stack.last() == Some(&Open::Brace) {
+                stack.pop();
+            }
+            i + 1
+        }
+        _ => i + 1,
+    }
+}
+
+/// cs[i] の `r` が `r"` か `r#"` の始まりなら raw 文字列を開く。
+fn raw_open(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
+    let hashes = cs[i + 1..].iter().take_while(|&&c| c == '#').count();
+    if cs.get(i + 1 + hashes) == Some(&'"') {
+        stack.push(Open::Raw(hashes));
+        i + 2 + hashes
+    } else {
+        i + 1
+    }
+}
+
+/// cs[i] の `'` が文字のリテラル (`'a'`、`'\n'`) の始まりなら、その後ろの位置。
+/// そうでなければ `'` の次の位置。
+fn char_end(cs: &[char], i: usize) -> usize {
+    let close = match cs.get(i + 1) {
+        Some('\\') => cs[i + 2..]
+            .iter()
+            .take_while(|&&c| c != '\n')
+            .position(|&c| c == '\'')
+            .map(|n| i + 2 + n),
+        Some('\n') => None,
+        _ => Some(i + 2).filter(|&k| cs.get(k) == Some(&'\'')),
+    };
+    close.map_or(i + 1, |k| k + 1)
+}
+
+/// cs[i] の `«` で始まる名前の後ろの位置。行の中で閉じなければ行末。
+fn name_end(cs: &[char], i: usize) -> usize {
+    let k = i
+        + 1
+        + cs[i + 1..]
+            .iter()
+            .take_while(|&&c| c != '»' && c != '\n')
+            .count();
+    if cs.get(k) == Some(&'»') { k + 1 } else { k }
+}
+
+/// 名前に使える文字か。`h'` の `'` や `s!` の `!` も名前の一部になる。
+fn name_char(c: char) -> bool {
+    c.is_alphanumeric() || matches!(c, '_' | '\'' | '!' | '?')
 }
 
 /// `:save` が書き出す本文。環境を構成しているソースに、保留中の宣言をコメントとして
@@ -1267,7 +1439,8 @@ fn dedent(text: &str) -> String {
 /// メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。桁と幅は文字の数。
 ///
 /// 位置は送ったソース上の座標なので、#eval でラップした分のずれ (line_off /
-/// col_off) を引いてから、その行の長さに収める。
+/// col_off) を引いてから、その行の長さに収める。col_off は `indent_code` が空白を
+/// 足した行 (文字列の中で始まらない行) だけから引く。
 pub fn span<S: AsRef<str>>(
     m: &Json,
     lines: &[S],
@@ -1282,6 +1455,15 @@ pub fn span<S: AsRef<str>>(
     let ln = int(pos, "line").unwrap_or(0) - line_off;
     let src_line = lines.get(usize::try_from(ln - 1).ok()?)?.as_ref();
     let len = i64::try_from(src_line.chars().count()).ok()?;
+    let src = lines
+        .iter()
+        .map(AsRef::as_ref)
+        .collect::<Vec<_>>()
+        .join("\n");
+    let col_off = match outside_strings(&src).get(usize::try_from(ln - 1).ok()?) {
+        Some(true) => col_off,
+        _ => 0,
+    };
     let col = (int(pos, "column").unwrap_or(0) - col_off).clamp(0, len);
     let width = if int(end, "line").unwrap_or(0) - line_off == ln {
         (int(end, "column").unwrap_or(0) - col_off - col).max(1)

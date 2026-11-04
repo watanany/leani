@@ -95,16 +95,6 @@ def lean_strs(xs: Sequence[str]) -> str:
     return "#[" + ", ".join(lean_str(x) for x in xs) + "]"
 
 
-def indent(text: str, pad: str) -> str:
-    """
-    空白だけの行を除くすべての行の先頭に pad を付ける。
-
-    行は `\\n` だけで区切る。`textwrap.indent` は `\\f` なども行の区切りと見なすので、
-    文字列リテラルの中の `\\f` の後ろに pad を入れてしまう。
-    """
-    return "\n".join(pad + line if line.strip() else line for line in text.split("\n"))
-
-
 def name_start(text: str) -> int:
     """
     text の末尾にある名前が始まる位置。補完でカーソルの前の名前を切り出すため。
@@ -394,9 +384,182 @@ def put_script(src: str, a: int, b: int, script: str) -> str:
 
 
 def hang(script: str, pad: str) -> str:
-    """スクリプトの 2 行目以降を pad の桁にそろえる。1 行目は呼び出し側が置く。"""
-    head, *rest = script.split("\n")
-    return "\n".join([head] + [pad + one if one.strip() else one for one in rest])
+    """
+    スクリプトの 2 行目以降を pad の桁にそろえる。1 行目は呼び出し側が置く。
+    文字列の中で始まる行には空白を足さない (`indent_code` と同じ)。
+    """
+    return _pad_lines(script, pad, 1)
+
+
+def indent_code(text: str, pad: str) -> str:
+    """
+    Lean のコードの、空白だけの行と文字列の中で始まる行を除くすべての行の先頭に
+    pad を付ける。
+
+    複数行の文字列の 2 行目以降に空白を足すと、文字列の値が変わる。コードを
+    `#eval` などに包むときと、sorry をスクリプトに置き換えるときに使う。
+
+    行は `\\n` だけで区切る。`textwrap.indent` は `\\f` なども行の区切りと見なすので、
+    文字列リテラルの中の `\\f` の後ろに pad を入れてしまう。
+    """
+    return _pad_lines(text, pad, 0)
+
+
+def _pad_lines(text: str, pad: str, start: int) -> str:
+    """start 行目以降の、空白だけの行と文字列の中で始まる行を除く行に pad を付ける。"""
+    lines = text.split("\n")
+    return "\n".join(
+        pad + one if n >= start and outside and one.strip() else one
+        for n, (one, outside) in enumerate(
+            zip(lines, outside_strings(text), strict=True)
+        )
+    )
+
+
+# 字句を読んでいる途中で開いているもの。("str", True) は `s!` などの後ろの文字列で、
+# `{}` の中はコードになる。("raw", n) は `#` が n 個の raw 文字列。"comment" は
+# ブロックコメント、"brace" はコードの中の `{`。
+Open = tuple[str, bool] | tuple[str, int] | str
+
+
+def outside_strings(text: str) -> list[bool]:
+    """
+    Lean のコードの各行 (`\\n` で区切る) が、文字列の外で始まるか。
+
+    文字列の外で始まる行なら、先頭に空白を足してもコードの意味は変わらない。
+    ブロックコメントの中で始まる行も、空白を足してよいので True にする。
+    コメントの中と `'"'` の引用符、`«»` の中の引用符では文字列は始まらない。
+    """
+    i, out = 0, [True]
+    stack: list[Open] = []
+    while i < len(text):
+        if text[i] == "\n":
+            out.append(not (stack and isinstance(stack[-1], tuple)))
+            i += 1
+        else:
+            i = _lex_step(text, i, stack)
+    return out
+
+
+def _lex_step(s: str, i: int, stack: list[Open]) -> int:
+    """s[i] から 1 つの字句を読み、stack に反映する。返すのは次に読む位置。"""
+    match stack[-1] if stack else None:
+        case ("str", interp):
+            return _str_step(s, i, stack, bool(interp))
+        case ("raw", hashes):
+            return _raw_step(s, i, stack, int(hashes))
+        case "comment":
+            return _comment_step(s, i, stack)
+        case _:
+            return _code_step(s, i, stack)
+
+
+def _str_step(s: str, i: int, stack: list[Open], interp: bool) -> int:
+    match s[i]:
+        # 行末の `\` は次の行の先頭の空白を読み飛ばす。`\n` は読まずに残す
+        case "\\" if s[i + 1 : i + 2] not in ("", "\n"):
+            return i + 2
+        case '"':
+            stack.pop()
+            return i + 1
+        case "{" if interp:
+            stack.append("brace")
+            return i + 1
+        case _:
+            return i + 1
+
+
+def _raw_step(s: str, i: int, stack: list[Open], hashes: int) -> int:
+    if s.startswith('"' + "#" * hashes, i):
+        stack.pop()
+        return i + 1 + hashes
+    else:
+        return i + 1
+
+
+def _comment_step(s: str, i: int, stack: list[Open]) -> int:
+    match s[i : i + 2]:
+        case "/-":
+            stack.append("comment")
+            return i + 2
+        case "-/":
+            stack.pop()
+            return i + 2
+        case _:
+            return i + 1
+
+
+def _code_step(s: str, i: int, stack: list[Open]) -> int:
+    after_name = i > 0 and _name_char(s[i - 1])
+    match s[i], s[i : i + 2]:
+        case _, "--":
+            end = s.find("\n", i)
+            return len(s) if end < 0 else end
+        case "r", ('r"' | "r#") if not after_name:
+            return _raw_open(s, i, stack)
+        case "'", _ if not after_name and i + 1 < len(s):
+            return _char_end(s, i)
+        case "«", _:
+            return _name_end(s, i)
+        case _:
+            return _code_push(s, i, stack)
+
+
+def _code_push(s: str, i: int, stack: list[Open]) -> int:
+    """コメント、文字列、`{}` を開くか閉じる。"""
+    match s[i], s[i : i + 2]:
+        case _, "/-":
+            stack.append("comment")
+            return i + 2
+        case '"', _:
+            stack.append(("str", i > 0 and s[i - 1] == "!"))
+            return i + 1
+        case "{", _:
+            stack.append("brace")
+            return i + 1
+        case "}", _ if stack and stack[-1] == "brace":
+            stack.pop()
+            return i + 1
+        case _:
+            return i + 1
+
+
+def _name_end(s: str, i: int) -> int:
+    """s[i] の `«` で始まる名前の後ろの位置。行の中で閉じなければ行末。"""
+    k = i + 1
+    while k < len(s) and s[k] not in "»\n":
+        k += 1
+    return k + 1 if s[k : k + 1] == "»" else k
+
+
+def _raw_open(s: str, i: int, stack: list[Open]) -> int:
+    """s[i] の `r` が `r"` か `r#"` の始まりなら raw 文字列を開く。"""
+    hashes = len(s[i + 1 :]) - len(s[i + 1 :].lstrip("#"))
+    if s.startswith('"', i + 1 + hashes):
+        stack.append(("raw", hashes))
+        return i + 2 + hashes
+    else:
+        return i + 1
+
+
+def _char_end(s: str, i: int) -> int:
+    """
+    s[i] の `'` が文字のリテラル (`'a'`、`'\\n'`) の始まりなら、その後ろの位置。
+    そうでなければ `'` の次の位置。
+    """
+    match s[i + 1]:
+        case "\\":
+            k = s[i + 2 :].split("\n", 1)[0].find("'")
+            return i + 1 if k < 0 else i + 2 + k + 1
+        case "\n":
+            return i + 1
+        case _:
+            return i + 3 if s[i + 2 : i + 3] == "'" else i + 1
+
+
+def _name_char(c: str) -> bool:
+    """名前に使える文字か。`h'` の `'` や `s!` の `!` も名前の一部になる。"""
+    return c.isalnum() or c in "_'!?"
 
 
 def has_import(src: str) -> bool:
@@ -729,7 +892,8 @@ def span(
     メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。
 
     位置は送ったソース上の座標なので、#eval でラップした分のずれ (line_off /
-    col_off) を引いてから、その行の長さに収める。
+    col_off) を引いてから、その行の長さに収める。col_off は `indent_code` が空白を
+    足した行 (文字列の中で始まらない行) だけから引く。
     """
     pos = m.get("pos") or {}
     ln = pos.get("line", 0) - line_off
@@ -737,6 +901,7 @@ def span(
         return None
     else:
         src_line = lines[ln - 1]
+        col_off = col_off if outside_strings("\n".join(lines))[ln - 1] else 0
         col = max(0, min(pos.get("column", 0) - col_off, len(src_line)))
         end = m.get("endPos") or {}
         width = (

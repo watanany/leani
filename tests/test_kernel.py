@@ -192,6 +192,22 @@ def fib : Nat → Nat
         assert "sorryAx" not in out, out
 
     @story("J1")
+    def it_複数行の文字列の値を変えずに評価する(kernel):
+        # #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
+        status, out, err = run(kernel, '"Hello\nWorld".length')
+        assert status == "ok", err
+        assert "11" in out, out
+
+    @story("J1", "E3")
+    def it_複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない(kernel):
+        run(kernel, "def cell_greeting : String := by sorry")
+        run(kernel, ":prove")
+        status, _, err = run(kernel, 'exact "Hello\nWorld"')
+        assert status == "ok", err
+        _, out, _ = run(kernel, "#eval cell_greeting.length")
+        assert "11" in out, out
+
+    @story("J1")
     def it_閉じていない_raw_文字列は次の行に続ける(kernel):
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')
         assert status == "ok", err

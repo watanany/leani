@@ -56,7 +56,7 @@ from leani.pure import (
     green,
     has_error,
     head_line,
-    indent,
+    indent_code,
     last_json,
     lean_str,
     lean_strs,
@@ -1025,7 +1025,7 @@ class Repl:
     def submit_term(self, src: str) -> bool:
         """式として #eval に包んで送る。環境は進めない。"""
         is_do, head, col = src.lstrip().startswith("do"), "", 2
-        resp = self.guard(lambda: self.eng.send_cmd("#eval\n" + indent(src, "  ")))
+        resp = self.guard(lambda: self.eng.send_cmd("#eval\n" + indent_code(src, "  ")))
         if resp is None or panic_check(self.out, resp):
             return False
 
@@ -1038,7 +1038,9 @@ class Repl:
         if errs and not is_do and nested_action(blob):
             is_do, head, col = True, " do", 4
             resp = self.guard(
-                lambda: self.eng.send_cmd(f"#eval{head}\n" + indent(src, " " * col))
+                lambda: self.eng.send_cmd(
+                    f"#eval{head}\n" + indent_code(src, " " * col)
+                )
             )
             if resp is None or panic_check(self.out, resp):
                 return False
@@ -1048,7 +1050,7 @@ class Repl:
         # `do` を単体で書くと、Lean は最初の action からモナドを決めてしまう
         # (IO.getEnv なら BaseIO)。GHCi と同じく IO として読み直す。
         if errs and is_do and "BaseIO" in blob:
-            retry = f"#eval show IO _ from{head}\n" + indent(src, " " * col)
+            retry = f"#eval show IO _ from{head}\n" + indent_code(src, " " * col)
             again = self.guard(lambda: self.eng.send_cmd(retry))
             if again is not None and panic_check(self.out, again):
                 return False
@@ -1061,7 +1063,7 @@ class Repl:
         reason = not_evaluable_reason(blob) if errs else None
         if reason is not None:
             out = self.guard(
-                lambda: self.eng.query(f"#check{head}\n" + indent(src, " " * col))
+                lambda: self.eng.query(f"#check{head}\n" + indent_code(src, " " * col))
             )
             if out:
                 self.out.write(out.rstrip())
@@ -1171,7 +1173,7 @@ class Repl:
         script = "\n".join(proof.script)
         self.out.write(green("証明完了。"))
         self.out.write(dim("-- スクリプト:"))
-        self.out.write(textwrap.indent(script, "  "))
+        self.out.write(indent_code(script, "  "))
         self.proof, self.last = None, None
         self.close_sorry(script)
 
@@ -1223,7 +1225,7 @@ class Repl:
         self.held = None
 
         self.out.write(dim("-- sorry をスクリプトで置き換えて実行する:"))
-        self.out.write(textwrap.indent(new_src.strip(), "  "))
+        self.out.write(indent_code(new_src.strip(), "  "))
 
         gen = self.eng.gen
         self.submit(new_src, CMD)
@@ -1370,7 +1372,7 @@ class Repl:
             case "goals" | "g":
                 self.show_goals()
             case "script":
-                self.out.write(textwrap.indent("\n".join(proof.script) or "(空)", "  "))
+                self.out.write(indent_code("\n".join(proof.script) or "(空)", "  "))
             case "undo":
                 self.proof_undo(proof)
             case "done" | "q" | "quit":
@@ -1406,7 +1408,7 @@ class Repl:
             self.out.fail(red(":t には式が必要"))
             return
 
-        out = self.guard(lambda: self.eng.query("#check\n" + indent(arg, "  ")))
+        out = self.guard(lambda: self.eng.query("#check\n" + indent_code(arg, "  ")))
         if out:
             self.out.write(out.rstrip())
         else:

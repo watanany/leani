@@ -111,6 +111,15 @@ mod 式の評価 {
         assert!(out.lines().any(|l| l.trim() == "3"), "{out}");
     }
 
+    #[story("A1")]
+    #[test]
+    fn 複数行の文字列の値を変えずに評価する() {
+        // #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
+        let mut repl = Driver::new();
+        let out = repl.feed(&["\"Hello", "World\".length"]);
+        assert!(out.lines().any(|l| l.trim() == "11"), "{out}");
+    }
+
     #[story("A1", "B1")]
     #[test]
     fn IO_の式はそのまま実行される() {
@@ -2015,6 +2024,17 @@ mod 証明モード {
         assert!(!out[done..].contains("exact?"), "置き換えた宣言に残った");
         let decl = repl.declarations().pop().expect("宣言が無い");
         assert!(decl.contains("exact ") && !decl.contains("sorry"), "{decl}");
+    }
+
+    #[story("E3")]
+    #[test]
+    fn 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない() {
+        let mut repl = Driver::new();
+        repl.feed(&["def greeting : String := by sorry", ":prove"]);
+        let out = repl.feed(&["exact \"Hello", "World\""]);
+        assert!(out.contains("証明完了"), "{out}");
+        let out = repl.feed(&["greeting.length"]);
+        assert!(out.lines().any(|l| l.trim() == "11"), "{out}");
     }
 
     #[story("E1")]

@@ -527,6 +527,14 @@ mod エラー位置の範囲 {
 
     #[story("A5")]
     #[test]
+    fn 文字列の中で始まる行は桁を戻さない() {
+        // 包むときに空白を足していない行なので、桁はずれていない。
+        let m = json!({"pos": {"line": 3, "column": 3}, "endPos": {"line": 3, "column": 5}});
+        assert_eq!(pure::span(&m, &["f \"a", "b\".xy"], 1, 2), Some((2, 3, 2)));
+    }
+
+    #[story("A5")]
+    #[test]
     fn 位置が行の外なら範囲を返さない() {
         let m = json!({"pos": {"line": 9, "column": 0}});
         assert_eq!(pure::span(&m, &["foo"], 0, 0), None);
@@ -1904,6 +1912,68 @@ mod sorry_の置き換え {
             splice(src, "sorry", "trivial").as_deref(),
             Some("example : True ∧ True := ⟨by trivial, by trivial⟩")
         );
+    }
+
+    #[story("E3")]
+    #[test]
+    fn 複数行の文字列を含むスクリプトは文字列の途中の行を字下げしない() {
+        // 文字列の 2 行目に空白を足すと、文字列の値が変わる。
+        let src = "def s : String := by\n  sorry";
+        assert_eq!(
+            splice(src, "sorry", "exact \"a\nb\"\n-- c").as_deref(),
+            Some("def s : String := by\n  exact \"a\nb\"\n  -- c")
+        );
+        let src = "def s : String := by sorry";
+        assert_eq!(
+            splice(src, "sorry", "exact \"a\nb\"").as_deref(),
+            Some("def s : String := by\n  exact \"a\nb\"")
+        );
+    }
+
+    #[story("A1", "E3")]
+    #[test]
+    fn 文字列の中で始まる行には空白を足さない() {
+        // コメントの中の引用符、文字の '"'、h' の '、«» の中の引用符では文字列は
+        // 始まらない。s! の {} の中の文字列が閉じても、外側の文字列は続く。
+        // 行の中で閉じない « は、行末で終わる。
+        let src = concat!(
+            "f \"a\n",
+            "b\" r#\"c\n",
+            "\"d\"#\n",
+            "s!\"{\"e\n",
+            "f\"}\n",
+            "g\" '\"' h' /- \" -/ -- \"\n",
+            "«y\n",
+            "«x\"» \"\\\"\n",
+            "i\"",
+        );
+        assert_eq!(
+            pure::outside_strings(src),
+            [true, false, false, true, false, false, true, true, false]
+        );
+        let lines: Vec<&str> = src.split('\n').collect();
+        let want = [
+            format!("  {}", lines[0]),
+            lines[1].to_string(),
+            lines[2].to_string(),
+            format!("  {}", lines[3]),
+            lines[4].to_string(),
+            lines[5].to_string(),
+            format!("  {}", lines[6]),
+            format!("  {}", lines[7]),
+            lines[8].to_string(),
+        ];
+        assert_eq!(pure::indent_code(src, "  "), want.join("\n"));
+    }
+
+    #[story("A1", "E3")]
+    #[proptest]
+    fn 行ごとの判定は行の数だけ返す(
+        #[strategy("[a\"'r#«»{}!/\\\\\\- \n]{0,40}")] src: String,
+    ) {
+        // 判定が行より少ないと、indent_code が後ろの行を落とす。
+        prop_assert_eq!(pure::outside_strings(&src).len(), src.split('\n').count());
+        prop_assert_eq!(pure::indent_code(&src, ""), src);
     }
 
     #[story("E3")]

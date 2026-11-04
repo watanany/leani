@@ -23,10 +23,10 @@ use std::time::Instant;
 use leani_core::abbrev::{abbrev_lookup, abbrev_table};
 use leani_core::pure::{
     Style, abspath, balanced, block_continues, cache_usable, classify, classify_tac, complete_hits,
-    continues, errors, expand_home, full_names, has_error, head_line, indent, int, last_json,
-    lean_str, lean_strs, list, loogle_text, messages, meta_names, name_chunk, nested_action,
-    not_evaluable_reason, own_names, save_body, scope_of, sorries, splice_sorry, strip_imports,
-    tactic_step, tactic_undo, text, try_this,
+    continues, errors, expand_home, full_names, has_error, head_line, indent, indent_code, int,
+    last_json, lean_str, lean_strs, list, loogle_text, messages, meta_names, name_chunk,
+    nested_action, not_evaluable_reason, own_names, save_body, scope_of, sorries, splice_sorry,
+    strip_imports, tactic_step, tactic_undo, text, try_this,
 };
 use leani_core::queries::{COMPLETE_QUERY, DOC_QUERY, META_LINE, PARSE_PROBE, SCOPE_QUERY, fill};
 use leani_core::types::{Candidate, EngineFault, Json, Kind, Output, Proof, Scope, State};
@@ -1214,7 +1214,7 @@ impl Repl {
         if !errs.is_empty() && is_do && blob.contains("BaseIO") {
             let retry = format!(
                 "#eval show IO _ from{head}\n{}",
-                indent(src, &" ".repeat(col))
+                indent_code(src, &" ".repeat(col))
             );
             let again = self.guard(|eng| eng.send_cmd(&retry, false));
             if let Some(again) = again {
@@ -1236,7 +1236,7 @@ impl Repl {
             not_evaluable_reason(&blob)
         };
         if let Some(reason) = reason {
-            let check = format!("#check{head}\n{}", indent(src, &" ".repeat(col)));
+            let check = format!("#check{head}\n{}", indent_code(src, &" ".repeat(col)));
             let out = self.guard(|eng| eng.query(&check)).flatten();
             if let Some(out) = out.filter(|s| !s.is_empty()) {
                 self.out.write(out.trim_end());
@@ -1254,7 +1254,7 @@ impl Repl {
 
     /// `#eval` に包んで送る。エンジンが使えなくなったか PANIC したら None。
     fn send_eval(&mut self, head: &str, col: usize, src: &str) -> Option<Json> {
-        let wrapped = format!("#eval{head}\n{}", indent(src, &" ".repeat(col)));
+        let wrapped = format!("#eval{head}\n{}", indent_code(src, &" ".repeat(col)));
         let resp = self.guard(|eng| eng.send_cmd(&wrapped, false))?;
         if panic_check(self.out.as_mut(), self.style, &resp) {
             None
@@ -1390,7 +1390,7 @@ impl Repl {
         let script = proof.script.join("\n");
         self.out.write(&self.style.green("証明完了。"));
         self.out.write(&self.style.dim("-- スクリプト:"));
-        self.out.write(&indent(&script, "  "));
+        self.out.write(&indent_code(&script, "  "));
         self.proof = None;
         self.last = None;
         self.close_sorry(&script);
@@ -1488,7 +1488,7 @@ impl Repl {
 
         self.out
             .write(&self.style.dim("-- sorry をスクリプトで置き換えて実行する:"));
-        self.out.write(&indent(new_src.trim(), "  "));
+        self.out.write(&indent_code(new_src.trim(), "  "));
 
         let generation = self.eng.generation();
         self.submit(&new_src, Some(Kind::Cmd));
@@ -1624,7 +1624,7 @@ impl Repl {
             "script" => {
                 let script = proof.script.join("\n");
                 let shown = if script.is_empty() { "(空)" } else { &script };
-                self.out.write(&indent(shown, "  "));
+                self.out.write(&indent_code(shown, "  "));
             }
             "undo" => self.proof_undo(&proof),
             "done" | "q" | "quit" => {
@@ -1736,7 +1736,7 @@ impl Repl {
             self.out.fail(&self.style.red(":t には式が必要"));
             return;
         }
-        let check = format!("#check\n{}", indent(arg, "  "));
+        let check = format!("#check\n{}", indent_code(arg, "  "));
         match self.guard(|eng| eng.query(&check)).flatten() {
             Some(out) if !out.is_empty() => self.out.write(out.trim_end()),
             _ => self.out.fail(&self.style.red("型を取得できなかった")),
