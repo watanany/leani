@@ -920,6 +920,33 @@ pub fn toolchain_version(tc: &str) -> &str {
     }
 }
 
+static LEAN_VERSION: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"version (\d+\.\d+\.\d+)(-[^,\s]+)?").expect("正規表現"));
+
+static RC: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^(-rc\d+)?$").expect("正規表現"));
+
+/// `lean --version` の出力から toolchain を作る。
+///
+/// リリースと rc は `leanprover/lean4:v4.24.0-rc1`、nightly は
+/// `leanprover/lean4:nightly-2025-10-01` にする。nightly の `4.24.0-nightly-…` を
+/// `v4.24.0` と読むと、別のバージョンのエンジンをビルドする。ほかの接尾辞は
+/// どの toolchain か分からないので None を返す。
+pub fn toolchain_of_version(out: &str) -> Option<String> {
+    let m = LEAN_VERSION.captures(out)?;
+    let suffix = m.get(2).map_or("", |s| s.as_str());
+    match (suffix.strip_prefix("-nightly-"), RC.is_match(suffix)) {
+        (Some(date), _) => Some(format!("leanprover/lean4:nightly-{date}")),
+        (None, true) => Some(format!("leanprover/lean4:v{}{suffix}", &m[1])),
+        (None, false) => None,
+    }
+}
+
+/// elan のチャンネル (`stable`、`beta`、`nightly`) か。チャンネルが指すバージョンは
+/// 新しいリリースが出ると変わる。
+pub fn is_channel(tc: &str) -> bool {
+    matches!(toolchain_version(tc), "stable" | "beta" | "nightly")
+}
+
 /// toolchain の書き方をそろえる。elan は配布元を省いた `v4.34.0` を
 /// `leanprover/lean4:v4.34.0` と同じ toolchain として扱う。
 pub fn canonical_toolchain(tc: &str) -> String {

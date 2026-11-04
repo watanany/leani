@@ -20,7 +20,6 @@
 //! すぐに確定する。
 
 use std::borrow::Cow;
-use std::io::IsTerminal;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -51,7 +50,7 @@ impl Terminal {
     /// 補完は `repl` をロックしてエンジンに問い合わせる。`cli::run` は `read_line` の
     /// あいだロックを持たないので、デッドロックしない。
     pub fn open(ctx: &Ctx, repl: &Arc<Mutex<Repl>>) -> Option<Terminal> {
-        if !ctx.tty || !std::io::stdin().is_terminal() || !answers_cursor_query() {
+        if !ctx.tty || !ctx.stdin_tty || !answers_cursor_query() {
             return None;
         }
         let entries = lock(repl)

@@ -76,7 +76,8 @@ impl Output for Console {
     }
 
     /// 画面に収まらないときだけ pager を使う。`leani | tee log` のように端末で
-    /// なければ、そのまま出力する。pager を起動できなければ、そのまま出力する。
+    /// なければ、そのまま出力する。pager を起動できないときと、pager のコマンドが
+    /// 無いとき (`sh` の終了コードが 127) も、そのまま出力する。
     fn page(&mut self, text: &str) {
         let tall = text.matches('\n').count() + 1 >= rows();
         if !(self.tty && tall) {
@@ -91,7 +92,9 @@ impl Output for Console {
         if let Some(mut stdin) = child.stdin.take() {
             let _ = writeln!(stdin, "{text}");
         }
-        let _ = child.wait();
+        if child.wait().is_ok_and(|s| s.code() == Some(127)) {
+            self.write(text);
+        }
     }
 }
 

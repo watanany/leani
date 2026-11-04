@@ -1211,6 +1211,71 @@ mod 使うバージョンの決め方 {
             Some("leanprover/lean4:v4.9.0")
         );
     }
+
+    /// `lean --version` が `out` を出す環境で、使うバージョンを決める。
+    fn guess_with_lean(lean: &str, project_tc: Option<&str>) -> Option<String> {
+        let dir = tmp();
+        let path = fake_tools(dir.path(), &[("lean", lean)]);
+        let ctx = ctx_with(&[("PATH", &path)], "/");
+        let proj = project_tc.map(|tc| toolchain_dir(dir.path(), "proj", tc));
+        let cfg = EnvConfig::make(&ctx, "t", proj.as_deref(), &[], None, None);
+        boot::guess_toolchain(&ctx, &cfg).expect("guess")
+    }
+
+    #[story("G3")]
+    #[test]
+    fn nightly_の_lean_は_nightly_の_toolchain_と読む() {
+        // v4.24.0 と読むと、別のバージョンのエンジンをビルドして .olean を読めなくなる。
+        let lean = "echo 'Lean (version 4.24.0-nightly-2025-10-01, arm64-apple-darwin, commit abc, Release)'";
+        assert_eq!(
+            guess_with_lean(lean, None).as_deref(),
+            Some("leanprover/lean4:nightly-2025-10-01")
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn 知らない接尾辞のバージョンは分からないとする() {
+        let lean = "echo 'Lean (version 4.24.0-pre, arm64-apple-darwin, commit abc, Release)'";
+        assert_eq!(guess_with_lean(lean, None), None);
+    }
+
+    #[story("G3")]
+    #[test]
+    fn lean_の_version_は時間を区切らずに待つ() {
+        // elan は lean --version の中で toolchain を取得することがある。途中で止めると、
+        // 取得が終わる前に「バージョンが分からない」と表示する。
+        let dir = tmp();
+        let lean = "sleep 1; echo 'Lean (version 4.9.0, x86_64-apple-darwin, commit abc, Release)'";
+        let path = fake_tools(dir.path(), &[("lean", lean)]);
+        let mut ctx = ctx_with(&[("PATH", &path)], "/");
+        ctx.setup_timeout = Duration::from_millis(100);
+        let cfg = EnvConfig::make(&ctx, "t", None, &[], None, None);
+        assert_eq!(
+            boot::guess_toolchain(&ctx, &cfg).expect("guess").as_deref(),
+            Some("leanprover/lean4:v4.9.0")
+        );
+    }
+
+    #[story("G3")]
+    #[test]
+    fn stable_の_toolchain_は今のバージョンに置き換える() {
+        // チャンネルの名前のままだと、stable が新しいバージョンに進んでも、前の
+        // バージョンでビルドしたエンジンを使い続ける。
+        let lean = r#"case "$1" in
+  +leanprover/lean4:stable) echo 'Lean (version 4.30.0, arm64-apple-darwin, commit abc, Release)' ;;
+  *) exit 1 ;;
+esac"#;
+        assert_eq!(
+            guess_with_lean(lean, Some("leanprover/lean4:stable")).as_deref(),
+            Some("leanprover/lean4:v4.30.0")
+        );
+        // 今のバージョンを取得できなければ、チャンネルの名前のまま使う。
+        assert_eq!(
+            guess_with_lean("exit 1", Some("leanprover/lean4:stable")).as_deref(),
+            Some("leanprover/lean4:stable")
+        );
+    }
 }
 
 mod 手動でエンジンを用意する手順 {
@@ -2314,6 +2379,35 @@ mod Lake_プロジェクトの判定 {
             (got.name.as_str(), got.project, got.imports),
             ("myproj", Some(path_str(&proj)), vec!["MyProj".to_string()])
         );
+    }
+
+    #[story("G6")]
+    #[test]
+    fn dash_p_の書き方によらずディレクトリ名を環境の名前にする() {
+        let dir = tmp();
+        let proj = dir.path().join("myproj");
+        fs::create_dir_all(dir.path().join("other")).expect("mkdir");
+        fs::create_dir_all(&proj).expect("mkdir");
+        fs::write(
+            proj.join("lakefile.toml"),
+            "[[lean_lib]]\nname = \"MyProj\"\n",
+        )
+        .expect("write");
+        let home = path_str(dir.path());
+        let cases = [
+            ("../myproj/", path_str(&dir.path().join("other"))),
+            (".", path_str(&proj)),
+            ("~/myproj", "/".to_string()),
+        ];
+        for (arg, cwd) in cases {
+            let ctx = ctx_with(&[("HOME", &home)], &cwd);
+            let got = config::resolve(&ctx, None, Some(arg), &[], &table("")).expect("resolve");
+            assert_eq!(
+                (got.name.as_str(), got.project, got.imports),
+                ("myproj", Some(path_str(&proj)), vec!["MyProj".to_string()]),
+                "-p {arg}"
+            );
+        }
     }
 
     #[story("G3", "G6")]

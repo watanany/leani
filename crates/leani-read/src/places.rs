@@ -17,9 +17,10 @@ pub const PROMPT: &str = "λ> ";
 // ディレクトリを作る。
 pub const ENGINE_REPO: &str = "https://github.com/leanprover-community/repl";
 
-// エンジンを用意するときの、すぐに終わるはずのコマンド (`lean --version` と
-// `git ls-remote`) のタイムアウト。応答が返らないまま何も表示せずに止まらない
-// ように。clone、ビルド、`lake env` は時間を区切らず、Ctrl-C で止める。
+// エンジンを用意するときの、すぐに終わるはずのコマンド (`git ls-remote`) の
+// タイムアウト。応答が返らないまま何も表示せずに止まらないように。`lean --version`
+// (elan が toolchain を取得することがある)、clone、ビルド、`lake env` は時間を
+// 区切らず、Ctrl-C で止める。
 pub const SETUP_TIMEOUT: Duration = Duration::from_secs(120);
 
 // 完結判定と補完のクエリが Lean.Parser / CoreM / Json を使うので、ユーザーの
@@ -70,7 +71,11 @@ pub struct Ctx {
     pub loogle: String,
     /// `:abbrev` の一覧を表示する pager (`MANPAGER`、`PAGER`、無ければ `less`)。
     pub pager: String,
+    /// stdout が端末か。pager、行編集、問い合わせ中の表示に使う。
     pub tty: bool,
+    /// stdin が端末か。履歴と行編集に使う。`echo … | leani` は stdout が端末でも
+    /// stdin は端末ではない。`new` は `tty` と同じ値にする。
+    pub stdin_tty: bool,
     /// 色を付けるかどうかは起動時に決める。パイプに出力するときは色を付けない。
     /// Jupyter のカーネルは stdout が端末ではないが、ノートブックは ANSI の色を
     /// 表示できるので、kernelspec で FORCE_COLOR を指定して色を付ける。
@@ -109,13 +114,15 @@ impl Ctx {
                 .or_else(|| var("PAGER"))
                 .unwrap_or_else(|| "less".to_string()),
             tty,
+            stdin_tty: tty,
             color: tty || set("FORCE_COLOR"),
             interrupted: Arc::new(AtomicBool::new(false)),
             home,
         }
     }
 
-    /// このプロセスの環境変数、カレントディレクトリ、stdout から作る。`main` だけが呼ぶ。
+    /// このプロセスの環境変数、カレントディレクトリ、stdout と stdin から作る。`main` だけが
+    /// 呼ぶ。
     pub fn from_process() -> Ctx {
         let var = |k: &str| match (std::env::var(k).ok(), k) {
             (None, "HOME") => std::env::home_dir().map(|p| p.to_string_lossy().into_owned()),
@@ -124,6 +131,9 @@ impl Ctx {
         let cwd = std::env::current_dir()
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_else(|_| "/".to_string());
-        Ctx::new(var, &cwd, std::io::stdout().is_terminal())
+        Ctx {
+            stdin_tty: std::io::stdin().is_terminal(),
+            ..Ctx::new(var, &cwd, std::io::stdout().is_terminal())
+        }
     }
 }

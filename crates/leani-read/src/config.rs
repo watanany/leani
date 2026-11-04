@@ -376,12 +376,13 @@ pub fn guess_env(
     imports: &[String],
     engine: Option<&str>,
 ) -> EnvConfig {
-    // -p "" はカレントディレクトリを探さず、Lake プロジェクトの外として扱う。
+    // -p は絶対パスにしてから lakefile を探し、名前を決める。`../proj/` や `.`、
+    // `~/proj` のままでは名前が空や `.` になる。-p "" は `abspath` が None を返すので、
+    // カレントディレクトリを探さず、Lake プロジェクトの外として扱う。
     let root = match project {
-        Some(p) => Some(p.to_string()),
+        Some(p) => abspath(p, &ctx.home, &ctx.cwd),
         None => lake_root(&ctx.cwd),
-    }
-    .filter(|r| !r.is_empty());
+    };
     let mods = match (imports, &root) {
         ([], Some(r)) => lake_libs(r),
         _ => imports.to_vec(),

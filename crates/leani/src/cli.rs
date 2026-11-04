@@ -360,6 +360,9 @@ impl LineSource for Stdin {
             }
             if self.eof {
                 if self.buf.is_empty() {
+                    // 端末の Ctrl-D は read を 1 回だけ 0 で返すので、次は読み直す。
+                    // パイプの終わりなら、次の read もすぐに 0 を返す。
+                    self.eof = false;
                     return Line::End;
                 }
                 return Line::Text(decode(&std::mem::take(&mut self.buf)));

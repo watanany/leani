@@ -10,23 +10,19 @@ use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::{Child, Command, ExitStatus, Stdio};
-use std::sync::LazyLock;
 use std::sync::atomic::Ordering;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use leani_core::pure::{
-    Style, engine_dir, parse_env_lines, pick_tag, toolchain_version, version_key,
+    Style, engine_dir, is_channel, parse_env_lines, pick_tag, toolchain_of_version,
+    toolchain_version, version_key,
 };
 use leani_core::types::EngineFault;
 use leani_read::config::{EnvConfig, read_text, read_toolchain, which};
 use leani_read::places::{Ctx, ENGINE_REPO};
 use nix::sys::signal::{Signal, killpg};
 use nix::unistd::{Pid, getpgid};
-use regex::Regex;
-
-static LEAN_VERSION: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)").expect("regex"));
 
 /// 進み具合を 1 行、薄い色で表示する。表示に失敗しても起動の用意は続ける。
 ///
@@ -162,16 +158,15 @@ fn secs(d: Duration) -> u64 {
 
 // ------------------------------------------------------------------ バージョン
 
-/// elan が今選択しているバージョン。プロジェクトも指定も無いときに使う。
+/// `lean <args>` が出すバージョンの toolchain。分からなければ None。
 ///
 /// elan は lean --version の中で toolchain を取得することがあるので、時間がかかる
-/// ことがある。そのあいだの Ctrl-C は、分からないことにせず `Interrupted` で返す。
-pub fn local_toolchain(ctx: &Ctx) -> Result<Option<String>, EngineFault> {
-    let args = ["--version"];
-    match run(ctx, "lean", &args, None, true, Some(ctx.setup_timeout)) {
-        Ok(got) => Ok(LEAN_VERSION
-            .captures(&got.stdout)
-            .map(|m| format!("leanprover/lean4:v{}", &m[1]))),
+/// ことがある。時間を区切ると、取得が終わる前に「分からない」と表示することになる
+/// ので、`lake env` と同じく区切らない。そのあいだの Ctrl-C は、分からないことに
+/// せず `Interrupted` で返す。
+fn lean_toolchain(ctx: &Ctx, args: &[&str]) -> Result<Option<String>, EngineFault> {
+    match run(ctx, "lean", args, None, true, None) {
+        Ok(got) => Ok(toolchain_of_version(&got.stdout)),
         Err(Stopped::Interrupted) => Err(EngineFault::Interrupted),
         Err(Stopped::Timeout | Stopped::Spawn(_)) => Ok(None),
     }
@@ -184,10 +179,19 @@ pub fn local_toolchain(ctx: &Ctx) -> Result<Option<String>, EngineFault> {
 /// 合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
 /// 用意したエンジンなら engine が None なので、2 番目は飛ばして elan のデフォルトの
 /// バージョンを使う。
+///
+/// `stable` のようなチャンネルは、今のバージョンに置き換える。エンジンのディレクトリは
+/// toolchain の名前で決まるので、チャンネルの名前のままだと、チャンネルが新しい
+/// バージョンに進んでも、前のバージョンでビルドしたエンジンを使い続ける。今の
+/// バージョンを取得できなければ、チャンネルの名前のまま使う。
 pub fn guess_toolchain(ctx: &Ctx, cfg: &EnvConfig) -> Result<Option<String>, EngineFault> {
     match read_toolchain(cfg.project.as_deref()).or_else(|| read_toolchain(cfg.engine.as_deref())) {
+        Some(tc) if is_channel(&tc) => {
+            let now = lean_toolchain(ctx, &[&format!("+{tc}"), "--version"])?;
+            Ok(Some(now.unwrap_or(tc)))
+        }
         Some(tc) => Ok(Some(tc)),
-        None => local_toolchain(ctx),
+        None => lean_toolchain(ctx, &["--version"]),
     }
 }
 

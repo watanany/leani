@@ -1396,6 +1396,33 @@ mod 履歴の書き出し {
         assert_eq!(history.load(), ["def f : Nat -> Nat\n  | 0 => 1"]);
     }
 
+    #[story("F3")]
+    #[test]
+    fn 標準入力が端末でなければ履歴を持たない() {
+        // echo … | leani を端末で実行したとき。stdout は端末だが、パイプから読んだ
+        // 入力を履歴に残さない。
+        let has_history = |stdin_tty: bool| {
+            let mut sb = sandbox();
+            sb.ctx.tty = true;
+            sb.ctx.stdin_tty = stdin_tty;
+            let table = load_config(&sb.ctx.config).expect("config");
+            let cfg = resolve(&sb.ctx, None, None, &[], &table).expect("resolve");
+            let mut repl = Repl::new(
+                &sb.ctx,
+                cfg,
+                None,
+                Box::new(Sink::default()),
+                Box::new(FakeSearch::default()),
+            )
+            .expect("起動できない");
+            let got = repl.history().is_some();
+            repl.close();
+            got
+        };
+        assert!(has_history(true));
+        assert!(!has_history(false));
+    }
+
     #[story("C3", "F3")]
     #[test]
     fn 行ごとの追加は受け付けない() {
@@ -2846,6 +2873,37 @@ mod 再起動に失敗したときの証明モード {
 
 mod 環境の切り替え {
     use super::*;
+
+    #[story("G5")]
+    #[test]
+    fn 名前が同じでも設定の違う環境には_colon_env_で切り替える() {
+        // -e core -i Lean.Elab.Frontend で起動したとき。名前だけを比べると
+        // 「すでに core」と表示して、設定にある core に戻れない。
+        let sb = sandbox();
+        let table = load_config(&sb.ctx.config).expect("config");
+        let extra = ["Lean.Elab.Frontend".to_string()];
+        let cfg = resolve(&sb.ctx, Some("core"), None, &extra, &table).expect("resolve");
+        let out = Sink::default();
+        let mut repl = Repl::new(
+            &sb.ctx,
+            cfg,
+            None,
+            Box::new(out.clone()),
+            Box::new(FakeSearch::default()),
+        )
+        .expect("起動できない");
+        let shown = || std::mem::take(&mut *out.0.lock().expect("sink"));
+        shown();
+
+        repl.feed(":env core");
+        let first = shown();
+        assert!(!first.contains("すでに"), "{first}");
+        assert!(repl.eng().cfg().imports.is_empty(), "{first}");
+
+        repl.feed(":env core");
+        assert!(shown().contains("すでに core"));
+        repl.close();
+    }
 
     #[story("G1", "G5")]
     #[test]

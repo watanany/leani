@@ -8,7 +8,6 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
-import re
 import shutil
 import subprocess
 from collections.abc import Sequence
@@ -20,12 +19,11 @@ from leani.pure import (
     engine_dir,
     parse_env_lines,
     pick_tag,
+    toolchain_of_version,
     toolchain_version,
     version_key,
 )
 from leani.types import EngineError
-
-LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+(?:-rc\d+)?)")
 
 
 def local_toolchain() -> str | None:
@@ -41,8 +39,7 @@ def local_toolchain() -> str | None:
     except (OSError, subprocess.TimeoutExpired):
         return None
 
-    m = LEAN_VERSION.search(r.stdout)
-    return f"leanprover/lean4:v{m.group(1)}" if m else None
+    return toolchain_of_version(r.stdout)
 
 
 def guess_toolchain(cfg: EnvConfig) -> str | None:

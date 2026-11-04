@@ -428,6 +428,29 @@ def toolchain_version(tc: str) -> str:
     return tc.rpartition(":")[2] or tc
 
 
+LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+)(-[^,\s]+)?")
+
+
+def toolchain_of_version(out: str) -> str | None:
+    """
+    `lean --version` の出力から toolchain を作る。
+
+    リリースと rc は `leanprover/lean4:v4.24.0-rc1`、nightly は
+    `leanprover/lean4:nightly-2025-10-01` にする。nightly の `4.24.0-nightly-…` を
+    `v4.24.0` と読むと、別のバージョンのエンジンをビルドする。ほかの接尾辞は
+    どの toolchain か分からないので None を返す。
+    """
+    m = LEAN_VERSION.search(out)
+    if m is None:
+        return None
+    suffix = m.group(2) or ""
+    if suffix.startswith("-nightly-"):
+        return f"leanprover/lean4:nightly-{suffix.removeprefix('-nightly-')}"
+    if re.fullmatch(r"(-rc\d+)?", suffix):
+        return f"leanprover/lean4:v{m.group(1)}{suffix}"
+    return None
+
+
 def toolchain_warning(
     own: bool, engine_tc: str, tc: str, engine_dir: str
 ) -> str | None:

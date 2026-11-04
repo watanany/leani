@@ -78,6 +78,23 @@ mod 行編集 {
         assert!(term.wait_exit(10), "もう一度 Ctrl-D を押しても終了しない");
     }
 
+    #[story("C6", "F4")]
+    #[test]
+    fn 行編集の無い端末でも_Ctrl__D_で入力途中のブロックを実行して続ける() {
+        // 端末の Ctrl-D は 1 回だけ read を 0 で返す。パイプの終わりとは違い、
+        // そのあとも入力を読める。
+        let mut term = Terminal::with(&[], false);
+        for one in ["#eval", "  41 + 1"] {
+            term.type_keys(&format!("{one}\r"));
+            term.wait_prompt("|", 20);
+        }
+        term.type_keys("\x04");
+        let out = term.wait_prompt(PROMPT, 40);
+        assert!(shows(&out, "42"), "{out}");
+        let out = term.line("1 + 1");
+        assert!(shows(&out, "2"), "Ctrl-D のあとに入力を読まない: {out}");
+    }
+
     #[story("A4")]
     #[test]
     fn Ctrl__C_で評価中の計算を止めても宣言が残る() {
@@ -260,6 +277,20 @@ mod 外部コマンド {
 }
 
 /// パイプで渡したとき。
+mod pager {
+    use super::*;
+
+    #[story("C7")]
+    #[test]
+    fn pager_のコマンドが無ければそのまま表示する() {
+        let missing = "leani-no-such-pager";
+        let mut term = Terminal::with(&[("MANPAGER", missing), ("PAGER", missing)], true);
+        // 一覧が画面より長いときだけ pager を使う。
+        let out = term.line(":abbrev");
+        assert!(out.contains("α"), "{out}");
+    }
+}
+
 mod 端末でない入力 {
     use super::*;
 

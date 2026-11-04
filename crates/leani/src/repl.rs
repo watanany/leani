@@ -180,7 +180,7 @@ pub struct Repl {
     show_time: bool,
     /// このセッションで `:save` したパス。同じパスへの 2 回目以降は上書きする。
     saved: HashSet<String>,
-    /// 標準入力が端末のときだけ履歴を残す。パイプからの入力は履歴にしない。
+    /// 標準入力と標準出力が端末のときだけ履歴を残す。パイプからの入力は履歴にしない。
     history: Option<BlockHistory>,
 
     // 証明モード
@@ -1812,11 +1812,6 @@ impl Repl {
             self.show_env();
             return;
         }
-        if arg == self.eng.cfg().name {
-            self.out.write(&self.style.dim(&format!("すでに {arg}")));
-            return;
-        }
-
         let found = load_config(&self.ctx.config)
             .and_then(|conf| resolve(&self.ctx, Some(arg), None, &[], &conf));
         let target = match found {
@@ -1826,6 +1821,12 @@ impl Repl {
                 return;
             }
         };
+        // 名前ではなく設定全体で比べる。-i を付けて起動した環境と、-p から推測した
+        // 環境は、設定にある同じ名前の環境と import やプロジェクトが違う。
+        if target == *self.eng.cfg() {
+            self.out.write(&self.style.dim(&format!("すでに {arg}")));
+            return;
+        }
 
         // 今のエンジンを終了させる前に準備を済ませる。
         let why = match problem(&self.ctx, &target) {
@@ -2139,10 +2140,10 @@ fn reason(e: &EngineFault) -> String {
     }
 }
 
-/// 標準入力が端末のときだけ履歴を持つ。履歴のディレクトリが無ければ作る。作れなくても
-/// 履歴が残らないだけなので、エラーは無視する。
+/// 標準入力と標準出力が端末のときだけ履歴を持つ。履歴のディレクトリが無ければ作る。
+/// 作れなくても履歴が残らないだけなので、エラーは無視する。
 fn history_for(ctx: &Ctx) -> Option<BlockHistory> {
-    if !ctx.tty {
+    if !ctx.tty || !ctx.stdin_tty {
         return None;
     }
     if let Some(dir) = Path::new(&ctx.hist).parent() {

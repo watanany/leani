@@ -69,6 +69,8 @@ pub struct Terminal {
     raw: Vec<u8>,
     history: PathBuf,
     closed: bool,
+    /// カーソル位置の問い合わせに応答するか。
+    answer_cpr: bool,
     /// キーを送る前の画面とカーソル。`settle` は、画面がこれと変わるまで待ってから、
     /// 出力が途切れるのを待つ。reedline は一度に 10 文字より多く受け取ると貼り付けと
     /// 見なし、続きを 100 ms 待ってから表示する。出力が途切れるのを待つだけでは、
@@ -88,6 +90,22 @@ impl Terminal {
     /// 状態のディレクトリから起動するので、履歴はそこに作られる。履歴のファイルには
     /// 起動の前に `seed` を書いておく。
     pub fn open(cols: u16, history_name: Option<&str>, seed: &str) -> Terminal {
+        Terminal::launch(cols, history_name, seed, &[], true)
+    }
+
+    /// 環境変数 `env` を足して起動する。`answer_cpr` が false なら、カーソル位置の
+    /// 問い合わせに応答しない。そのとき `leani` は行編集を使わずに 1 行ずつ読む。
+    pub fn with(env: &[(&str, &str)], answer_cpr: bool) -> Terminal {
+        Terminal::launch(80, None, "", env, answer_cpr)
+    }
+
+    fn launch(
+        cols: u16,
+        history_name: Option<&str>,
+        seed: &str,
+        env: &[(&str, &str)],
+        answer_cpr: bool,
+    ) -> Terminal {
         let dir = state_dir();
         let (history, history_env) = match history_name {
             Some(name) => (dir.path().join(name), PathBuf::from(name)),
@@ -112,6 +130,9 @@ impl Terminal {
         }
         cmd.env_remove("LEANI_ENGINE");
         cmd.env_remove("LEANI_NO_SETUP");
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
         let child = pty.slave.spawn_command(cmd).expect("spawn");
         drop(pty.slave);
 
@@ -139,6 +160,7 @@ impl Terminal {
             raw: Vec::new(),
             history,
             closed: false,
+            answer_cpr,
             typed: None,
             dir,
         };
@@ -146,7 +168,8 @@ impl Terminal {
         term
     }
 
-    /// 受け取ったバイトを画面に出力する。CPR には今のカーソル位置で応答する。
+    /// 受け取ったバイトを画面に出力する。CPR には今のカーソル位置で応答する
+    /// (`answer_cpr` が false なら応答しない)。
     fn feed(&mut self, chunk: &[u8]) {
         self.pending.extend_from_slice(chunk);
         let cut = ESC_TAIL
@@ -159,8 +182,10 @@ impl Terminal {
             let at = start + i;
             self.show(&head[start..at]);
             // 直前までのバイトを出力したあとのカーソル位置で応答する。
-            let (row, col) = self.parser.screen().cursor_position();
-            self.send(&format!("\x1b[{};{}R", row + 1, col + 1));
+            if self.answer_cpr {
+                let (row, col) = self.parser.screen().cursor_position();
+                self.send(&format!("\x1b[{};{}R", row + 1, col + 1));
+            }
             start = at + CPR.len();
         }
         self.show(&head[start..]);
