@@ -1,0 +1,70 @@
+# テストの文とストーリーで、同じ日本語の語に同じ英語の語を当てるための表。
+# crates/spec が、ja の文に ja の語があるのに、en の文に en の語のどれも無いときにエラーにする。
+# en は小文字で書き、en の文を小文字にしてから探す。語の頭だけを書けば、活用した形にも当たる
+# (declar は declaration と declared に当たる)。except は ja の語を含む別の語で、その中の ja は数えない。
+# 文書 (README など) を訳すときも、この表の語を使う。
+
+[[term]]
+ja = "エンジン"
+en = ["engine"]
+
+[[term]]
+ja = "宣言"
+en = ["declar"]
+
+[[term]]
+ja = "セル"
+en = ["cell"]
+
+[[term]]
+ja = "証明モード"
+en = ["proof mode"]
+
+[[term]]
+ja = "保留"
+en = ["pending"]
+
+[[term]]
+ja = "略記"
+en = ["abbreviation"]
+
+[[term]]
+ja = "補完"
+en = ["complet"]
+
+[[term]]
+ja = "環境"
+en = ["environment"]
+except = ["環境変数"]
+
+[[term]]
+ja = "履歴"
+en = ["history"]
+
+[[term]]
+ja = "タクティク"
+en = ["tactic"]
+
+[[term]]
+ja = "ゴール"
+en = ["goal"]
+
+[[term]]
+ja = "再起動"
+en = ["restart"]
+
+[[term]]
+ja = "中断"
+en = ["interrupt"]
+
+[[term]]
+ja = "定理"
+en = ["theorem"]
+
+[[term]]
+ja = "ブロック"
+en = ["block"]
+
+[[term]]
+ja = "証明"
+en = ["proof", "prove", "proving"]

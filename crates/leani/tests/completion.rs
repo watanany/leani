@@ -431,10 +431,10 @@ mod tab_completion_after_the_engine_crashes {
     use super::*;
 
     /// ja: 補完するとエンジンを再起動せずに空の候補を返し、次の入力で再起動して宣言を残す
-    /// en: Returns nothing without a restart on completion and restarts with declarations on the next input
+    /// en: Returns nothing without restarting the engine on completion and restarts it with declarations on the next input
     #[story("D1", "F1")]
     #[test]
-    fn returns_nothing_without_a_restart_on_completion_and_restarts_with_declarations_on_the_next_input()
+    fn returns_nothing_without_restarting_the_engine_on_completion_and_restarts_it_with_declarations_on_the_next_input()
      {
         // Tab 補完は行編集の途中で呼ばれる。そこで再起動すると、再起動の表示が
         // 入力の行に混ざり、証明モードなどの状態も失われる。

@@ -1320,10 +1320,10 @@ mod handling_init {
     }
 
     /// ja: :restart で init を送る前に再起動を中断すると、中断したと表示して init を残し、次の :restart で init の宣言を戻す
-    /// en: Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init
+    /// en: Says the restart was interrupted, keeps init, and restores its declarations on the next :restart when it is interrupted before sending init
     #[story("F1", "G2")]
     #[test]
-    fn says_the_restart_was_interrupted_keeps_init_and_restores_it_on_the_next_restart_when_it_is_interrupted_before_sending_init()
+    fn says_the_restart_was_interrupted_keeps_init_and_restores_its_declarations_on_the_next_restart_when_it_is_interrupted_before_sending_init()
      {
         // init ファイルの内容に問題があるわけではないので、次の :restart で戻せる。
         let mut repl = Driver::new();

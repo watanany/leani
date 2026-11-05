@@ -1622,11 +1622,11 @@ mod choosing_the_version_to_use {
     }
 
     /// ja: lean --version がエンジンを用意するときの時間の上限より長くかかっても、待ってそのバージョンの toolchain を返す
-    /// en: Returns the toolchain of the version when lean --version takes longer than the setup timeout
+    /// en: Returns the toolchain of the version when lean --version takes longer than the engine setup timeout
     #[story("G3")]
     #[test]
-    fn returns_the_toolchain_of_the_version_when_lean_version_takes_longer_than_the_setup_timeout()
-    {
+    fn returns_the_toolchain_of_the_version_when_lean_version_takes_longer_than_the_engine_setup_timeout()
+     {
         // elan は lean --version の中で toolchain を取得することがある。途中で止めると、
         // 取得が終わる前に「バージョンが分からない」と表示する。
         let dir = tmp();
@@ -2171,10 +2171,10 @@ mod getting_lake_env {
     }
 
     /// ja: lake env がエンジンを用意するときの時間の上限より長くかかっても、待って結果を返す
-    /// en: Returns the result of lake env when it takes longer than the setup timeout
+    /// en: Returns the result of lake env when it takes longer than the engine setup timeout
     #[story("G6")]
     #[test]
-    fn returns_the_result_of_lake_env_when_it_takes_longer_than_the_setup_timeout() {
+    fn returns_the_result_of_lake_env_when_it_takes_longer_than_the_engine_setup_timeout() {
         // 依存パッケージの取得は、外部との通信のタイムアウトより長くかかることがある。
         let dir = tmp();
         let proj = project(dir.path());

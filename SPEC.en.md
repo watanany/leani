@@ -272,7 +272,7 @@ Not built yet.
 - Does not return the name of a declaration when :reset runs after the declaration (completion / Completion candidates)
 - Returns the name of a declaration when it is completed after the declaration runs (completion / Completion candidates)
 - Returns no candidates without querying the engine when a one-letter name is completed (completion / Completion candidates)
-- Returns nothing without a restart on completion and restarts with declarations on the next input (completion / Tab completion after the engine crashes)
+- Returns nothing without restarting the engine on completion and restarts it with declarations on the next input (completion / Tab completion after the engine crashes)
 - Offers constant names as candidates when a partial name is completed (kernel / Completion)
 - Removes the name from the candidates when :undo undoes its declaration (kernel / Completion)
 - Offers the added name as a candidate but not the undone one when a declaration is added after :undo (kernel / Completion)
@@ -439,7 +439,7 @@ Not built yet.
 
 ### F1 When the engine crashes, I want to go on without losing the declarations I have run
 
-- Returns nothing without a restart on completion and restarts with declarations on the next input (completion / Tab completion after the engine crashes)
+- Returns nothing without restarting the engine on completion and restarts it with declarations on the next input (completion / Tab completion after the engine crashes)
 - Restarts and replays the declarations, including the one being sent, when the engine crashes (engine / Recovering from engine crashes)
 - Shows correct values for later input when the replay after an interrupt is interrupted again (engine / Recovering from engine crashes)
 - Shows the PANIC in a warning and leaves the declaration out of the environment when the engine panics on it (engine / Recovering from engine crashes)
@@ -457,7 +457,7 @@ Not built yet.
 - Says the file could not be loaded and keeps the environment when :l loads a file with an error (engine / Reading and writing files)
 - Reports the failed reload and drops the file's declarations when the loaded file is deleted before :restart (engine / When a file cannot be reloaded after a restart)
 - Keeps the init declarations when :restart runs (engine / Handling init)
-- Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init (engine / Handling init)
+- Says the restart was interrupted, keeps init, and restores its declarations on the next :restart when it is interrupted before sending init (engine / Handling init)
 - Keeps the previous environment and declarations when loading a file is interrupted (engine / Interrupting a load)
 - Cancels the load and keeps earlier declarations when reapplying init during :l is interrupted (engine / Interrupting a load)
 - Reports the failed reload and the lost declarations when :restart runs after the loaded file gets an error (engine / What the replay could not run)
@@ -547,7 +547,7 @@ Not built yet.
 ### G2 I want the helper functions and open lines I always write to be loaded at startup
 
 - Keeps the init declarations when :restart runs (engine / Handling init)
-- Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init (engine / Handling init)
+- Says the restart was interrupted, keeps init, and restores its declarations on the next :restart when it is interrupted before sending init (engine / Handling init)
 - Keeps the init declarations when :reset runs (engine / Handling init)
 - Evaluates short names from a namespace in entered input when init opens the namespace (engine / Handling init)
 - Keeps the open from init when :reset runs (engine / Handling init)
@@ -586,7 +586,7 @@ Not built yet.
 - Returns the elan default version from lean --version when there is no project or engine (parsing / Choosing the version to use)
 - Returns a nightly toolchain when lean --version shows a nightly version (parsing / Choosing the version to use)
 - Returns None when lean --version shows a version with an unknown suffix (parsing / Choosing the version to use)
-- Returns the toolchain of the version when lean --version takes longer than the setup timeout (parsing / Choosing the version to use)
+- Returns the toolchain of the version when lean --version takes longer than the engine setup timeout (parsing / Choosing the version to use)
 - Shows a message only on a terminal while checking the lean version and clears it after (parsing / Choosing the version to use)
 - Returns the current version for a stable project toolchain, or stable if it cannot get one (parsing / Choosing the version to use)
 - Returns stable unchanged when a given engine has the stable toolchain (parsing / Choosing the version to use)
@@ -702,7 +702,7 @@ Not built yet.
 - Returns the cache without running lake env when getting it twice for the same project (parsing / Getting lake env)
 - Reports the reason if lake is missing or lake env fails (parsing / Getting lake env)
 - Shows that Ctrl-C can interrupt lake env when it runs (parsing / Getting lake env)
-- Returns the result of lake env when it takes longer than the setup timeout (parsing / Getting lake env)
+- Returns the result of lake env when it takes longer than the engine setup timeout (parsing / Getting lake env)
 - Interrupts when Ctrl-C is pressed while lake env runs (parsing / Getting lake env)
 - Reports the failure and leaves no temp file if the lake env result cannot be saved (parsing / Getting lake env)
 - Returns the parent directory with a lakefile when searching from a subdirectory (parsing / Detecting Lake projects)

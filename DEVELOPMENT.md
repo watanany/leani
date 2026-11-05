@@ -84,12 +84,12 @@ uv run mypy
 - 主語を省いてよいのは、結果の主語 (leani か、describe の文に書いてある関数) と、ユーザーの操作 (入力する、送る、実行する、押す) の主語だけである。これは「文書の書き方」の「主語と目的語を省かない」の例外である。ほかの操作の主語 (セル、エンジン) と目的語は省かない
 - `\` を書かない。Python の docstring では `\` がエスケープになる。`\to` のような略記は「to の略記」と書く
 
-`en:` の文は `ja:` の文を英語に訳したもので、次のように書く。`en:` の文が `ja:` の文と合っているかは、`crates/spec` では確かめない。
+`en:` の文は `ja:` の文を英語に訳したもので、次のように書く。`en:` の文が `ja:` の文の訳として合っているかは、`crates/spec` では確かめない。
 
 - テスト: Then の動詞 (3 人称単数) から始め、`when` で When を、`with` `in` `if` `for` などで Given を続ける。例: `Shows the proof mode help when :help runs in proof mode`
 - `mod` と describe: 名詞句か、`When ...` `After ...` の形で書く。例: `Tactics sent in proof mode`
 - ASCII の文字だけで書き、文末に `.` を付けない。`\` を書かない
-- 同じ日本語の語には、同じ英語の語を当てる (エンジン: engine、宣言: declaration、セル: cell など)
+- 同じ日本語の語には、同じ英語の語を当てる。語の組は `glossary.toml` に書いてあり、ja の文にその語があるのに en の文に英語の語が無ければ、`crates/spec` がエラーにする
 
 ## コードの書き方
 
@@ -141,5 +141,6 @@ Jupyter のカーネル (Python 版) のモジュールの決まりは、`src/le
 | [SPEC.en.md](SPEC.en.md)                           | `SPEC.ja.md` の英語版。`crates/spec` がテストの `en:` の文から生成する |
 | [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                               |
 | `stories.toml`                                     | ユーザーストーリーの一覧                                               |
+| `glossary.toml`                                    | テストの文と文書で使う、日本語と英語の語の組                           |
 | `crates/`                                          | leani のコード。設計の理由は doc comment とコメントに書いてある        |
 | `src/leani/`                                       | Jupyter のカーネル (Python 版)                                         |

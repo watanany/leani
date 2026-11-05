@@ -43,6 +43,9 @@
 //! en の文は ASCII だけで書く。ja と en のどちらにも `\` を書かない。Python の docstring では
 //! `\` がエスケープになり、Rust と Python で同じ文を書くテストがあるため。en が ja の訳として
 //! 合っているかは確かめない。
+//!
+//! 同じ日本語の語には、同じ英語の語を当てる。`glossary.toml` の語が ja の文にあるのに、
+//! その英語の語が en の文に無ければエラーにする ([`glossary_complaints`])。
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -209,6 +212,96 @@ pub fn stories(root: &Path) -> Result<Stories, String> {
     let path = root.join("stories.toml");
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+// ------------------------------------------------------------------- 用語集
+
+/// `glossary.toml` の 1 つの語。ja の文に `ja` があれば、en の文に `en` のどれかがなければ
+/// ならない。`en` は小文字で書き、en の文を小文字にしてから探す。`except` は `ja` を含む
+/// 別の語 (「環境変数」など) で、その中の `ja` は数えない。
+#[derive(Deserialize)]
+pub struct Term {
+    pub ja: String,
+    pub en: Vec<String>,
+    #[serde(default)]
+    pub except: Vec<String>,
+}
+
+impl Term {
+    fn used_in(&self, ja: &str) -> bool {
+        self.except
+            .iter()
+            .fold(ja.to_string(), |rest, x| rest.replace(x.as_str(), ""))
+            .contains(&self.ja)
+    }
+
+    fn kept_in(&self, en: &str) -> bool {
+        let en = en.to_lowercase();
+        self.en.iter().any(|w| en.contains(w.as_str()))
+    }
+}
+
+/// `glossary.toml` の中身。同じ日本語の語に、いつも同じ英語の語を当てるための表。
+#[derive(Deserialize)]
+pub struct Glossary {
+    pub term: Vec<Term>,
+}
+
+pub fn glossary(root: &Path) -> Result<Glossary, String> {
+    let path = root.join("glossary.toml");
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// テストの場所を describe ごとの文に分ける。層の名前は両方の言語で同じなので、` / ` で
+/// 分けた位置で ja と en が対応する。
+fn places(place: &Both) -> Vec<Both> {
+    place
+        .ja
+        .split(" / ")
+        .zip(place.en.split(" / "))
+        .map(|(ja, en)| Both {
+            ja: ja.to_string(),
+            en: en.to_string(),
+        })
+        .collect()
+}
+
+/// 用語集に合わない文。ja の文にある語の英語が、en の文に無いもの。
+/// group、ストーリー、テスト、describe の文を調べる。
+pub fn glossary_complaints(glossary: &Glossary, stories: &Stories, tests: &[Test]) -> Vec<String> {
+    let texts: Vec<Both> = stories
+        .group
+        .iter()
+        .map(|g| g.title.clone())
+        .chain(stories.story.iter().map(|s| s.text.clone()))
+        .chain(tests.iter().map(|t| t.what.clone()))
+        .chain(tests.iter().flat_map(|t| places(&t.place)))
+        .collect();
+    let unique: Vec<&Both> = texts
+        .iter()
+        .enumerate()
+        .filter(|&(i, b)| !texts[..i].contains(b))
+        .map(|(_, b)| b)
+        .collect();
+    unique
+        .iter()
+        .flat_map(|b| {
+            glossary
+                .term
+                .iter()
+                .filter(|t| t.used_in(&b.ja) && !t.kept_in(&b.en))
+                .map(|t| {
+                    format!(
+                        "ja の文に「{}」があるのに、en の文に {} が無い: {} / {}",
+                        t.ja,
+                        t.en.join(" か "),
+                        b.ja,
+                        b.en
+                    )
+                })
+        })
+        .collect()
 }
 
 // ------------------------------------------------------------------ 文を読む
@@ -1252,8 +1345,12 @@ pub fn render(stories: &Stories, tests: &[Test], lang: Lang) -> Result<String, V
 /// `stories.toml` とテストから、`lang` の文で生成した中身。
 pub fn generate(root: &Path, lang: Lang) -> Result<String, String> {
     let stories = stories(root)?;
+    let glossary = glossary(root)?;
     let tests = collect(root)?;
-    render(&stories, &tests, lang).map_err(|bad| bad.join("\n"))
+    match glossary_complaints(&glossary, &stories, &tests).as_slice() {
+        [] => render(&stories, &tests, lang).map_err(|bad| bad.join("\n")),
+        bad => Err(bad.join("\n")),
+    }
 }
 
 /// `lang` の生成結果が `lang.out()` のファイルと同じか確かめる。違えば理由を返す。
@@ -1940,6 +2037,7 @@ en = "I want to see the type"
             "check",
             &[
                 ("stories.toml", stories),
+                ("glossary.toml", "term = []\n"),
                 ("crates/leani/tests/parsing.rs", test),
                 ("tests/conftest.py", ""),
             ],
@@ -2242,6 +2340,68 @@ en = "No number"
             got.unwrap(),
             [row("parsing", "評価する", "evaluates", &["A1"])]
         );
+    }
+
+    fn glossary_of(text: &str) -> Glossary {
+        toml::from_str(text).unwrap()
+    }
+
+    fn test_with(place: Both, what: Both) -> Test {
+        Test {
+            name: ident(&what.en),
+            what,
+            place,
+            stories: vec!["A1".to_string()],
+        }
+    }
+
+    fn no_stories() -> Stories {
+        toml::from_str("unbuilt = []\ngroup = []\nstory = []").unwrap()
+    }
+
+    #[test]
+    fn rejects_a_text_whose_en_lacks_the_english_word_for_a_glossary_word_in_its_ja() {
+        let glossary = glossary_of("[[term]]\nja = \"エンジン\"\nen = [\"engine\"]");
+        let place = both("engine / 起動", "engine / Startup");
+        let bad = test_with(place.clone(), both("エンジンを起動する", "Starts it"));
+        let good = test_with(place, both("エンジンを止める", "Stops the Engine"));
+        let got = glossary_complaints(&glossary, &no_stories(), &[bad, good]);
+        assert_eq!(
+            got,
+            [
+                "ja の文に「エンジン」があるのに、en の文に engine が無い: エンジンを起動する / Starts it"
+            ]
+        );
+    }
+
+    #[test]
+    fn checks_the_glossary_against_the_texts_of_describes_stories_and_groups() {
+        let glossary = glossary_of("[[term]]\nja = \"宣言\"\nen = [\"declar\"]");
+        let stories: Stories = toml::from_str(
+            "unbuilt = []\n[[group]]\nid = \"A\"\nja = \"宣言\"\nen = \"Defs\"\n[[story]]\nid = \"A1\"\nja = \"宣言を残す\"\nen = \"Keep defs\"",
+        )
+        .unwrap();
+        let test = test_with(
+            both("engine / 宣言の扱い", "engine / Defs"),
+            both("値を表示する", "Shows the value"),
+        );
+        let got = glossary_complaints(&glossary, &stories, &[test]);
+        assert_eq!(got.len(), 3, "{got:?}");
+    }
+
+    #[test]
+    fn ignores_a_glossary_word_inside_an_excepted_word() {
+        let glossary =
+            glossary_of("[[term]]\nja = \"環境\"\nen = [\"environment\"]\nexcept = [\"環境変数\"]");
+        let place = both("parsing / 設定", "parsing / Config");
+        let ok = test_with(place.clone(), both("環境変数を読む", "Reads variables"));
+        let bad = test_with(
+            place,
+            both("環境変数と環境を読む", "Reads variables and the env"),
+        );
+        let got = glossary_complaints(&glossary, &no_stories(), &[ok, bad]);
+        assert_eq!(got.len(), 1, "{got:?}");
+        assert!(got[0].contains("環境変数と環境を読む"), "{got:?}");
     }
 
     #[test]
