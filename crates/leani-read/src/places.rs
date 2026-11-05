@@ -29,7 +29,7 @@ pub const SETUP_TIMEOUT: Duration = Duration::from_secs(120);
 pub const PROBE_IMPORT: &str = "import Lean\n";
 
 // 起動時のヘッダが本当に読み込まれたかを確かめるための 1 行。repl は解決できない
-// import があると、**エラーも出さずに**ヘッダ全体を捨てて新しい env を返す。なので、
+// import があると、エラーも出さずにヘッダ全体を捨てて新しい env を返す。なので、
 // この行がエラーなく実行できるかでしか判別できない。そのとき import Lean も捨て
 // られるため、確かめる対象は Lean の中の定数にする (完結判定が使っているものと同じ)。
 pub const BOOT_PROBE: &str = "#check @Lean.Parser.runParserCategory\n";

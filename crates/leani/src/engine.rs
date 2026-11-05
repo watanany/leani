@@ -121,7 +121,6 @@ pub struct Engine {
     warning: Option<String>,
     proc_env: BTreeMap<String, String>,
     proc: Option<Child>,
-    /// 今の env id。
     env: Option<i64>,
     /// 起動直後、または `:l` 直後 (init を含む) の env id。
     base: Option<i64>,
@@ -239,7 +238,6 @@ impl Engine {
         self.proc.as_ref().map(Child::id)
     }
 
-    /// プロセスが実行中か。
     pub fn alive(&mut self) -> bool {
         match self.proc.as_mut() {
             Some(p) => matches!(p.try_wait(), Ok(None)),
@@ -379,7 +377,6 @@ impl Engine {
         }
     }
 
-    /// 差し込み口を呼ぶ。入れていなければ `Pass`。
     fn hook(&mut self, stage: Stage<'_>) -> Hooked {
         match self.hook.as_mut() {
             Some(f) => f(stage),

@@ -39,7 +39,6 @@ impl Console {
         }
     }
 
-    /// `sh -c` で実行するコマンド。
     fn sh(&self, cmd: &str) -> Command {
         let mut sh = Command::new("sh");
         sh.args(["-c", cmd])

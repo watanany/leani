@@ -18,11 +18,7 @@ pub static ABBREV: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
 });
 
 /// カーソルの手前にある `\name` を記号に置き換える。(記号, 消す文字数) を返す。
-///
-/// 確定は space か Tab で行い、キー入力ごとには変換しない。`\a` `\all` `\alpha`
-/// のようにほかのキーの接頭辞になっているキーが 293 件あり、入力するたびに確定
-/// すると `\alpha` を入力できなくなる。space か Tab まで待てば、どのキーを入力した
-/// のかが一意に決まる。
+/// space か Tab を押したときに呼ぶ。キーを押すたびに呼ばない理由は DECISIONS.md にある。
 ///
 /// 表に無ければ None を返す。`\` のあとを空白まで取り出して、そのまま表を検索
 /// するので、`\to)` のように記号が続いた形は変換しない (先に Tab で変換する)。
@@ -95,7 +91,6 @@ pub fn cell_width(text: &str) -> usize {
     text.chars().map(char_width).sum()
 }
 
-/// 端末で表示したときの 1 文字の幅。
 pub fn char_width(c: char) -> usize {
     let within = |table: &[(char, char)]| {
         table

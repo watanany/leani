@@ -894,7 +894,6 @@ impl Repl {
         }
     }
 
-    /// エンジンを終了させる。
     pub fn close(&mut self) {
         self.eng.kill();
     }
@@ -1323,7 +1322,6 @@ impl Repl {
 
     // -- 証明モード -------------------------------------------------------
 
-    /// 1 回の入力 = 1 タクティク。proofState を進める。
     fn tactic(&mut self, src: &str) {
         // guard の前に取り出しておく。再起動に失敗すると fold_proof も証明モードを
         // 終了するが、取り出しておけば fold_proof は知らせず、ここで 1 回だけ知らせる。

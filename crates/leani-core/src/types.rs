@@ -23,16 +23,14 @@ pub enum Kind {
 /// 入力の状態。
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum State {
-    /// 完結している。
     Complete,
-    /// 続きの行を待つ。
     More,
     /// パースできない。そのまま送って Lean にエラーを出させる。
     Err,
 }
 
-/// 証明モードの状態。1 回の入力 = 1 タクティクで進む。タクティクを進めたり取り消したり
-/// するときは、新しい `Proof` を作る (`pure::tactic_step` と `pure::tactic_undo`)。
+/// 証明モードの状態。タクティクを進めたり取り消したりするときは、新しい `Proof` を作る
+/// (`pure::tactic_step` と `pure::tactic_undo`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proof {
     /// repl 側の proofState。
@@ -159,7 +157,7 @@ pub struct Candidate {
 /// 作る箇所と分ける箇所が別のモジュールなので、どちらでもないここに置く。
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum EngineFault {
-    /// エンジンを用意できない。起動時なら起動を中止する。起動後なら REPL は続ける。
+    /// `EngineError` と同じ。
     #[error("{0}")]
     Setup(String),
     /// repl のプロセスが応答しなくなった。呼び出し側は repl を再起動する。

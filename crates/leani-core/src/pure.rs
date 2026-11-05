@@ -19,17 +19,14 @@ use crate::types::{EngineError, Header, Json, Kind, Proof, Scope, State, Target}
 
 // ------------------------------------------------------------------ 応答の読み取り
 
-/// `v[key]` の文字列。無いか文字列でなければ None。
 pub fn text<'a>(v: &'a Json, key: &str) -> Option<&'a str> {
     v.get(key).and_then(Json::as_str)
 }
 
-/// `v[key]` の整数。無いか整数でなければ None。
 pub fn int(v: &Json, key: &str) -> Option<i64> {
     v.get(key).and_then(Json::as_i64)
 }
 
-/// `v[key]` の配列。無いか配列でなければ空。
 pub fn list<'a>(v: &'a Json, key: &str) -> &'a [Json] {
     v.get(key)
         .and_then(Json::as_array)
@@ -46,7 +43,6 @@ pub struct Style {
 }
 
 impl Style {
-    /// 色を付けない。
     pub const PLAIN: Style = Style { color: false };
 
     pub fn c(self, code: &str, s: &str) -> String {
@@ -86,7 +82,6 @@ pub fn lean_str(s: &str) -> String {
     format!("\"{body}\"")
 }
 
-/// 文字列リテラルの中に書く 1 文字。
 fn lean_char(c: char) -> String {
     match c {
         '\\' => "\\\\".to_string(),
@@ -607,7 +602,6 @@ pub fn strip_imports(text: &str) -> String {
     drop_lines(text, &scan_header(text).1)
 }
 
-/// `at` の番号の行を取り除く。
 fn drop_lines(text: &str, at: &BTreeSet<usize>) -> String {
     text.lines()
         .enumerate()
@@ -1275,12 +1269,10 @@ pub fn block_continues<S: AsRef<str>>(buf: &[S], src: &str) -> bool {
     last_continues || BLOCK_OPEN.is_match(src)
 }
 
-/// パーサの応答の `probe[cat]` が `{"ok": true}` か。
 fn parsed(probe: &Json, cat: &str) -> bool {
     probe.get(cat).and_then(|p| p.get("ok")) == Some(&Json::Bool(true))
 }
 
-/// パーサの応答の `probe[cat]["err"]`。無ければ空文字列。
 fn parse_err<'a>(probe: &'a Json, cat: &str) -> &'a str {
     probe.get(cat).and_then(|p| text(p, "err")).unwrap_or("")
 }
@@ -1350,7 +1342,6 @@ pub fn tactic_step(proof: &Proof, state: i64, goals: &[String], tactic: &str) ->
     }
 }
 
-/// 最後のタクティクを取り消した Proof。取り消せるタクティクが無ければ None。
 pub fn tactic_undo(proof: &Proof) -> Option<Proof> {
     proof
         .stack
@@ -1577,7 +1568,6 @@ pub fn loogle_hits(hits: &[Json], total: usize, keep: usize, width: usize, style
         .join("\n")
 }
 
-/// 検索結果 1 件を 2 行 (名前と型 / どの module か) にする。
 pub fn hit_rows(hit: &Json, width: usize, style: Style) -> [String; 2] {
     let name = text(hit, "name").unwrap_or("?");
     let ty = text(hit, "type").unwrap_or("");
