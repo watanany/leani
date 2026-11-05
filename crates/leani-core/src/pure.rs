@@ -503,7 +503,7 @@ fn code_of(line: &str) -> Option<String> {
             (Some(b"--"), 0) => break,
             // `«A--B»` の中の `--` と `/-` はコメントではない。`«` と `»` は 2 byte
             (Some([0xC2, 0xAB]), 0) => {
-                let end = escape_end(bytes, i);
+                let end = line[i..].find('»').map_or(line.len(), |n| i + n + 2);
                 code.extend_from_slice(&bytes[i..end]);
                 i = end - 1;
             }
@@ -524,14 +524,6 @@ fn code_of(line: &str) -> Option<String> {
         0 => Some(String::from_utf8_lossy(&code).trim().to_string()),
         _ => None,
     }
-}
-
-/// bytes[i] の `«` で始まる名前の後ろの位置。閉じなければ末尾。
-fn escape_end(bytes: &[u8], i: usize) -> usize {
-    bytes[i..]
-        .windows(2)
-        .position(|w| w == "»".as_bytes())
-        .map_or(bytes.len(), |n| i + n + 2)
 }
 
 /// 先頭のヘッダ領域にある `module` と import を、行番号と一緒に返す。
@@ -823,11 +815,11 @@ fn pad_lines(text: &str, pad: &str, from: usize) -> String {
         .join("\n")
 }
 
-/// 字句を読んでいる途中で開いているもの。
+/// 字句を読んでいる途中で、まだ閉じていない文字列、コメント、`{`。
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Open {
-    /// 文字列。`s!` などの後ろの文字列なら true で、`{}` の中はコードになる
-    Str(bool),
+    /// 文字列。`interp` は `s!` などの後ろの文字列か。そうなら `{}` の中はコードになる
+    Str { interp: bool },
     /// raw 文字列。`#` の数を持つ
     Raw(usize),
     /// ブロックコメント。入れ子にできる
@@ -846,7 +838,10 @@ pub fn outside_strings(text: &str) -> Vec<bool> {
     let (mut i, mut stack, mut out) = (0, Vec::new(), vec![true]);
     while i < cs.len() {
         if cs[i] == '\n' {
-            out.push(!matches!(stack.last(), Some(Open::Str(_) | Open::Raw(_))));
+            out.push(!matches!(
+                stack.last(),
+                Some(Open::Str { .. } | Open::Raw(_))
+            ));
             i += 1;
         } else {
             i = lex_step(&cs, i, &mut stack);
@@ -859,7 +854,7 @@ pub fn outside_strings(text: &str) -> Vec<bool> {
 /// 返すのは次に読む位置。`\n` は読まずに手前で止まる。
 fn lex_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
     match stack.last().copied() {
-        Some(Open::Str(interp)) => str_step(cs, i, stack, interp),
+        Some(Open::Str { interp }) => str_step(cs, i, stack, interp),
         Some(Open::Raw(hashes)) => raw_step(cs, i, stack, hashes),
         Some(Open::Comment) => comment_step(cs, i, stack),
         Some(Open::Brace) | None => code_step(cs, i, stack),
@@ -868,7 +863,7 @@ fn lex_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
 
 fn str_step(cs: &[char], i: usize, stack: &mut Vec<Open>, interp: bool) -> usize {
     match (cs[i], cs.get(i + 1)) {
-        // 行末の `\` は次の行の先頭の空白を読み飛ばす。`\n` は読まずに残す
+        // `\` は次の 1 文字と一緒に読む。行末の `\` の次の行は、文字列の中で始まる行にする
         ('\\', Some(&next)) if next != '\n' => i + 2,
         ('"', _) => {
             stack.pop();
@@ -918,20 +913,20 @@ fn code_step(cs: &[char], i: usize, stack: &mut Vec<Open>) -> usize {
             i + 2
         }
         ('"', _) => {
-            stack.push(Open::Str(i > 0 && cs[i - 1] == '!'));
+            stack.push(Open::Str {
+                interp: i > 0 && cs[i - 1] == '!',
+            });
             i + 1
         }
         ('r', Some('"' | '#')) if !after_name => raw_open(cs, i, stack),
         ('\'', Some(_)) if !after_name => char_end(cs, i),
-        ('«', _) => name_end(cs, i),
+        ('«', _) => escape_end(cs, i),
         ('{', _) => {
             stack.push(Open::Brace);
             i + 1
         }
-        ('}', _) => {
-            if stack.last() == Some(&Open::Brace) {
-                stack.pop();
-            }
+        ('}', _) if stack.last() == Some(&Open::Brace) => {
+            stack.pop();
             i + 1
         }
         _ => i + 1,
@@ -965,7 +960,7 @@ fn char_end(cs: &[char], i: usize) -> usize {
 }
 
 /// cs[i] の `«` で始まる名前の後ろの位置。行の中で閉じなければ行末。
-fn name_end(cs: &[char], i: usize) -> usize {
+fn escape_end(cs: &[char], i: usize) -> usize {
     let k = i
         + 1
         + cs[i + 1..]

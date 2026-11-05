@@ -423,9 +423,9 @@ def _pad_lines(text: str, pad: str, start: int) -> str:
     )
 
 
-# 字句を読んでいる途中で開いているもの。("str", True) は `s!` などの後ろの文字列で、
-# `{}` の中はコードになる。("raw", n) は `#` が n 個の raw 文字列。"comment" は
-# ブロックコメント、"brace" はコードの中の `{`。
+# 字句を読んでいる途中で、まだ閉じていない文字列、コメント、`{`。("str", True) は
+# `s!` などの後ろの文字列で、`{}` の中はコードになる。("raw", n) は `#` が n 個の
+# raw 文字列。"comment" はブロックコメント、"brace" はコードの中の `{`。
 Open = tuple[str, bool] | tuple[str, int] | str
 
 
@@ -441,11 +441,16 @@ def outside_strings(text: str) -> list[bool]:
     stack: list[Open] = []
     while i < len(text):
         if text[i] == "\n":
-            out.append(not (stack and isinstance(stack[-1], tuple)))
+            out.append(not _in_string(stack))
             i += 1
         else:
             i = _lex_step(text, i, stack)
     return out
+
+
+def _in_string(stack: list[Open]) -> bool:
+    """文字列か raw 文字列の中か。この 2 つだけを tuple で表している。"""
+    return bool(stack) and isinstance(stack[-1], tuple)
 
 
 def _lex_step(s: str, i: int, stack: list[Open]) -> int:
@@ -463,7 +468,8 @@ def _lex_step(s: str, i: int, stack: list[Open]) -> int:
 
 def _str_step(s: str, i: int, stack: list[Open], interp: bool) -> int:
     match s[i]:
-        # 行末の `\` は次の行の先頭の空白を読み飛ばす。`\n` は読まずに残す
+        # `\` は次の 1 文字と一緒に読む。行末の `\` の次の行は、
+        # 文字列の中で始まる行にする
         case "\\" if s[i + 1 : i + 2] not in ("", "\n"):
             return i + 2
         case '"':
@@ -507,12 +513,12 @@ def _code_step(s: str, i: int, stack: list[Open]) -> int:
         case "'", _ if not after_name and i + 1 < len(s):
             return _char_end(s, i)
         case "«", _:
-            return _name_end(s, i)
+            return _escape_end(s, i)
         case _:
-            return _code_push(s, i, stack)
+            return _open_or_close(s, i, stack)
 
 
-def _code_push(s: str, i: int, stack: list[Open]) -> int:
+def _open_or_close(s: str, i: int, stack: list[Open]) -> int:
     """コメント、文字列、`{}` を開くか閉じる。"""
     match s[i], s[i : i + 2]:
         case _, "/-":
@@ -531,11 +537,9 @@ def _code_push(s: str, i: int, stack: list[Open]) -> int:
             return i + 1
 
 
-def _name_end(s: str, i: int) -> int:
+def _escape_end(s: str, i: int) -> int:
     """s[i] の `«` で始まる名前の後ろの位置。行の中で閉じなければ行末。"""
-    k = i + 1
-    while k < len(s) and s[k] not in "»\n":
-        k += 1
+    k = min(n for n in (s.find("»", i), s.find("\n", i), len(s)) if n >= 0)
     return k + 1 if s[k : k + 1] == "»" else k
 
 

@@ -213,7 +213,7 @@ fn skipped(attrs: &[Attribute]) -> bool {
 }
 
 /// `mod x;` の中身。`dir` にある `x.rs` か `x/mod.rs` を読む。
-fn outside(dir: &Path, name: &str) -> Result<syn::File, String> {
+fn mod_file(dir: &Path, name: &str) -> Result<syn::File, String> {
     let path = [
         dir.join(format!("{name}.rs")),
         dir.join(name).join("mod.rs"),
@@ -261,7 +261,7 @@ fn descend(
                 let sub = dir.join(&ident);
                 let tests = match &m.content {
                     Some((_, inner)) => descend(inner, layer, Some(&inside), &sub)?,
-                    None => descend(&outside(dir, &ident)?.items, layer, Some(&inside), &sub)?,
+                    None => descend(&mod_file(dir, &ident)?.items, layer, Some(&inside), &sub)?,
                 };
                 match (skipped(&m.attrs), tests.is_empty()) {
                     (true, false) => {

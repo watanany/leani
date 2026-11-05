@@ -1,4 +1,4 @@
-"""ストーリーの指定と、SPEC.md に載るテストの確かめ。
+"""ストーリーの指定と、テストが SPEC.md に載る形かの確認。
 
 crates/spec は tests/test_*.py を行単位で読み、describe_ の中の it_ と、その
 @story だけを SPEC.md に載せる。conftest.py はこのモジュールの hook を使う。
