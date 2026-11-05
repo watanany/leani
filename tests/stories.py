@@ -1,7 +1,7 @@
 """ストーリーの指定と、テストが SPEC.md に載る形かの確認。
 
-crates/spec は tests/test_*.py を行単位で読み、describe_ の中の it_ と、その
-@story だけを SPEC.md に載せる。conftest.py はこのモジュールの hook を使う。
+crates/spec は tests/test_*.py を行単位で読み、describe_ の中で @story を付けた
+関数だけを SPEC.md に載せる。conftest.py はこのモジュールの hook を使う。
 """
 
 import os
@@ -40,15 +40,15 @@ def story(*ids):
 def listed(item):
     """crates/spec が SPEC.md に載せる形のテストか。
 
-    describe_ の関数の中 (入れ子でもよい) の it_ で、@story が付いているもの。
+    describe_ の関数の中 (入れ子でもよい) の関数で、@story が付いているもの。
     pytest-describe は describe の中の _ で始まらない関数をすべてテストとして集め、
-    pytest は test で始まる関数と Test で始まる class を集める。spec はそれを読まない。
+    pytest は test で始まる関数と Test で始まる class を集める。spec は、このうち
+    describe の外のものと @story の無いものを読まない。
     """
     chain = item.listchain()
     blocks = [n for n in chain if isinstance(n, DescribeBlock)]
     return (
         isinstance(item, pytest.Function)
-        and item.originalname.startswith("it_")
         and bool(blocks)
         and item.parent is blocks[-1]
         and all(b.name.startswith("describe_") for b in blocks)
@@ -63,6 +63,6 @@ def pytest_runtest_setup(item):
     """
     if not listed(item):
         pytest.fail(
-            "SPEC.md に載らない。describe_ の中の it_ にして、@story を付ける",
+            "SPEC.md に載らない。describe_ の中に書いて、@story を付ける",
             pytrace=False,
         )

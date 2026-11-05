@@ -103,7 +103,7 @@ mod 式の評価 {
 
     #[story("A1", "C1")]
     #[test]
-    fn 改ページを含む文字列も式として評価する() {
+    fn 改ページを含む文字列を入力しても式として評価する() {
         // 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
         // エラーになり、式を宣言として送ってしまう。
         let mut repl = Driver::new();
@@ -113,7 +113,7 @@ mod 式の評価 {
 
     #[story("A1")]
     #[test]
-    fn 複数行の文字列の値を変えずに評価する() {
+    fn 複数行の文字列を評価しても値は変わらない() {
         // #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
         let mut repl = Driver::new();
         let out = repl.feed(&["\"Hello", "World\".length"]);
@@ -2039,7 +2039,7 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
-    fn 証明モードで閉じていないタクティクは次の行に続ける() {
+    fn 証明モードで閉じていないタクティクを入力すると次の行に続ける() {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem pair (p q : Prop) (hp : p) (hq : q) : p ∧ q := by sorry",
@@ -2051,7 +2051,7 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
-    fn セミコロンで並べたタクティクを_1_行で実行する() {
+    fn セミコロンでタクティクを並べると_1_行で実行する() {
         let mut repl = Driver::new();
         repl.feed(&["theorem semi : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         let out = repl.feed(&["constructor; rfl; rfl"]);
@@ -2069,7 +2069,7 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
-    fn タクティクのパースエラーに送るときに付けた括弧の話を出さない() {
+    fn 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する() {
         let mut repl = Driver::new();
         repl.feed(&["theorem paren : 1 = 1 := by sorry", ":prove"]);
         let out = repl.feed(&["rfl rfl"]);

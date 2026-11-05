@@ -126,13 +126,13 @@ def engine_pids(km):
 def describe_セルの実行():
 
     @story("J1")
-    def it_式の値を表示する(kernel):
+    def 式のセルを実行すると値を表示する(kernel):
         status, out, _ = run(kernel, "#eval 1 + 1")
         assert status == "ok"
         assert "2" in out, out
 
     @story("J1")
-    def it_前のセルの宣言を使える(kernel):
+    def 前のセルで宣言すると次のセルでその名前を使える(kernel):
         cell = """\
 def fib : Nat → Nat
   | 0 => 0
@@ -144,20 +144,20 @@ def fib : Nat → Nat
         assert "55" in out, out
 
     @story("J1")
-    def it_エラーのセルは_status_が_error_になる(kernel):
+    def エラーになるセルを実行すると_status_が_error_になる(kernel):
         # status が error なら、「すべて実行」はそのセルで止まる。
         status, _, err = run(kernel, "#eval (1 : String)")
         assert status == "error"
         assert "error" in err.lower() or "failed" in err.lower(), err
 
     @story("J1")
-    def it_silent_のセルは何も表示しない(kernel):
+    def silent_のセルを実行すると何も表示しない(kernel):
         status, streams = run_silent(kernel, "#eval 3 + 4")
         assert status == "ok"
         assert streams == []
 
     @story("J1")
-    def it_前のセルで起動したプロセスの出力を_silent_のセルに表示しない(kernel):
+    def 前のセルで起動したプロセスが出力しても_silent_のセルには表示しない(kernel):
         # 1 秒後に stderr に書くプロセスを起動し、その間に silent のセルを実行する。
         # カーネルが fd 2 の出力を取り込んでいると、その出力は実行中のセルに表示される。
         spawn = (
@@ -171,7 +171,7 @@ def fib : Nat → Nat
         assert streams == []
 
     @story("J1", "E3")
-    def it_証明を完了すると_sorry_を置き換える(kernel):
+    def 証明モードで証明を完了すると_sorry_を置き換える(kernel):
         run(kernel, "theorem cell_t : 1 + 1 = 2 := by sorry")
         run(kernel, ":prove")
         status, _, err = run(kernel, "rfl")
@@ -180,7 +180,7 @@ def fib : Nat → Nat
         assert "sorryAx" not in out, out
 
     @story("J1", "E1")
-    def it_証明モードで閉じていないタクティクは次の行に続ける(kernel):
+    def 証明モードで閉じていないタクティクを入力すると次の行に続ける(kernel):
         run(
             kernel,
             "theorem cell_pair (p q : Prop) (hp : p) (hq : q) : p ∧ q := by sorry",
@@ -192,14 +192,14 @@ def fib : Nat → Nat
         assert "sorryAx" not in out, out
 
     @story("J1")
-    def it_複数行の文字列の値を変えずに評価する(kernel):
+    def 複数行の文字列を評価しても値は変わらない(kernel):
         # #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
         status, out, err = run(kernel, '"Hello\nWorld".length')
         assert status == "ok", err
         assert "11" in out, out
 
     @story("J1", "E3")
-    def it_複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない(kernel):
+    def 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない(kernel):
         run(kernel, "def cell_greeting : String := by sorry")
         run(kernel, ":prove")
         status, _, err = run(kernel, 'exact "Hello\nWorld"')
@@ -208,7 +208,7 @@ def fib : Nat → Nat
         assert "11" in out, out
 
     @story("J1", "E1")
-    def it_タクティクの続きを書きかけてやめたらタクティクを戻す(kernel):
+    def タクティクの続きを書きかけてやめたらタクティクを戻す(kernel):
         # インデントした行は直前のタクティクの続きとして読み直すので、直前の
         # タクティクを一度取り消す。続きを書かずにやめたら、取り消しを戻す。
         run(kernel, "theorem cell_two : 1 = 1 ∧ 2 = 2 := by sorry")
@@ -221,14 +221,14 @@ def fib : Nat → Nat
         assert status == "ok", err
 
     @story("J1", "E1")
-    def it_セミコロンで並べたタクティクを_1_行で実行する(kernel):
+    def セミコロンでタクティクを並べると_1_行で実行する(kernel):
         run(kernel, "theorem cell_semi : 1 = 1 ∧ 2 = 2 := by sorry")
         run(kernel, ":prove")
         _, out, err = run(kernel, "constructor; rfl; rfl")
         assert "証明完了" in out, out + err
 
     @story("J1", "E1")
-    def it_タクティクのパースエラーに送るときに付けた括弧の話を出さない(kernel):
+    def 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する(kernel):
         run(kernel, "theorem cell_paren : 1 = 1 := by sorry")
         run(kernel, ":prove")
         _, out, err = run(kernel, "rfl rfl")
@@ -237,13 +237,13 @@ def fib : Nat → Nat
         assert "<input>:1:12" in out + err, out + err
 
     @story("J1")
-    def it_閉じていない_raw_文字列は次の行に続ける(kernel):
+    def 閉じていない_raw_文字列を入力すると次の行に続ける(kernel):
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')
         assert status == "ok", err
         assert "3" in out, out
 
     @story("J1")
-    def it_閉じていない複数行ブロックのセルはエラーになり次のセルは実行できる(
+    def 複数行ブロックを閉じずにセルを実行するとエラーになり次のセルは実行できる(
         kernel,
     ):
         status, out, err = run(kernel, ":{\ndef unclosed := 1")
@@ -254,34 +254,34 @@ def fib : Nat → Nat
         assert "5" in out, out
 
     @story("J1")
-    def it_colon_shell_の出力をセルに表示する(kernel):
+    def colon_shell_を実行すると出力をセルに表示する(kernel):
         status, out, err = run(kernel, ":! echo to-out; echo to-err >&2; exit 3")
         assert status == "ok"  # 終了コードは見ない (端末と同じ)
         assert out.endswith("to-out\n"), out
         assert err == "to-err\n", err
 
     @story("J1", "C7")
-    def it_colon_abbrev_の一覧をセルに表示する(kernel):
+    def colon_abbrev_を実行すると一覧をセルに表示する(kernel):
         status, out, _ = run(kernel, ":abbrev →")
         assert status == "ok"
         assert "\\to" in out, out
 
     @story("J1", "D4")
-    def it_パターンの無い_colon_loogle_のセルは_status_が_error_になる(kernel):
+    def パターンを付けずに_colon_loogle_を実行すると_status_が_error_になる(kernel):
         # 引数を確かめたところで止まるので、loogle には問い合わせない。
         status, _, err = run(kernel, ":loogle")
         assert status == "error"
         assert "パターンが必要" in err, err
 
     @story("J1")
-    def it_colon_q_はノートブックでは何もしない(kernel):
+    def ノートブックで_colon_q_を実行しても終了しない(kernel):
         _, out, _ = run(kernel, ":q")
         assert "ノートブックでは何もしない" in out, out
         _, out, _ = run(kernel, "#eval 3 + 3")
         assert "6" in out, out
 
     @story("J1")
-    def it_改ページを含む文字列も式として評価する(kernel):
+    def 改ページを含む文字列を入力しても式として評価する(kernel):
         # 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
         # エラーになり、式を宣言として送ってしまう。#eval に包むときに \f を行の
         # 区切りと見なすと、文字列の中にインデントが入る。
@@ -293,14 +293,14 @@ def fib : Nat → Nat
 def describe_補完():
 
     @story("J2", "D1")
-    def it_名前を補完する(kernel):
+    def 名前の途中で補完すると定数名を候補に出す(kernel):
         run(kernel, "#eval 0")  # エンジンを起動しておく
         head, matches = complete(kernel, "#check Nat.add_c")
         assert head == "Nat.add_c"
         assert "Nat.add_comm" in matches, matches
 
     @story("J2", "D1")
-    def it_colon_undo_で取り消した宣言は候補に出ない(kernel):
+    def colon_undo_で宣言を取り消すとその名前は候補に出ない(kernel):
         run(kernel, "def undoneOnly := 1")
         assert "undoneOnly" in complete(kernel, "#check undoneO")[1]
         run(kernel, ":undo")
@@ -308,7 +308,7 @@ def describe_補完():
         assert "undoneOnly" not in matches, matches
 
     @story("J2", "D1")
-    def it_colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない(
+    def colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない(
         kernel,
     ):
         # 宣言の数だけを見ると、取り消す前の名前を使い続ける。
@@ -321,19 +321,19 @@ def describe_補完():
         assert "swappedA" not in matches, matches
 
     @story("J2", "C5")
-    def it_略記を記号に補完する(kernel):
+    def 略記の途中で補完すると記号を候補に出す(kernel):
         head, matches = complete(kernel, "theorem x : p \\to")
         assert head == "\\to"
         assert matches[0] == "→", matches
 
     @story("J2", "H1")
-    def it_コマンド名を補完する(kernel):
+    def コマンド名の途中で補完するとコマンド名を候補に出す(kernel):
         head, matches = complete(kernel, ":re")
         assert head == "re"
         assert matches == ["reload", "reset", "restart"], matches
 
     @story("J2", "B4")
-    def it_セルの_2_行目でも_colon_l_の後のパスを補完する(kernel):
+    def セルの_2_行目の_colon_l_の後で補完するとファイルのパスを候補に出す(kernel):
         run(
             kernel, ":! touch cell.lean cell.md"
         )  # カーネルのカレントディレクトリに作る
@@ -354,42 +354,42 @@ def describe_Jupyter_の補完の形():
 
     @story("J2", "B5")
     @pytest.mark.usefixtures("place")
-    def it_続きの文字だけの候補を語全体に直す():
+    def 続きの文字だけの候補は_Jupyter_に返すときに語全体に直す():
         assert jupyter(":! leanf") == (len(":! "), ["leanfoo"])
         assert jupyter(":! cat bin/leanf") == (len(":! cat bin/"), ["leanfoo"])
 
     @story("J2", "B4")
     @pytest.mark.usefixtures("place")
-    def it_ディレクトリには_slash_を付ける():
+    def ディレクトリの候補には_slash_を付ける():
         assert jupyter(":l ") == (len(":l "), ["bin/", "notes.lean"])
 
     @story("J2", "D1")
-    def it_定数名はそのまま置き換える():
+    def 定数名の候補は名前全体を置き換える():
         assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
 
     @story("J2", "D1")
-    def it_文字列のエスケープの後ろでは名前を補完する():
+    def 文字列のエスケープの後ろで補完すると名前を候補に出す():
         # `\n",Nat.su` で始まる略記は無いので、`\` から後ろは略記ではない。
         text = '#eval ("a\\n",Nat.su'
         assert jupyter(text) == (len(text) - len("Nat.su"), ["Nat.succ"])
 
     @story("J2", "D1")
-    def it_名前の前の記号で区切る():
+    def 名前の前に記号があれば記号の後ろから名前を補完する():
         assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 
     @story("J2", "D1")
-    def it_Lean_の名前に使えない文字で区切る():
+    def 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する():
         assert jupyter("#check 定理Nat.su") == (len("#check 定理"), ["Nat.succ"])
 
     @story("J2")
-    def it_候補が無ければカーソルの位置を返す():
+    def 候補が無ければカーソルの位置を返す():
         assert jupyter(":env ") == (len(":env "), [])
 
 
 def describe_エンジンの異常終了と中断():
 
     @story("J3", "F1")
-    def it_エンジンが異常終了しても宣言が残る(kernel):
+    def エンジンが異常終了しても宣言が残る(kernel):
         km, _ = kernel
         run(kernel, "def kept := 41")
         for pid in engine_pids(km):
@@ -399,7 +399,7 @@ def describe_エンジンの異常終了と中断():
         assert "42" in out, out
 
     @story("J3", "A4")
-    def it_中断しても宣言が残る(kernel, tmp_path):
+    def 評価を中断しても宣言が残る(kernel, tmp_path):
         km, kc = kernel
         run(kernel, "def before := 5")
         # 評価が始まってから中断する。評価の前 (完結判定の途中など) に中断すると、
@@ -445,7 +445,7 @@ def describe_起動と再起動の失敗():
         return leani.kernel.LeaniKernel(), make, fake
 
     @story("J1", "G4")
-    def it_設定のエラーはセルに表示して次のセルでもう一度起動する(
+    def 設定にエラーがあればセルに表示して次のセルでもう一度起動する(
         direct, mocker, capsys
     ):
         k, make, _ = direct
@@ -463,7 +463,7 @@ def describe_起動と再起動の失敗():
         assert make.called
 
     @story("J3")
-    def it_エンジンを起動できなければセルが_error_になり次のセルで起動し直す(
+    def エンジンを起動できなければセルが_error_になり次のセルで起動し直す(
         direct, capsys
     ):
         k, make, fake = direct
@@ -481,7 +481,7 @@ def describe_起動と再起動の失敗():
             leani.types.EnvLost("main にも戻れなくなった"),
         ],
     )
-    def it_再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
+    def 再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
         k, make, fake = direct
         execute(k)
         fake.feed.side_effect = exc
@@ -494,7 +494,7 @@ def describe_起動と再起動の失敗():
         assert make.call_count == 2
 
     @story("J3")
-    def it_想定外の例外は内部エラーとして表示しセッションを残す(direct, capsys):
+    def 想定外の例外が起きたら内部エラーとして表示しセッションを残す(direct, capsys):
         k, _, fake = direct
         execute(k)
         fake.feed.side_effect = ValueError("想定外")
@@ -516,12 +516,12 @@ def describe_Lean_のバージョン():
         return run
 
     @story("J1", "G3")
-    def it_lean_の_version_は時間を区切らずに待つ(lean):
+    def lean_の_version_を調べるときは時間を区切らずに待つ(lean):
         assert leani.boot.local_toolchain() == "leanprover/lean4:v4.34.0"
         assert "timeout" not in lean.call_args.kwargs
 
     @story("J1", "G3")
-    def it_stable_の_toolchain_は今のバージョンに置き換える(lean, tmp_path):
+    def toolchain_が_stable_なら今のバージョンに置き換える(lean, tmp_path):
         (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
         cfg = leani.config.EnvConfig.make("t", project=str(tmp_path))
         assert leani.boot.guess_toolchain(cfg) == "leanprover/lean4:v4.34.0"
@@ -532,7 +532,7 @@ def describe_Lean_のバージョン():
         ]
 
     @story("J1", "G3")
-    def it_自分で指定したエンジンの_stable_は置き換えない(lean, tmp_path):
+    def エンジンを自分で指定したら_stable_を置き換えない(lean, tmp_path):
         (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
         cfg = leani.config.EnvConfig.make("t", engine=str(tmp_path))
         assert leani.boot.guess_toolchain(cfg) == "leanprover/lean4:stable"
@@ -542,7 +542,7 @@ def describe_Lean_のバージョン():
 def describe_カーネルの登録():
 
     @story("J1")
-    def it_今の_Python_で_leani_kernel_を起動するカーネルを登録する(tmp_path):
+    def カーネルを登録すると今の_Python_で_leani_kernel_を起動する設定を書く(tmp_path):
         env = dict(os.environ, JUPYTER_DATA_DIR=str(tmp_path), PYTHONPATH=SRC)
         subprocess.run(
             [sys.executable, "-m", "leani.kernel", "install"], env=env, check=True
@@ -554,20 +554,20 @@ def describe_カーネルの登録():
 
 def describe_SPEC_md_との対応():
     @story("X1")
-    def it_SPEC_md_に載らない形のテストはエラーにする(pytester):
+    def SPEC_md_に載らない形のテストを実行するとエラーにする(pytester):
         pytester.makepyfile(
             test_forms="""
             from stories import story
 
             def describe_セル():
                 @story("J1")
-                def it_載る():
+                def 載る():
                     pass
 
-                def 補助():
+                def _補助():
                     pass
 
-                def it_story_が無い():
+                def story_が無い():
                     pass
 
             def test_直下():
@@ -581,6 +581,7 @@ def describe_SPEC_md_との対応():
         result = pytester.runpytest("-p", "stories", "-p", "no:xdist")
         out = result.stdout.str() + result.stderr.str()
         assert result.ret != 0
-        for name in ("補助", "it_story_が無い", "test_直下", "test_中"):
+        for name in ("story_が無い", "test_直下", "test_中"):
             assert name in out
-        assert "it_載る" not in out
+        for name in ("載る", "_補助"):
+            assert name not in out

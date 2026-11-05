@@ -269,8 +269,10 @@ rustfmt は `it!(...)` を関数の呼び出しとして整形するので、文
 describe にあたる `mod` の名前は識別子のままなので、文の書き方が 2 通りになる。
 
 代わりに、テストの文は日本語の関数名のままにする。
-Python 版の `it_` と `describe_` は、pytest と pytest-describe がテストを見つけるための接頭辞である。
-Rust では `#[test]` と `#[proptest]` でテストを見分けられるので、付けない。
+関数名には `it_` のような接頭辞を付けない。
+Rust では `#[test]` と `#[proptest]` が、Python 版では describe の中の `@story` が、テストの目印になる。
+pytest-describe は describe の中の `_` で始まらない関数をすべてテストとして集めるので、Python 版でも接頭辞は要らない。
+describe の側の `describe_` は、pytest-describe が describe を見つけるために必要なので付ける。
 
 ### 不採用: テストの文を doc comment に書き、関数名を英語にする
 

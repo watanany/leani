@@ -21,10 +21,10 @@
 //! Rust では、`#[test]` か `#[proptest]` の付いた関数をテストと見なし、テストを含む `mod` を
 //! describe と見なす。
 //!
-//! Python のテストは行単位で読む。`def describe_` と `def it_` の行をインデントで入れ子に
-//! し、その前の `@story(...)` の行からストーリー番号を取る。名前からは `it_` と
-//! `describe_` を外す。Python の構文を解析する crate は使わない。カーネルのテストは
-//! 数が少なく、書き方も決まっているので、行単位で足りる。
+//! Python のテストは行単位で読む。`def describe_` の行をインデントで入れ子にし、その中で
+//! `@story(...)` の行の次にある `def` をテストと見なす。describe の名前からは `describe_`
+//! を外す。Python の構文を解析する crate は使わない。カーネルのテストは数が少なく、
+//! 書き方も決まっているので、行単位で足りる。
 //!
 //! テスト名を文に戻す規則は 5 つだけ。
 //!
@@ -338,10 +338,11 @@ fn string_after(line: &str, open: Option<&'static str>) -> Option<&'static str> 
 /// 三重引用符の中の行は読まない。セルの中身として書いた `def fib` を関数と見なすと、
 /// インデントが 0 なので、開いている describe を閉じてしまう。
 ///
-/// describe の外や `class` の中の `it_` はエラーにする。pytest-describe はこれを
-/// 集めないので、実行されないテストが `SPEC.md` に載る。反対に、pytest は describe の
-/// 中の `it_` でない関数もテストとして集める。そのテストは、`tests/stories.py` が
-/// 実行する前に失敗させる。
+/// describe の中で `@story` を付けた関数をテストと見なす。pytest-describe は describe の
+/// 中の `_` で始まらない関数をすべてテストとして集めるので、名前に接頭辞は要らない。
+/// describe の外や `class` の中で `@story` を付けた関数はエラーにする。pytest-describe は
+/// これを集めないので、実行されないテストが `SPEC.md` に載る。反対に、`@story` の無い
+/// テストは `tests/stories.py` が実行する前に失敗させる。
 fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
     struct Scan {
         /// 開いているブロックの (インデント, describe の名前)。`class` は名前が None。
@@ -387,25 +388,26 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
         scan.describes.retain(|(at, _)| *at < indent);
         let stories = std::mem::take(&mut scan.pending);
         if let Some(d) = name.strip_prefix("describe_") {
+            if !stories.is_empty() {
+                return Err(format!("describe に @story が付いている: {layer} / {name}"));
+            }
             scan.describes.push((indent, Some(label(d))));
-        } else if let Some(it) = name.strip_prefix("it_") {
-            let names: Option<Vec<&str>> =
-                scan.describes.iter().map(|(_, d)| d.as_deref()).collect();
-            let Some(place) = names.filter(|n| !n.is_empty()).map(|n| n.join(" / ")) else {
-                return Err(format!(
-                    "describe の外の it_ は pytest で実行されない: {layer} / {name}"
-                ));
-            };
-            scan.out.push(Test {
-                what: label(it),
-                place: format!("{layer} / {place}"),
-                stories,
-            });
-        } else if !stories.is_empty() {
-            return Err(format!(
-                "テストでない関数に @story が付いている: {layer} / {name}"
-            ));
+            return Ok(scan);
         }
+        if stories.is_empty() {
+            return Ok(scan);
+        }
+        let names: Option<Vec<&str>> = scan.describes.iter().map(|(_, d)| d.as_deref()).collect();
+        let Some(place) = names.filter(|n| !n.is_empty()).map(|n| n.join(" / ")) else {
+            return Err(format!(
+                "describe の外のテストは pytest-describe が実行しない: {layer} / {name}"
+            ));
+        };
+        scan.out.push(Test {
+            what: label(name),
+            place: format!("{layer} / {place}"),
+            stories,
+        });
         Ok(scan)
     })?;
     Ok(done.out)
@@ -649,23 +651,26 @@ mod tests {
     }
 
     #[test]
-    fn テストを行単位で読む() {
+    fn describe_の中で_story_を付けた関数をテストとして読む() {
         let text = r#"
 def describe_セルの実行():
 
     @story("J1", "E3")
     @pytest.mark.usefixtures("place")
-    def it_colon_q_は何もしない(kernel):
+    def colon_q_は何もしない(kernel):
         pass
 
     @pytest.fixture
     def helper():
         pass
 
+    def 補助():
+        pass
+
 def describe_カーネルの登録():
 
     @story("J1")
-    def it_複数行の(
+    def 複数行の(
         tmp_path,
     ):
         pass
@@ -700,14 +705,14 @@ def helper():
 def describe_セルの実行():
 
     @story("J1")
-    def it_前のセルの宣言を使える(kernel):
+    def 前のセルの宣言を使える(kernel):
         cell = """\
 def fib : Nat → Nat
   | 0 => 0"""
         pass
 
     @story("J2")
-    async def it_後ろのテスト(kernel):
+    async def 後ろのテスト(kernel):
         pass
 "#;
         let got: Vec<(String, String)> = python_tests(text, "kernel")
@@ -723,12 +728,6 @@ def fib : Nat → Nat
                 (place, "後ろのテスト".to_string()),
             ]
         );
-    }
-
-    #[test]
-    fn テストでない関数の_story_はエラーにする() {
-        let text = "@story(\"J1\")\ndef helper():\n    pass\n";
-        assert!(python_tests(text, "kernel").is_err());
     }
 
     #[test]
@@ -773,12 +772,12 @@ def fib : Nat → Nat
 def describe_セルの実行():
 
     @story("J1")
-    def it_前のテスト(kernel):
+    def 前のテスト(kernel):
         # 次の """ は文字列ではない
         pass
 
     @story("J2")
-    def it_後ろのテスト(kernel):
+    def 後ろのテスト(kernel):
         pass
 "#;
         let got: Vec<String> = python_tests(text, "kernel")
@@ -790,10 +789,10 @@ def describe_セルの実行():
     }
 
     #[test]
-    fn describe_の外の_it_はエラーにする() {
-        let top = "@story(\"J1\")\ndef it_外のテスト(kernel):\n    pass\n";
+    fn describe_の外か_class_の中で_story_を付けるとエラーにする() {
+        let top = "@story(\"J1\")\ndef 外のテスト(kernel):\n    pass\n";
         assert!(python_tests(top, "kernel").is_err());
-        let class = "def describe_セル():\n    class TestX:\n        @story(\"J1\")\n        def it_中のテスト(self):\n            pass\n";
+        let class = "def describe_セル():\n    class TestX:\n        @story(\"J1\")\n        def 中のテスト(self):\n            pass\n";
         assert!(python_tests(class, "kernel").is_err());
     }
 
@@ -803,7 +802,7 @@ def describe_セルの実行():
 def describe_セルの実行():
 
     @story("J1")
-    def it_前のテスト(kernel):
+    def 前のテスト(kernel):
         src = 'x = """'
         code = "theorem h''' : True := trivial"
         doc = """閉じる""" + """
@@ -811,7 +810,7 @@ def describe_セルの実行():
         pass
 
     @story("J2")
-    def it_後ろのテスト(kernel):
+    def 後ろのテスト(kernel):
         pass
 "#;
         let got: Vec<String> = python_tests(text, "kernel")
@@ -828,13 +827,13 @@ def describe_セルの実行():
 def describe_外側A():
     def describe_共通():
         @story("J1")
-        def it_同じ名前(kernel):
+        def 同じ名前(kernel):
             pass
 
 def describe_外側B():
     def describe_共通():
         @story("J1")
-        def it_同じ名前(kernel):
+        def 同じ名前(kernel):
             pass
 "#;
         let got: Vec<String> = python_tests(text, "kernel")

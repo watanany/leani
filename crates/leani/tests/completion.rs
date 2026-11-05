@@ -293,7 +293,7 @@ mod 候補 {
 
     #[story("D1", "F2")]
     #[test]
-    fn colon_undo_で取り消した宣言は候補に出ない() {
+    fn colon_undo_で宣言を取り消すとその名前は候補に出ない() {
         // 宣言を実行したあとに問い合わせると、その宣言の名前もキャッシュに入る。
         let mut repl = Driver::new();
         repl.feed(&["def myUndone.helper := 1"]);
