@@ -18,9 +18,11 @@ use story::story;
 
 mod 行編集 {
     //! ja: 行編集
+    //! en: Line editing
     use super::*;
 
     /// ja: 80 桁の端末に 74 文字を入力すると、プロンプトの色を数えずに、折り返さずにカーソルを 78 桁目に置く
+    /// en: Puts the cursor at column 78 without wrapping or counting prompt colors when 74 characters are typed in 80 columns
     #[story("C3")]
     #[test]
     fn プロンプトの色を桁として数えない() {
@@ -35,6 +37,7 @@ mod 行編集 {
     }
 
     /// ja: Ctrl-P で呼び出した行を Backspace で直して送ると、直した行の値を表示する
+    /// en: Shows the value of a line recalled with Ctrl-P when it is edited with Backspace and sent
     #[story("C3")]
     #[test]
     fn 履歴から呼び出した行を_Backspace_で修正できる() {
@@ -52,6 +55,7 @@ mod 行編集 {
     }
 
     /// ja: 入力途中の行で Ctrl-C を押すと、^C を表示してその行を捨てる
+    /// en: Shows ^C and discards the unfinished line when Ctrl-C is pressed on it
     #[story("F4")]
     #[test]
     fn Ctrl__C_で入力途中の行を捨てる() {
@@ -66,6 +70,7 @@ mod 行編集 {
     }
 
     /// ja: 入力途中のブロックで Ctrl-D を押すと、ブロックを実行し、2 回目で終了する
+    /// en: Runs the unfinished block when Ctrl-D is pressed, and exits on a second Ctrl-D
     #[story("C6")]
     #[test]
     fn Ctrl__D_で入力途中のブロックを実行する() {
@@ -84,6 +89,7 @@ mod 行編集 {
     }
 
     /// ja: 行編集の無い端末で Ctrl-D を押すと、入力途中のブロックを実行して次の入力を読む
+    /// en: Runs the unfinished block and reads more input when Ctrl-D is pressed without line editing
     #[story("C6", "F4")]
     #[test]
     fn 行編集の無い端末でも_Ctrl__D_で入力途中のブロックを実行して続ける() {
@@ -102,6 +108,7 @@ mod 行編集 {
     }
 
     /// ja: 評価中に Ctrl-C を押すと、評価を中断し、それまでの宣言を残す
+    /// en: Interrupts the evaluation and keeps earlier declarations when Ctrl-C is pressed during it
     #[story("A4")]
     #[test]
     fn Ctrl__C_で評価中の計算を止めても宣言が残る() {
@@ -130,6 +137,7 @@ mod 行編集 {
     }
 
     /// ja: Ctrl-C で入力途中のブロックを捨てたあと Ctrl-P を押すと、捨てた行を呼び出す
+    /// en: Recalls the line of a block discarded with Ctrl-C when Ctrl-P is pressed
     #[story("C3", "F3")]
     #[test]
     fn 捨てた入力途中のブロックも履歴には残る() {
@@ -148,9 +156,11 @@ mod 行編集 {
 
 mod 略記の入力 {
     //! ja: 略記の入力
+    //! en: Abbreviation input
     use super::*;
 
     /// ja: 略記のあとに space を入力すると、記号に変換して space を残す
+    /// en: Converts the abbreviation to a symbol and keeps the space when a space is typed after it
     #[story("C5")]
     #[test]
     fn space_で記号に変換され_space_も残る() {
@@ -165,6 +175,7 @@ mod 略記の入力 {
     }
 
     /// ja: 略記のあとに Tab を押すと、記号に変換して空白を入れない
+    /// en: Converts the abbreviation to a symbol without adding a space when Tab is pressed after it
     #[story("C8")]
     #[test]
     fn Tab_で記号に変換され_空白は入らない() {
@@ -177,6 +188,7 @@ mod 略記の入力 {
     }
 
     /// ja: 略記でない名前のあとで Tab を押すと、名前を補完する
+    /// en: Completes the name when Tab is pressed after a name that is not an abbreviation
     #[story("C8", "D1")]
     #[test]
     fn 略記でなければ_Tab_は名前を補完する() {
@@ -192,9 +204,11 @@ mod 略記の入力 {
 
 mod 履歴 {
     //! ja: 履歴
+    //! en: History
     use super::*;
 
     /// ja: 複数行のブロックを実行すると、行を改行でつないだ 1 件を履歴に保存する
+    /// en: Saves a multi-line block as one history entry with its newlines when the block runs
     #[story("C3", "F3")]
     #[test]
     fn 複数行のブロックは_1_件にまとまる() {
@@ -206,6 +220,7 @@ mod 履歴 {
     }
 
     /// ja: ブロックのあとに Ctrl-P を 1 回押すと全体を呼び出し、Enter で 1 つの入力として送る
+    /// en: Recalls the whole block when Ctrl-P is pressed once after a block, and sends it as one input
     #[story("C3")]
     #[test]
     fn _1_回の_Ctrl__P_でブロック全体を呼び出して_1_つの入力として送る() {
@@ -226,6 +241,7 @@ mod 履歴 {
     }
 
     /// ja: ディレクトリを含まない履歴のパスで入力すると、前回の履歴のあとに追記する
+    /// en: Appends to the previous history when input is sent with a history path without a directory
     #[story("F3")]
     #[test]
     fn ディレクトリを含まない履歴のパスでも前回の履歴を消さない() {
@@ -242,6 +258,7 @@ mod 履歴 {
     }
 
     /// ja: 入力のあとで leani を SIGKILL で止めると、その入力が履歴に残っている
+    /// en: Keeps the entered lines in history when leani is killed with SIGKILL
     #[story("F3")]
     #[test]
     fn 異常終了したセッションの履歴も残る() {
@@ -256,9 +273,11 @@ mod 履歴 {
 
 mod 環境の切り替え {
     //! ja: 環境の切り替え
+    //! en: Switching environments
     use super::*;
 
     /// ja: :env で環境を切り替えると、プロンプトをその環境に設定したプロンプトに変える
+    /// en: Changes the prompt to the one set for the environment when :env switches environments
     #[story("G5")]
     #[test]
     fn プロンプトが設定どおりに変わる() {
@@ -275,9 +294,11 @@ mod 環境の切り替え {
 
 mod 外部コマンド {
     //! ja: 外部コマンド
+    //! en: External commands
     use super::*;
 
     /// ja: 外部コマンドの実行中に Ctrl-C を押すと、^C を表示し、それまでの宣言を残す
+    /// en: Shows ^C and keeps earlier declarations when Ctrl-C is pressed during an external command
     #[story("F4")]
     #[test]
     fn Ctrl__C_で外部コマンドを止めてもセッションが残る() {
@@ -299,9 +320,11 @@ mod 外部コマンド {
 
 mod pager {
     //! ja: pager
+    //! en: Pager
     use super::*;
 
     /// ja: pager のコマンドが無いときに :abbrev を実行すると、一覧をそのまま表示する
+    /// en: Shows the list directly when :abbrev runs with a pager command that does not exist
     #[story("C7")]
     #[test]
     fn pager_のコマンドが無ければそのまま表示する() {
@@ -315,11 +338,13 @@ mod pager {
 
 mod 端末でない入力 {
     //! ja: 端末でない入力
+    //! en: Input not from a terminal
     //!
     //! パイプで渡したとき。
     use super::*;
 
     /// ja: UTF-8 で読めないバイトの行を含む入力を渡すと、その前後の行を実行する
+    /// en: Runs the lines around a line of bytes that are not valid UTF-8 when such input is piped
     #[story("F4")]
     #[test]
     fn UTF__8_で読めないバイトがあっても後続の行を失わない() {
@@ -336,6 +361,7 @@ mod 端末でない入力 {
     }
 
     /// ja: 末尾に空行の無い入力を渡すと、最後のブロックを実行する
+    /// en: Runs the last block when the input ends without a blank line
     #[story("F4")]
     #[test]
     fn 末尾に空行が無くても最後のブロックを実行する() {
@@ -346,6 +372,7 @@ mod 端末でない入力 {
     }
 
     /// ja: lean ファイルを引数にして leani を起動すると、そのファイルの宣言を読み込む
+    /// en: Loads the declarations in a file when leani starts with the file as an argument
     #[story("B4")]
     #[test]
     fn ファイルを指定して起動すると宣言を使える() {

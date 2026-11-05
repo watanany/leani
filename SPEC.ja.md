@@ -2,14 +2,16 @@
 
 # leani の性質一覧
 
+English version: [SPEC.en.md](SPEC.en.md)
+
 leani が誰の何を助けるか (`stories.toml`) に、それを確かめているテストの
-名前を並べたもの。テスト名はすべて `cargo nextest run` (層 kernel は `uv run pytest`)
+文を並べたもの。テストはすべて `cargo nextest run` (層 kernel は `uv run pytest`)
 で実際に確かめられている。
 項目が増えたり減ったりするのは、ストーリーかテストを追加または削除したときだけ。
 
     cargo run -p spec
 
-ストーリー 43 件、テスト 466 件。括弧の中はテストの場所
+ストーリー 44 件、テスト 467 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -785,4 +787,8 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 ### X1 ドキュメントがテストとずれないようにしたい
 
 - SPEC に載らない形のテストがあると、pytest の実行を失敗させ、そのテストの名前だけを表示する (kernel / SPEC との対応)
-- テストとストーリーの文から、SPEC.md と同じ内容を生成する (parsing / 性質一覧)
+- テストとストーリーの ja: の文から、SPEC.ja.md と同じ内容を生成する (parsing / 性質一覧)
+
+### X2 日本語を読まない人にも、leani ができることの一覧を読んでもらいたい
+
+- テストとストーリーの en: の文から、SPEC.en.md と同じ内容を生成する (parsing / 性質一覧)

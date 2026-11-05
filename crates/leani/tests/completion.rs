@@ -109,9 +109,11 @@ fn asked(text: &str, names: Vec<String>) -> (Vec<(String, usize)>, Vec<String>) 
 
 mod 端末の_Tab_補完 {
     //! ja: 端末の Tab 補完
+    //! en: Tab completion in the terminal
     use super::*;
 
     /// ja: #check Nat.suc には、カーソルの前の名前 Nat.suc だけを置き換える候補を返す
+    /// en: Returns candidates that replace only the name before the cursor in #check Nat.suc
     #[story("D1")]
     #[test]
     fn Tab_で置き換える範囲はカーソルの前の名前だけ() {
@@ -127,9 +129,11 @@ mod 端末の_Tab_補完 {
 
 mod 略記の_Tab_補完 {
     //! ja: 略記の Tab 補完
+    //! en: Tab completion of abbreviations
     use super::*;
 
     /// ja: 略記の途中で終わる入力には、その略記を記号に置き換える候補だけを返す
+    /// en: Returns only the symbol replacing the abbreviation for input ending in a partial abbreviation
     #[story("C8")]
     #[test]
     fn 略記の途中なら記号を補完する() {
@@ -139,6 +143,7 @@ mod 略記の_Tab_補完 {
     }
 
     /// ja: 略記の途中で終わる入力では、定数名を問い合わせない
+    /// en: Does not query constant names for input ending in a partial abbreviation
     #[story("C8")]
     #[test]
     fn 略記の途中なら定数名を問い合わせない() {
@@ -147,6 +152,7 @@ mod 略記の_Tab_補完 {
     }
 
     /// ja: :t と :! の引数の末尾にある略記には、記号の候補を返す
+    /// en: Returns a symbol candidate for an abbreviation at the end of the arguments of :t and :!
     #[story("C8")]
     #[test]
     fn コマンドの引数の中でも略記を補完する() {
@@ -158,9 +164,11 @@ mod 略記の_Tab_補完 {
 
 mod shell_コマンドの_Tab_補完 {
     //! ja: shell コマンドの Tab 補完
+    //! en: Tab completion of shell commands
     use super::*;
 
     /// ja: 1 語目には、PATH にある実行できるコマンドを候補に返す
+    /// en: Returns executable commands on PATH as candidates for the first word
     #[story("B5")]
     #[test]
     fn _1_語目は_PATH_にある実行できるコマンドを補完する() {
@@ -169,6 +177,7 @@ mod shell_コマンドの_Tab_補完 {
     }
 
     /// ja: 2 語目からは、ファイルのパスを候補に返す
+    /// en: Returns file paths as candidates from the second word on
     #[story("B5")]
     #[test]
     fn _2_語目からはファイルのパスを補完する() {
@@ -177,6 +186,7 @@ mod shell_コマンドの_Tab_補完 {
     }
 
     /// ja: slash を含む 1 語目には、ファイルのパスを候補に返す
+    /// en: Returns file paths as candidates for a first word containing a slash
     #[story("B5")]
     #[test]
     fn _1_語目でも_slash_を含めばパスを補完する() {
@@ -184,6 +194,7 @@ mod shell_コマンドの_Tab_補完 {
     }
 
     /// ja: 定数名の形をした shell コマンドの引数には、定数名の候補を返さない
+    /// en: Returns no constant names for a shell command argument that looks like a constant name
     #[story("B5")]
     #[test]
     fn shell_コマンドの中では定数名を補完しない() {
@@ -193,9 +204,11 @@ mod shell_コマンドの_Tab_補完 {
 
 mod コマンドの_Tab_補完 {
     //! ja: コマンドの Tab 補完
+    //! en: Tab completion of commands
     use super::*;
 
     /// ja: : で始まる語には、HELP に載っているコマンド名を候補に返す
+    /// en: Returns command names listed in HELP for a word starting with a colon
     #[story("H1")]
     #[test]
     fn コマンド名は_HELP_に載っているものを補完する() {
@@ -204,6 +217,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: HELP の文字列からは、英字のコマンド名だけを取り出す
+    /// en: Extracts only alphabetic command names from the HELP text
     #[story("H1")]
     #[test]
     fn HELP_から_コマンド名だけを取り出す() {
@@ -212,6 +226,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: :l の後には、lean ファイルとディレクトリだけを候補に返す
+    /// en: Returns only lean files and directories as candidates after :l
     #[story("B4")]
     #[test]
     fn colon_l_の後は_lean_ファイルとディレクトリだけを補完する() {
@@ -220,6 +235,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: :save の後には、lean ファイルのパスだけを候補に返す
+    /// en: Returns only lean file paths as candidates after :save
     #[story("B3")]
     #[test]
     fn colon_save_の後も_lean_ファイルのパスを補完する() {
@@ -227,6 +243,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: :env の後には、環境の名前を候補に返す
+    /// en: Returns environment names as candidates after :env
     #[story("G5")]
     #[test]
     fn colon_env_の後は設定ファイルに書いた環境の名前を補完する() {
@@ -237,6 +254,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: 設定ファイルを TOML として読めなければ、環境の名前を 1 つも返さない
+    /// en: Returns no environment names if the config file is not valid TOML
     #[story("G5")]
     #[test]
     fn 設定ファイルを読めなければ環境の名前を補完しない() {
@@ -246,6 +264,7 @@ mod コマンドの_Tab_補完 {
     }
 
     /// ja: :t の後には、定数名を候補に返す
+    /// en: Returns constant names as candidates after :t
     #[story("D1")]
     #[test]
     fn colon_t_の後は定数名を補完する() {
@@ -255,9 +274,11 @@ mod コマンドの_Tab_補完 {
 
 mod 名前空間ごとのキャッシュ {
     //! ja: 名前空間ごとのキャッシュ
+    //! en: Cache per namespace
     use super::*;
 
     /// ja: 同じ名前空間の名前を続けて補完すると、定数を 1 回だけ問い合わせる
+    /// en: Queries constants only once when names in the same namespace are completed in a row
     #[story("D1")]
     #[test]
     fn 同じ名前空間なら_1_回しか問い合わせない() {
@@ -275,6 +296,7 @@ mod 名前空間ごとのキャッシュ {
     }
 
     /// ja: 別の名前空間の名前を補完すると、定数を問い合わせ直す
+    /// en: Queries constants again when a name in another namespace is completed
     #[story("D1")]
     #[test]
     fn 別の名前空間なら取得し直す() {
@@ -286,6 +308,7 @@ mod 名前空間ごとのキャッシュ {
     }
 
     /// ja: 宣言を実行したあとに同じ名前を補完すると、定数を問い合わせ直さない
+    /// en: Does not query constants again when the same name is completed after a declaration runs
     #[story("D1")]
     #[test]
     fn 宣言を実行してもキャッシュを捨てない() {
@@ -301,6 +324,7 @@ mod 名前空間ごとのキャッシュ {
     }
 
     /// ja: 2 つの名前空間を open したあとに補完すると、定数を 1 回だけ問い合わせる
+    /// en: Queries constants only once when a name is completed after two namespaces are opened
     #[story("D1", "D5")]
     #[test]
     fn open_した名前空間の名前も一度に取得する() {
@@ -314,9 +338,11 @@ mod 名前空間ごとのキャッシュ {
 
 mod 候補 {
     //! ja: 候補
+    //! en: Completion candidates
     use super::*;
 
     /// ja: :undo で宣言を取り消すと、その宣言の名前を候補から外す
+    /// en: Removes the name of a declaration from candidates when :undo undoes the declaration
     #[story("D1", "F2")]
     #[test]
     fn colon_undo_で宣言を取り消すとその名前は候補に出ない() {
@@ -330,6 +356,7 @@ mod 候補 {
     }
 
     /// ja: :undo のあとに同じ数の宣言を足すと、取り消した名前を外して足した名前を返す
+    /// en: Returns the added name instead of the undone one when :undo is followed by a new declaration
     #[story("D1", "F2")]
     #[test]
     fn colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない() {
@@ -343,6 +370,7 @@ mod 候補 {
     }
 
     /// ja: :undo のあとに定数の問い合わせが失敗すると、取り消した名前を候補に返さない
+    /// en: Does not return the undone name when the constant query fails after :undo
     #[story("D1", "F2")]
     #[test]
     fn 問い合わせ直しに失敗しても_colon_undo_で取り消した名前は候補に出ない() {
@@ -360,6 +388,7 @@ mod 候補 {
     }
 
     /// ja: 宣言のあとに :reset を実行すると、その宣言の名前を候補に返さない
+    /// en: Does not return the name of a declaration when :reset runs after the declaration
     #[story("D1", "F2")]
     #[test]
     fn colon_reset_で取り消した宣言は候補に出ない() {
@@ -372,6 +401,7 @@ mod 候補 {
     }
 
     /// ja: 宣言を実行したあとに補完すると、その宣言の名前を返す
+    /// en: Returns the name of a declaration when it is completed after the declaration runs
     #[story("D1")]
     #[test]
     fn 自分で実行した宣言も候補に表示される() {
@@ -381,6 +411,7 @@ mod 候補 {
     }
 
     /// ja: 1 文字の名前を補完すると、エンジンに問い合わせずに空の一覧を返す
+    /// en: Returns no candidates without querying the engine when a one-letter name is completed
     #[story("D1")]
     #[test]
     fn _1_文字では候補を表示しない() {
@@ -401,9 +432,11 @@ mod 候補 {
 
 mod エンジンが異常終了したあとの_Tab_補完 {
     //! ja: エンジンが異常終了したあとの Tab 補完
+    //! en: Tab completion after the engine crashes
     use super::*;
 
     /// ja: 補完するとエンジンを再起動せずに空の候補を返し、次の入力で再起動して宣言を残す
+    /// en: Returns nothing without a restart on completion and restarts with declarations on the next input
     #[story("D1", "F1")]
     #[test]
     fn 補完ではエンジンを再起動せず次の入力で再起動する() {
@@ -429,9 +462,11 @@ mod エンジンが異常終了したあとの_Tab_補完 {
 
 mod open_した名前空間 {
     //! ja: open した名前空間
+    //! en: Opened namespaces
     use super::*;
 
     /// ja: 名前空間を open すると、その名前空間を省いた名前を候補に返す
+    /// en: Returns names without the namespace prefix when the namespace is opened
     #[story("D5")]
     #[test]
     fn open_すると短い名前で補完される() {
@@ -445,6 +480,7 @@ mod open_した名前空間 {
     }
 
     /// ja: 名前空間を open していなければ、名前空間を省いた名前を候補に返さない
+    /// en: Does not return names without the namespace prefix if the namespace is not opened
     #[story("D5")]
     #[test]
     fn open_しなければ短い名前では補完されない() {
@@ -453,6 +489,7 @@ mod open_した名前空間 {
     }
 
     /// ja: open X in を実行したあとは、名前空間を省いた名前を候補に返さない
+    /// en: Does not return names without the namespace prefix after open X in runs
     #[story("D5")]
     #[test]
     fn open_X_in_の効果は次の入力に残らない() {
@@ -462,6 +499,7 @@ mod open_した名前空間 {
     }
 
     /// ja: hiding を付けて open すると、隠した名前を外し、ほかの名前を返す
+    /// en: Omits hidden names but returns the others when a namespace is opened with hiding
     #[story("D5")]
     #[test]
     fn hiding_した名前は補完されない() {
@@ -473,6 +511,7 @@ mod open_した名前空間 {
     }
 
     /// ja: 別の名前を隠して 2 回 open すると、どちらの名前も返す
+    /// en: Returns both hidden names when a namespace is opened twice hiding a different name each time
     #[story("D5")]
     #[test]
     fn もう一度_open_して_hiding_を外した名前は補完される() {
@@ -485,6 +524,7 @@ mod open_した名前空間 {
     }
 
     /// ja: 名前を指定して open すると、指定した名前だけを名前空間を省いて返す
+    /// en: Returns only the listed names without the namespace prefix when open lists names
     #[story("D5")]
     #[test]
     fn 名前を指定して_open_したものだけが補完される() {
@@ -496,6 +536,7 @@ mod open_した名前空間 {
     }
 
     /// ja: open すると、protected でない名前だけを名前空間を省いて返す
+    /// en: Returns only non-protected names without the namespace prefix when the namespace is opened
     #[story("D5")]
     #[test]
     fn protected_な名前は最後の部分だけでは補完されない() {
@@ -516,6 +557,7 @@ mod open_した名前空間 {
     }
 
     /// ja: namespace を実行すると、その名前空間の名前を、名前空間を省いて返す
+    /// en: Returns names of a namespace without its prefix when a namespace command has run
     #[story("D5")]
     #[test]
     fn namespace_の中ではその名前空間の名前も短い名前で補完される() {

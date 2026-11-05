@@ -41,11 +41,13 @@ fn died_message(r: Result<impl std::fmt::Debug, EngineFault>) -> String {
 
 mod 起動時の確認 {
     //! ja: 起動時の確認
+    //! en: Startup checks
     //!
     //! boot と、エンジンの異常終了の報告。
     use super::*;
 
     /// ja: 解決できない import を指定して起動すると、import に失敗したと報告して起動を中止する
+    /// en: Aborts startup and reports the import failure when started with an unresolvable import
     #[story("G4")]
     #[test]
     fn 解決できない_import_では起動を中止する() {
@@ -64,6 +66,7 @@ mod 起動時の確認 {
     }
 
     /// ja: エンジンがシグナルで終了したあとにコマンドを送ると、報告にそのシグナルの名前を含める
+    /// en: Names the signal in the report when a command is sent after the engine is killed by a signal
     #[story("G4")]
     #[test]
     fn エンジンが異常終了したら終了シグナルや終了コードを報告に含める() {
@@ -77,6 +80,7 @@ mod 起動時の確認 {
     }
 
     /// ja: :env で切り替えた先のエンジンが起動に失敗すると、そのプロセスを終了させ、元の環境のエンジンは動いたままにする
+    /// en: Stops the failed engine and leaves the engine of the original environment running when the engine for :env fails to start
     #[story("G4", "G5")]
     #[test]
     fn 起動に失敗したエンジンのプロセスを残さない() {
@@ -98,9 +102,11 @@ mod 起動時の確認 {
 
 mod 式の評価 {
     //! ja: 式の評価
+    //! en: Evaluating expressions
     use super::*;
 
     /// ja: 式を入力すると、評価した値を表示する
+    /// en: Shows the value when an expression is entered
     #[story("A1")]
     #[test]
     fn 単独の式は評価されて値が表示される() {
@@ -109,6 +115,7 @@ mod 式の評価 {
     }
 
     /// ja: 改ページを含む文字列の式を入力すると、その値を表示する
+    /// en: Shows the value when an expression with a form feed in a string is entered
     #[story("A1", "C1")]
     #[test]
     fn 改ページを含む文字列を入力しても式として評価する() {
@@ -120,6 +127,7 @@ mod 式の評価 {
     }
 
     /// ja: 2 行にまたがる文字列の式を入力すると、文字列を変えずに評価した値を表示する
+    /// en: Shows the value of the unchanged string when an expression with a multi-line string is entered
     #[story("A1")]
     #[test]
     fn 複数行の文字列を評価しても値は変わらない() {
@@ -130,6 +138,7 @@ mod 式の評価 {
     }
 
     /// ja: IO の式を入力すると、その action を実行して出力を表示する
+    /// en: Runs the action and shows its output when an IO expression is entered
     #[story("A1", "B1")]
     #[test]
     fn IO_の式はそのまま実行される() {
@@ -138,6 +147,7 @@ mod 式の評価 {
     }
 
     /// ja: Repr の無い項を入力すると、評価できない理由と型を表示する
+    /// en: Shows why it cannot be evaluated and the type when a term without Repr is entered
     #[story("A2")]
     #[test]
     fn 評価できない項は理由と型を表示する() {
@@ -149,6 +159,7 @@ mod 式の評価 {
     }
 
     /// ja: noncomputable な定数を入力すると、評価できない理由と型を表示する
+    /// en: Shows why it cannot be evaluated and the type when a noncomputable constant is entered
     #[story("A2")]
     #[test]
     fn noncomputable_な定数は理由と型を表示する() {
@@ -160,6 +171,7 @@ mod 式の評価 {
     }
 
     /// ja: BaseIO と IO の action を混ぜた do ブロックを入力すると、エラーにせず IO として実行する
+    /// en: Runs the block as IO without an error when a do block mixing BaseIO and IO actions is entered
     #[story("A1", "B1")]
     #[test]
     fn do_ブロックは_IO_として読み直す() {
@@ -174,6 +186,7 @@ mod 式の評価 {
     }
 
     /// ja: do の外で ← を使った式を入力すると、do で包んでエラーにせず実行する
+    /// en: Wraps it in do and runs it without an error when an expression with a left arrow is entered
     #[story("A1", "B1")]
     #[test]
     fn do_の外の_action_は_do_で包み直す() {
@@ -189,6 +202,7 @@ mod 式の評価 {
     }
 
     /// ja: BaseIO の action に ← を使った式を入力すると、エラーにせず IO として実行する
+    /// en: Runs it as IO without an error when an expression with a left arrow on a BaseIO action is entered
     #[story("A1", "B1")]
     #[test]
     fn do_で包み直した式も_IO_として読み直す() {
@@ -200,6 +214,7 @@ mod 式の評価 {
     }
 
     /// ja: ← を含む式がエラーになると、元の入力の中のエラーの位置を表示する
+    /// en: Shows the error position within the original input when an expression with a left arrow fails
     #[story("A5")]
     #[test]
     fn do_で包み直した式のエラー位置は元の入力の中を指す() {
@@ -215,6 +230,7 @@ mod 式の評価 {
     }
 
     /// ja: ファイルを読む do ブロックを入力すると、ファイルの中身を表示する
+    /// en: Shows the file contents when a do block that reads a file is entered
     #[story("B1")]
     #[test]
     fn do_ブロックでファイルを読める() {
@@ -229,6 +245,7 @@ mod 式の評価 {
     }
 
     /// ja: プロセスを起動する do ブロックを入力すると、エラーにせずプロセスの出力を表示する
+    /// en: Shows the process output without an error when a do block that starts a process is entered
     #[story("B1")]
     #[test]
     fn do_ブロックでプロセスを起動して出力を受け取れる() {
@@ -243,9 +260,11 @@ mod 式の評価 {
 
 mod 複数行の宣言 {
     //! ja: 複数行の宣言
+    //! en: Multi-line declarations
     use super::*;
 
     /// ja: 複数行の宣言のあとに空行を入力すると、まとめて 1 つの宣言として実行する
+    /// en: Runs the lines as one declaration when a multi-line declaration is followed by a blank line
     #[story("C1")]
     #[test]
     fn 空行までをまとめて_1_つの宣言として実行する() {
@@ -261,6 +280,7 @@ mod 複数行の宣言 {
     }
 
     /// ja: 1 行の宣言の直後にインデントした行を入力すると、その宣言の続きとして扱う
+    /// en: Continues a one-line declaration when an indented line is entered right after it
     #[story("C2")]
     #[test]
     fn 確定した直後のインデントした行は前の入力の続きとして扱う() {
@@ -276,6 +296,7 @@ mod 複数行の宣言 {
     }
 
     /// ja: 空行で確定したブロックの直後にインデントした行を入力すると、そのブロックの続きとして扱う
+    /// en: Continues a block confirmed by a blank line when an indented line is entered right after it
     #[story("C2")]
     #[test]
     fn 空行で確定したブロックの直後のインデントした行も続きとして扱う() {
@@ -291,6 +312,7 @@ mod 複数行の宣言 {
     }
 
     /// ja: エラーになる宣言を入力すると、その宣言を環境に加えない
+    /// en: Leaves the declaration out of the environment when a declaration with an error is entered
     #[story("C1")]
     #[test]
     fn エラーになった宣言は環境を進めない() {
@@ -300,6 +322,7 @@ mod 複数行の宣言 {
     }
 
     /// ja: 空行を含む入力を :{ と :} で囲むと、:} を入力するまで実行せず 1 つの宣言として実行する
+    /// en: Runs one declaration only after :} when input with a blank line is between :{ and :}
     #[story("C6")]
     #[test]
     fn 波括弧のあいだは空行があっても_1_つの宣言として実行する() {
@@ -312,6 +335,7 @@ mod 複数行の宣言 {
     }
 
     /// ja: :{ のすぐあとに :} を入力すると、何も実行せず何も表示しない
+    /// en: Runs and shows nothing when :} is entered right after :{
     #[story("C6")]
     #[test]
     fn 波括弧のあいだが空なら何も実行しない() {
@@ -323,9 +347,11 @@ mod 複数行の宣言 {
 
 mod ノートブックのセルの終わり {
     //! ja: ノートブックのセルの終わり
+    //! en: End of a notebook cell
     use super::*;
 
     /// ja: 入力途中の宣言があるときにセルが終わると、その宣言を実行する
+    /// en: Runs the unfinished declaration when the cell ends
     #[story("J1")]
     #[test]
     fn セルの終わりで入力途中の宣言を確定する() {
@@ -338,6 +364,7 @@ mod ノートブックのセルの終わり {
     }
 
     /// ja: :} で閉じていないブロックがあるときにセルが終わると、実行せずに :} が無いと表示する
+    /// en: Shows that :} is missing without running the block when the cell ends inside :{
     #[story("J1", "C6")]
     #[test]
     fn セルの終わりで閉じていない複数行ブロックは実行しない() {
@@ -365,6 +392,7 @@ impl LineSource for Script {
 
 mod 入力の終わり {
     //! ja: 入力の終わり
+    //! en: End of input
     //!
     //! パイプの EOF と端末の Ctrl-D。どちらも `Line::End` になる。
     use super::*;
@@ -388,6 +416,7 @@ mod 入力の終わり {
     }
 
     /// ja: 入力途中のブロックがあるときに入力が終わると、そのブロックを実行する
+    /// en: Runs the unfinished block when input ends
     #[story("C6", "F4")]
     #[test]
     fn 入力の終わりで入力途中のブロックを実行する() {
@@ -399,6 +428,7 @@ mod 入力の終わり {
     }
 
     /// ja: :} で閉じていないブロックがあるときに入力が終わると、実行せずに :} が無いと表示する
+    /// en: Shows that :} is missing without running the block when input ends inside :{
     #[story("C6")]
     #[test]
     fn 入力の終わりで閉じていない複数行ブロックは実行せずに知らせる() {
@@ -412,9 +442,11 @@ mod 入力の終わり {
 
 mod エンジンが異常終了してもセッションが続く {
     //! ja: エンジンの異常終了からの復旧
+    //! en: Recovering from engine crashes
     use super::*;
 
     /// ja: 宣言の実行中にエンジンが異常終了すると、再起動して、送っていた宣言を含めて再実行する
+    /// en: Restarts and replays the declarations, including the one being sent, when the engine crashes
     #[story("F1")]
     #[test]
     fn エンジンが異常終了したら再起動して宣言を_replay_する() {
@@ -446,6 +478,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 中断のあとの再実行をもう一度中断すると、そのあとの入力には正しい値を表示する
+    /// en: Shows correct values for later input when the replay after an interrupt is interrupted again
     #[story("A4", "F1")]
     #[test]
     fn 再起動中にもう一度中断しても応答がずれない() {
@@ -476,6 +509,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 宣言の実行でエンジンが PANIC すると、PANIC の内容を警告に表示し、宣言を環境に加えない
+    /// en: Shows the PANIC in a warning and leaves the declaration out of the environment when the engine panics on it
     #[story("F1")]
     #[test]
     fn エンジンが_PANIC_したら宣言を環境に追加せず警告する() {
@@ -496,6 +530,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 式の評価でエンジンが PANIC すると、結果の代わりに警告を表示する
+    /// en: Shows a warning instead of the result when the engine panics while evaluating an expression
     #[story("F1")]
     #[test]
     fn 式の評価で_PANIC_したら結果を表示せず警告する() {
@@ -516,6 +551,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 式、do ブロック、宣言のどれでエンジンが PANIC しても警告する
+    /// en: Shows a warning when the engine panics on an expression, a do block or a declaration
     #[story("F1")]
     #[test]
     fn 入力したものがどの経路で送られても_PANIC_を警告する() {
@@ -543,6 +579,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 毎回エンジンを異常終了させる宣言を送ると、再実行でも異常終了したと表示し、前の宣言を残す
+    /// en: Reports the repeated crash and keeps earlier declarations when a declaration always crashes the engine
     #[story("F1")]
     #[test]
     fn 再実行してもまた異常終了したら知らせてセッションを続ける() {
@@ -561,6 +598,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: 再起動を中断したあとに :restart を実行すると、宣言を再実行する
+    /// en: Replays the declarations when :restart runs after a restart was interrupted
     #[story("A4", "F1")]
     #[test]
     fn 再起動を中断しても_colon_restart_でやり直せる() {
@@ -579,6 +617,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 
     /// ja: ファイルの読み込み直しで再起動を中断したあとに :restart を実行すると、ファイルと宣言を戻す
+    /// en: Restores the file and the declarations when :restart runs after reloading the file was interrupted
     #[story("A4", "F1")]
     #[test]
     fn ファイルの読み込み直しを中断しても_colon_restart_でやり直せる() {
@@ -604,11 +643,13 @@ mod エンジンが異常終了してもセッションが続く {
 
 mod エンジンを再起動できないとき {
     //! ja: エンジンを再起動できないとき
+    //! en: When the engine fails to restart
     //!
     //! boot が失敗することもある。leani は報告して続ける (異常終了しない)。
     use super::*;
 
     /// ja: :restart のときにエンジンが起動に失敗すると、再起動できなかったと表示する
+    /// en: Reports that the restart failed when the engine fails to start on :restart
     #[story("F1")]
     #[test]
     fn 再起動に失敗しても報告して異常終了しない() {
@@ -623,6 +664,7 @@ mod エンジンを再起動できないとき {
     }
 
     /// ja: 再起動に失敗すると、宣言を保留にし、次の :restart で再実行する
+    /// en: Keeps the declarations pending and replays them on the next :restart when the restart fails
     #[story("F1")]
     #[test]
     fn 失敗しても宣言を捨てない() {
@@ -646,6 +688,7 @@ mod エンジンを再起動できないとき {
 
 mod replay_が途中で止まったとき {
     //! ja: replay が途中で止まったとき
+    //! en: When a replay stops partway
     //!
     //! 実行できなかった宣言は保留しておくが、環境に含まれている宣言の並び (log) には
     //! 混ぜない。log は env のスタックと 1 対 1 に対応していて、混ぜると :undo と
@@ -653,6 +696,7 @@ mod replay_が途中で止まったとき {
     use super::*;
 
     /// ja: :restart の再実行を中断すると、残りの宣言を保留にし、環境の宣言に含めない
+    /// en: Keeps the remaining declarations pending and out of the environment when the replay is interrupted
     #[story("F1", "F2")]
     #[test]
     fn 実行できなかった宣言を環境の並びに混ぜない() {
@@ -672,6 +716,7 @@ mod replay_が途中で止まったとき {
     }
 
     /// ja: :restart をもう一度実行すると、保留にした宣言を再実行する
+    /// en: Replays the pending declarations when :restart runs again
     #[story("F1", "F2")]
     #[test]
     fn 次の_colon_restart_で再実行する() {
@@ -698,6 +743,7 @@ mod replay_が途中で止まったとき {
     }
 
     /// ja: 異常終了のあとの再実行を Ctrl-C で中断すると、入力した行を実行せず、そのことを表示する
+    /// en: Skips the entered line and says so when the replay after a crash is interrupted with Ctrl-C
     #[story("A4", "F1")]
     #[test]
     fn 異常終了後の再実行を_Ctrl_C_で止めたら入力を再実行しない() {
@@ -735,11 +781,13 @@ mod replay_が途中で止まったとき {
 
 mod 内部エラーでもセッションが続く {
     //! ja: 内部エラーが起きたとき
+    //! en: When an internal error occurs
     //!
     //! 想定外の panic は「内部エラー」として表示し、セッションを続ける。
     use super::*;
 
     /// ja: 宣言を送る途中で leani が panic すると、内部エラーと表示して前の宣言を再実行する
+    /// en: Shows an internal error and replays the earlier declarations when leani panics while sending a declaration
     #[story("F1")]
     #[test]
     fn panic_を捕まえて宣言を失わない() {
@@ -804,9 +852,11 @@ fn add_env(repl: &Driver, text: &str) {
 
 mod ファイルの読み書き {
     //! ja: ファイルの読み書き
+    //! en: Reading and writing files
     use super::*;
 
     /// ja: ファイルを指定して leani を起動すると、そのファイルの宣言を読み込む
+    /// en: Loads the declarations of a file when leani starts with the file
     #[story("B4")]
     #[test]
     fn 起動時に指定したファイルの関数を呼べる() {
@@ -818,6 +868,7 @@ mod ファイルの読み書き {
     }
 
     /// ja: :save で書き出したファイルを :l で読み込むと、書き出した宣言を戻す
+    /// en: Restores the saved declarations when a file written by :save is loaded with :l
     #[story("B3", "B4")]
     #[test]
     fn colon_save_したファイルを読み込み直せる() {
@@ -836,6 +887,7 @@ mod ファイルの読み書き {
     }
 
     /// ja: エラーのあるファイルを :l で読み込むと、読み込めなかったと表示し、今の環境を残す
+    /// en: Says the file could not be loaded and keeps the environment when :l loads a file with an error
     #[story("B4", "F1")]
     #[test]
     fn 読み込みに失敗しても今の環境を失わない() {
@@ -852,6 +904,7 @@ mod ファイルの読み書き {
     }
 
     /// ja: 読む権限の無いファイルを :l で読み込むと、読めないと表示する
+    /// en: Says the file cannot be read when :l loads a file without read permission
     #[story("B4")]
     #[test]
     fn 読み込めないファイルは理由を表示する() {
@@ -863,6 +916,7 @@ mod ファイルの読み書き {
     }
 
     /// ja: :l で読み込んだファイルを編集してから :r を実行すると、編集後の宣言を読み込む
+    /// en: Loads the edited declarations when :r runs after the loaded file is edited
     #[story("B4")]
     #[test]
     fn 編集したファイルを_colon_r_で読み込み直す() {
@@ -876,6 +930,7 @@ mod ファイルの読み書き {
     }
 
     /// ja: ファイルを読み込んでいないときに :r を実行すると、入力した宣言をすべて消す
+    /// en: Removes all entered declarations when :r runs with no file loaded
     #[story("B4", "F2")]
     #[test]
     fn ファイルを読み込んでいなければ_colon_r_は起動直後に戻す() {
@@ -888,11 +943,13 @@ mod ファイルの読み書き {
 
 mod 少しずつ組み立てる {
     //! ja: 宣言の組み立て
+    //! en: Building up declarations
     //!
     //! 前に実行した宣言を次の宣言から呼べる。REPL 上で少しずつ組み立てる。
     use super::*;
 
     /// ja: 前の宣言を呼ぶ宣言を評価すると、その値を表示する
+    /// en: Shows the value when a declaration that calls an earlier one is evaluated
     #[story("B2")]
     #[test]
     fn 実行した宣言を次の宣言から呼べる() {
@@ -903,6 +960,7 @@ mod 少しずつ組み立てる {
     }
 
     /// ja: :save を実行すると、宣言を実行した順に書き出す
+    /// en: Writes the declarations in the order they ran when :save runs
     #[story("B2", "B3")]
     #[test]
     fn 組み立てた順に書き出す() {
@@ -920,9 +978,11 @@ mod 少しずつ組み立てる {
 
 mod コマンドの一覧 {
     //! ja: コマンドの一覧
+    //! en: The command list
     use super::*;
 
     /// ja: :help を実行すると、コマンドの一覧を表示する
+    /// en: Shows the command list when :help runs
     #[story("H1")]
     #[test]
     fn colon_help_でコマンドの一覧を表示する() {
@@ -933,6 +993,7 @@ mod コマンドの一覧 {
     }
 
     /// ja: 証明モードで :help を実行すると、証明モードのヘルプを表示する
+    /// en: Shows the proof mode help when :help runs in proof mode
     #[story("H1")]
     #[test]
     fn 証明モードの_colon_help_では証明用のコマンドを表示する() {
@@ -942,6 +1003,7 @@ mod コマンドの一覧 {
     }
 
     /// ja: 無いコマンドを入力すると、不明なコマンドと表示してセッションを続ける
+    /// en: Says the command is unknown and keeps the session when a nonexistent command is entered
     #[story("H1")]
     #[test]
     fn 無いコマンドを入力したら知らせてセッションを続ける() {
@@ -951,6 +1013,7 @@ mod コマンドの一覧 {
     }
 
     /// ja: :abbrev に記号か略記の先頭を渡すと、合う略記を表示し、無ければ無いと表示する
+    /// en: Shows matching abbreviations for a symbol or a prefix, or says there are none, when :abbrev runs
     #[story("C7")]
     #[test]
     fn colon_abbrev_で略記の一覧を表示する() {
@@ -969,11 +1032,13 @@ mod コマンドの一覧 {
 
 mod 実行時間 {
     //! ja: 実行時間
+    //! en: Run time
     //!
     //! 重い計算を切り分けるための目安。デフォルトでは表示しない (ノイズになる)。
     use super::*;
 
     /// ja: :time を実行するたびに、結果に実行時間を添えるかどうかを切り替える
+    /// en: Toggles whether results show the run time each time :time runs
     #[story("A3")]
     #[test]
     fn colon_time_で実行時間を表示する() {
@@ -990,9 +1055,11 @@ mod 実行時間 {
 
 mod 型と_docstring {
     //! ja: 型と docstring
+    //! en: Types and docstrings
     use super::*;
 
     /// ja: :i に名前を渡すと、その型と docstring を表示する
+    /// en: Shows the type and the docstring when :i runs with a name
     #[story("D2")]
     #[test]
     fn colon_i_は型と_docstring_を表示する() {
@@ -1003,6 +1070,7 @@ mod 型と_docstring {
     }
 
     /// ja: :i に無い名前を渡すと、その名前が不明だと表示する
+    /// en: Says the name is unknown when :i runs with a nonexistent name
     #[story("D2")]
     #[test]
     fn 無い名前はエラーを表示する() {
@@ -1014,9 +1082,11 @@ mod 型と_docstring {
 
 mod 型と定義の表示 {
     //! ja: 型と定義の表示
+    //! en: Showing types and definitions
     use super::*;
 
     /// ja: :t か :type に式を渡すと、その式の型を表示する
+    /// en: Shows the type of the expression when :t or :type runs with an expression
     #[story("D2")]
     #[test]
     fn colon_t_は式の型を表示する() {
@@ -1027,6 +1097,7 @@ mod 型と定義の表示 {
     }
 
     /// ja: :p に定義の名前を渡すと、定義の本体を表示する
+    /// en: Shows the body of the definition when :p runs with its name
     #[story("D3")]
     #[test]
     fn colon_p_は定義の本体を表示する() {
@@ -1036,6 +1107,7 @@ mod 型と定義の表示 {
     }
 
     /// ja: 名前を渡さずに :p を実行すると、名前が必要だと表示する
+    /// en: Says a name is required when :p runs without a name
     #[story("D3", "H1")]
     #[test]
     fn colon_p_に名前が無ければ名前が必要と伝える() {
@@ -1046,11 +1118,13 @@ mod 型と定義の表示 {
 
 mod 定理を外部サービスで探す {
     //! ja: 外部サービスでの定理検索
+    //! en: Theorem search with an external service
     //!
     //! :loogle は外部サービスに問い合わせるだけで、エンジンは一度も操作しない。
     use super::*;
 
     /// ja: パターンを渡さずに :loogle を実行すると、問い合わせずにパターンが必要だと表示する
+    /// en: Says a pattern is required and sends no query when :loogle runs without a pattern
     #[story("D4")]
     #[test]
     fn パターンが無ければ問い合わせない() {
@@ -1060,6 +1134,7 @@ mod 定理を外部サービスで探す {
     }
 
     /// ja: :loogle を実行すると、見つかった定理を表示し、環境を変えない
+    /// en: Shows the found theorems and leaves the environment unchanged when :loogle runs
     #[story("D4")]
     #[test]
     fn 問い合わせても環境は変わらない() {
@@ -1086,6 +1161,7 @@ mod 定理を外部サービスで探す {
     }
 
     /// ja: :loogle の問い合わせがタイムアウトすると、検索に失敗した理由を表示してセッションを続ける
+    /// en: Shows why the search failed and keeps the session when the query for :loogle times out
     #[story("D4", "F4")]
     #[test]
     fn loogle_が応答しなくてもセッションは続く() {
@@ -1104,11 +1180,13 @@ mod 定理を外部サービスで探す {
 
 mod 書き出しの安全対策 {
     //! ja: 書き出しの安全対策
+    //! en: Safeguards for saving files
     //!
     //! :save は宣言を残す操作。そこで宣言を失わせない。
     use super::*;
 
     /// ja: すでにあるファイルに :save すると、すでにあると表示して上書きしない
+    /// en: Says the file exists and does not overwrite it when :save targets an existing file
     #[story("B3")]
     #[test]
     fn すでにあるファイルは上書きしない() {
@@ -1126,6 +1204,7 @@ mod 書き出しの安全対策 {
     }
 
     /// ja: リンク先の無いシンボリックリンクに :save すると、すでにあると表示してリンク先を作らない
+    /// en: Says the file exists and does not create the target when :save targets a dangling symlink
     #[story("B3")]
     #[test]
     fn リンク先の無いシンボリックリンクも上書きしない() {
@@ -1145,6 +1224,7 @@ mod 書き出しの安全対策 {
     }
 
     /// ja: leani が書き出したファイルにもう一度 :save すると、そのファイルを上書きする
+    /// en: Overwrites the file when :save targets a file that leani wrote
     #[story("B3")]
     #[test]
     fn leani_が書き出したファイルは上書きする() {
@@ -1162,6 +1242,7 @@ mod 書き出しの安全対策 {
     }
 
     /// ja: 無いディレクトリの中に :save すると、書き出せなかったと表示してセッションを続ける
+    /// en: Says the file could not be written and keeps the session when :save targets a missing directory
     #[story("B3")]
     #[test]
     fn 書き込めない場所を指定しても異常終了しない() {
@@ -1176,9 +1257,11 @@ mod 書き出しの安全対策 {
 
 mod 再起動のあとで読み込み直せないとき {
     //! ja: 再起動のあとで読み込み直せないとき
+    //! en: When a file cannot be reloaded after a restart
     use super::*;
 
     /// ja: 読み込んだファイルを消してから :restart を実行すると、読み込み直せなかったと表示してその宣言を外す
+    /// en: Reports the failed reload and drops the file's declarations when the loaded file is deleted before :restart
     #[story("F1", "B4")]
     #[test]
     fn 読み込んだファイルが消えていたら理由を表示して宣言から外す() {
@@ -1195,6 +1278,7 @@ mod 再起動のあとで読み込み直せないとき {
     }
 
     /// ja: init を送る途中で再起動を中断すると、init を残し、次の :restart で init を戻す
+    /// en: Keeps init and restores it on the next :restart when the restart is interrupted while sending init
     #[story("F1", "G2")]
     #[test]
     fn init_の再実行中に異常終了しても_init_を捨てない() {
@@ -1222,11 +1306,13 @@ mod 再起動のあとで読み込み直せないとき {
 
 mod init_の扱い {
     //! ja: init の扱い
+    //! en: Handling init
     //!
     //! init は base の環境に含めるので、環境を作り直すと消えやすい。
     use super::*;
 
     /// ja: :restart を実行すると、init の宣言を残す
+    /// en: Keeps the init declarations when :restart runs
     #[story("F1", "G2")]
     #[test]
     fn 再起動しても_init_の宣言が残る() {
@@ -1242,6 +1328,7 @@ mod init_の扱い {
     }
 
     /// ja: :reset を実行すると、init の宣言を残す
+    /// en: Keeps the init declarations when :reset runs
     #[story("F2", "G2")]
     #[test]
     fn colon_reset_しても_init_の宣言が残る() {
@@ -1256,6 +1343,7 @@ mod init_の扱い {
     }
 
     /// ja: init で名前空間を open すると、入力した式でその名前空間の短い名前を評価する
+    /// en: Evaluates short names from a namespace in entered input when init opens the namespace
     #[story("G2")]
     #[test]
     fn init_に書いた_open_は入力した行でも有効になる() {
@@ -1266,6 +1354,7 @@ mod init_の扱い {
     }
 
     /// ja: :reset を実行すると、init に書いた open を残す
+    /// en: Keeps the open from init when :reset runs
     #[story("F2", "G2")]
     #[test]
     fn colon_reset_しても_init_の_open_が残る() {
@@ -1277,6 +1366,7 @@ mod init_の扱い {
     }
 
     /// ja: エラーのある init を読み込むと、エラーがあると表示して環境を変えない
+    /// en: Reports the error and leaves the environment unchanged when an init file with an error is loaded
     #[story("G2", "G4")]
     #[test]
     fn エラーのある_init_は知らせて環境を変えない() {
@@ -1291,6 +1381,7 @@ mod init_の扱い {
     }
 
     /// ja: init にディレクトリを指定して読み込むと、読めないと表示する
+    /// en: Says the init file cannot be read when a directory is given as init
     #[story("G2", "G4")]
     #[test]
     fn 読めない_init_は理由を表示する() {
@@ -1302,6 +1393,7 @@ mod init_の扱い {
     }
 
     /// ja: import だけの init を読み込むと、何も表示せず環境を変えない
+    /// en: Shows nothing and leaves the environment unchanged when an init file with only imports is loaded
     #[story("G2")]
     #[test]
     fn import_だけの_init_は何もしない() {
@@ -1317,11 +1409,13 @@ mod init_の扱い {
 
 mod 書き出しにすべての宣言を含める {
     //! ja: 書き出しに含める宣言
+    //! en: Declarations included in a saved file
     //!
     //! log だけ書き出すと、読み込み直したファイルが元の環境と違うものになる。
     use super::*;
 
     /// ja: :save を実行すると、init、読み込んだファイル、入力した宣言をすべて書き出す
+    /// en: Writes the declarations from init, loaded files and input when :save runs
     #[story("B3", "G2")]
     #[test]
     fn init_と_読み込んだファイルの宣言も書き出す() {
@@ -1349,11 +1443,13 @@ mod 書き出しにすべての宣言を含める {
 
 mod 書き直しをやめたとき {
     //! ja: 書き直しをやめたとき
+    //! en: When a rewrite is abandoned
     //!
     //! 前の宣言の続きを書き始めた時点で、直前の宣言は取り消されている。
     use super::*;
 
     /// ja: 宣言の続きを入力している途中で Ctrl-C を押すと、元の宣言を戻す
+    /// en: Restores the original declaration when Ctrl-C is pressed while continuing a declaration
     #[story("C2")]
     #[test]
     fn 続きを書く途中で捨てたら元の宣言が戻る() {
@@ -1370,6 +1466,7 @@ mod 書き直しをやめたとき {
     }
 
     /// ja: 宣言の続きを空行で確定したあとに Ctrl-C を押すと、書き直した宣言を残す
+    /// en: Keeps the rewritten declaration when Ctrl-C is pressed after the continuation is confirmed
     #[story("C2")]
     #[test]
     fn 書き直しが確定したら戻さない() {
@@ -1385,6 +1482,7 @@ mod 書き直しをやめたとき {
     }
 
     /// ja: タクティクの続きを入力している途中で Ctrl-C を押すと、直前のタクティクを戻す
+    /// en: Restores the previous tactic when Ctrl-C is pressed while continuing a tactic
     #[story("C2", "E1")]
     #[test]
     fn タクティクの続きを捨てたら直前のタクティクが戻る() {
@@ -1402,6 +1500,7 @@ mod 書き直しをやめたとき {
     }
 
     /// ja: タクティクの続きで証明が終わったあとに Ctrl-C を押すと、完成した証明を残す
+    /// en: Keeps the finished proof when Ctrl-C is pressed after a tactic continuation finishes it
     #[story("C2", "E1")]
     #[test]
     fn タクティクの書き直しが確定したら戻さない() {
@@ -1420,6 +1519,7 @@ mod 書き直しをやめたとき {
     }
 
     /// ja: sorry を含む宣言の続きを入力している途中で Ctrl-C を押すと、:prove でその sorry のゴールを表示する
+    /// en: Shows the sorry's goal on :prove when Ctrl-C is pressed while continuing a declaration with sorry
     #[story("C2", "E1")]
     #[test]
     fn sorry_を含む宣言の続きを捨てたら_prove_も戻る() {
@@ -1439,9 +1539,11 @@ mod 書き直しをやめたとき {
 
 mod 読み込みの中断 {
     //! ja: 読み込みの中断
+    //! en: Interrupting a load
     use super::*;
 
     /// ja: ファイルの読み込みを中断すると、読み込む前の環境と宣言を残す
+    /// en: Keeps the previous environment and declarations when loading a file is interrupted
     #[story("A4", "F1")]
     #[test]
     fn 中断しても環境と宣言を失わない() {
@@ -1468,6 +1570,7 @@ mod 読み込みの中断 {
     }
 
     /// ja: :l で init を適用し直す途中で中断すると、ファイルを読み込まずに前の宣言を残す
+    /// en: Cancels the load and keeps earlier declarations when reapplying init during :l is interrupted
     #[story("A4", "F1", "G2")]
     #[test]
     fn init_の再適用中に中断したら読み込みを取り消す() {
@@ -1493,6 +1596,7 @@ mod 読み込みの中断 {
 
 mod 履歴の書き出し {
     //! ja: 履歴の書き出し
+    //! en: Writing history
     //!
     //! 履歴は確定した入力を 1 件として、そのつど追記する。ファイル全体を書き直さないので、
     //! 読めない形式のファイルがあっても消さない。
@@ -1500,6 +1604,7 @@ mod 履歴の書き出し {
     use leani::history::BlockHistory;
 
     /// ja: 読めない形式の履歴ファイルに入力を記録すると、前の内容を残す
+    /// en: Keeps the existing content when an input is recorded in a history file in an unreadable format
     #[story("F3")]
     #[test]
     fn 読めない形式の履歴を上書きしない() {
@@ -1515,6 +1620,7 @@ mod 履歴の書き出し {
     }
 
     /// ja: 複数行の入力を記録すると、読み込んだときに 1 件として返す
+    /// en: Loads a multi-line input back as one entry when it is recorded
     #[story("C3", "F3")]
     #[test]
     fn 複数行の入力を_1_件として保存する() {
@@ -1525,6 +1631,7 @@ mod 履歴の書き出し {
     }
 
     /// ja: leani を起動すると、標準入力が端末のときだけ履歴を使う
+    /// en: Enables history at startup only if stdin is a terminal
     #[story("F3")]
     #[test]
     fn 標準入力が端末でなければ履歴を持たない() {
@@ -1553,6 +1660,7 @@ mod 履歴の書き出し {
     }
 
     /// ja: 行編集が 1 行を履歴に追加しようとすると、その行を記録しない
+    /// en: Records nothing when line editing tries to add a single line to history
     #[story("C3", "F3")]
     #[test]
     fn 行ごとの追加は受け付けない() {
@@ -1567,11 +1675,13 @@ mod 履歴の書き出し {
 
 mod 履歴から呼び出した入力 {
     //! ja: 履歴から呼び出した入力
+    //! en: Input recalled from history
     //!
     //! 履歴から呼び出した複数行は、改行を含む 1 行として `Repl::feed_line` に渡される。
     use super::*;
 
     /// ja: 完結したブロックで Enter を押すと、空行を待たずに実行する
+    /// en: Runs a complete block without waiting for a blank line when Enter is pressed
     #[story("C3")]
     #[test]
     fn 完結したブロックは_Enter_だけで送る() {
@@ -1589,6 +1699,7 @@ mod 履歴から呼び出した入力 {
     }
 
     /// ja: 入力途中のブロックで Enter を押すと、送らずに続きの行を待つ
+    /// en: Waits for more lines without sending when Enter is pressed on an unfinished block
     #[story("C3")]
     #[test]
     fn 途中のブロックは送らずに続きの行を待つ() {
@@ -1607,11 +1718,13 @@ mod 履歴から呼び出した入力 {
 
 mod replay_で再実行できなかったもの {
     //! ja: replay で再実行できなかったもの
+    //! en: What the replay could not run
     //!
     //! 何も表示せずに消えると、ユーザーが気付く場所が無い。
     use super::*;
 
     /// ja: 読み込んだファイルにエラーを入れて :restart を実行すると、読み込み直せなかったことと消えた宣言を表示する
+    /// en: Reports the failed reload and the lost declarations when :restart runs after the loaded file gets an error
     #[story("F1", "B4")]
     #[test]
     fn 読み込み直せないファイルと消えた宣言を報告する() {
@@ -1637,9 +1750,11 @@ mod replay_で再実行できなかったもの {
 
 mod 書き出したファイルのヘッダ {
     //! ja: 書き出したファイルのヘッダ
+    //! en: Header of a saved file
     use super::*;
 
     /// ja: :save を実行すると、ファイルの先頭に import Lean を書く
+    /// en: Writes import Lean at the top of the file when :save runs
     #[story("B3")]
     #[test]
     fn lean_でそのまま実行できる_import_を書く() {
@@ -1657,9 +1772,11 @@ mod 書き出したファイルのヘッダ {
 
 mod init_と読み込みが混ざるとき {
     //! ja: init と読み込みが混ざるとき
+    //! en: When init and a loaded file are combined
     use super::*;
 
     /// ja: :l でファイルを読み込むと、ファイルのあとに init の宣言を追加し直す
+    /// en: Adds the init declarations again after the file when :l loads a file
     #[story("G2", "B3")]
     #[test]
     fn 読み込んだあとも_init_を追加し直す() {
@@ -1689,9 +1806,11 @@ mod init_と読み込みが混ざるとき {
 
 mod 宣言の取り消し {
     //! ja: 宣言の取り消し
+    //! en: Undoing declarations
     use super::*;
 
     /// ja: :undo n を実行すると、最後の n 件の宣言を取り消す
+    /// en: Undoes the last n declarations when :undo n runs
     #[story("F2")]
     #[test]
     fn colon_undo_n_で_n_件取り消す() {
@@ -1707,11 +1826,13 @@ mod 宣言の取り消し {
 
 mod 保留した宣言とエンジンの世代 {
     //! ja: 保留した宣言とエンジンの世代
+    //! en: Pending declarations and engine generations
     //!
     //! 取り消した宣言の中身は env id を持つ。再起動したエンジンにその id は無い。
     use super::*;
 
     /// ja: 書き直しの途中で :restart してから書き直しをやめると、取り消した宣言を使う式を評価する
+    /// en: Evaluates an expression using the undone declaration when rewriting is abandoned after :restart
     #[story("F1", "C2")]
     #[test]
     fn 無効になった_env_id_を設定し直さない() {
@@ -1729,6 +1850,7 @@ mod 保留した宣言とエンジンの世代 {
     }
 
     /// ja: 書き直し中にエンジンが異常終了してからやめると、前の宣言に sorry があっても :prove は sorry が無いと表示する
+    /// en: Says :prove finds no sorry when a rewrite after a declaration with sorry is abandoned after an engine crash
     #[story("C2", "E1", "F1")]
     #[test]
     fn 再起動のあとで書き直しをやめたら前の宣言の_sorry_を残さない() {
@@ -1750,6 +1872,7 @@ mod 保留した宣言とエンジンの世代 {
     }
 
     /// ja: エンジンが無効な env id を持つときに宣言を入力すると、環境のエラーと :restart を表示する
+    /// en: Shows an environment error and :restart when a declaration is entered and the engine has an invalid env id
     #[story("F1")]
     #[test]
     fn 無効な_env_id_を持っていたらそのことを報告する() {
@@ -1764,12 +1887,14 @@ mod 保留した宣言とエンジンの世代 {
 
 mod 環境に無い宣言の扱い {
     //! ja: 環境に無い宣言の扱い
+    //! en: Declarations missing from the environment
     //!
     //! replay でエラーになった宣言と実行できなかった宣言は env に無い。テキストは保留
     //! しておくが、そのまま書き出すとエラーになるファイルができる。
     use super::*;
 
     /// ja: 依存先が消えたあとで :restart すると、再実行に失敗した宣言を表示して保留にする
+    /// en: Shows and keeps pending a declaration that fails to replay when :restart runs without its dependency
     #[story("F1")]
     #[test]
     fn 再実行に失敗した宣言を保留する() {
@@ -1786,6 +1911,7 @@ mod 環境に無い宣言の扱い {
     }
 
     /// ja: :save すると、保留にした宣言をコメントとして書き出す
+    /// en: Writes pending declarations as comments when :save runs
     #[story("B3", "F1")]
     #[test]
     fn colon_save_はコメントとして添える() {
@@ -1807,6 +1933,7 @@ mod 環境に無い宣言の扱い {
     }
 
     /// ja: :reset すると、保留にした宣言を捨てたと表示し、そのあとの :restart で再実行しない
+    /// en: Discards pending declarations with a notice when :reset runs and does not replay them on :restart
     #[story("F2")]
     #[test]
     fn colon_reset_したら保留も捨てる() {
@@ -1829,9 +1956,11 @@ mod 環境に無い宣言の扱い {
 
 mod 読み込んだファイルの_import {
     //! ja: 読み込んだファイルの import
+    //! en: Imports of a loaded file
     use super::*;
 
     /// ja: :save すると、その import を書き出したファイルのヘッダに書く
+    /// en: Writes the imports into the header of the saved file when :save runs
     #[story("B3", "B4")]
     #[test]
     fn colon_save_に書き戻す() {
@@ -1855,6 +1984,7 @@ mod 読み込んだファイルの_import {
     }
 
     /// ja: :restart でファイルを読み込み直せなかったあとに :save すると、そのファイルの import を書かない
+    /// en: Leaves out the imports of a file that :restart could not reload when :save runs
     #[story("B3", "F1")]
     #[test]
     fn 読み込み直せなかったファイルの_import_は_colon_save_に書かない() {
@@ -1880,6 +2010,7 @@ mod 読み込んだファイルの_import {
 
 mod module_のファイル {
     //! ja: module のファイル
+    //! en: Module files
     //!
     //! Lean の module system のファイル。`module` の行は import より前に書く決まりで、
     //! module から module でないファイルは import できない。
@@ -1893,6 +2024,7 @@ mod module_のファイル {
         public def five := 5\n";
 
     /// ja: :l すると宣言を読み込み、:save すると module の行で始まるファイルを書き出す
+    /// en: Loads the declarations on :l and saves a file that starts with the module line on :save
     #[story("B4")]
     #[test]
     fn module_のファイルを_colon_l_できる() {
@@ -1913,6 +2045,7 @@ mod module_のファイル {
     }
 
     /// ja: 設定に import のある環境で :l すると、設定の import の代わりに public import Lean を足す
+    /// en: Adds public import Lean instead of the configured imports when :l runs in an environment with imports
     #[story("B4")]
     #[test]
     fn module_のファイルには設定の_import_を足さない() {
@@ -1946,9 +2079,11 @@ mod module_のファイル {
 
 mod コメントに書いた_import {
     //! ja: コメントに書いた import
+    //! en: Imports written in comments
     use super::*;
 
     /// ja: :save すると、その import を書かずに、:l で読み込めるファイルを書き出す
+    /// en: Saves a loadable file without the commented import when :save runs
     #[story("B3", "B4")]
     #[test]
     fn colon_save_のヘッダに書かない() {
@@ -1979,6 +2114,7 @@ mod コメントに書いた_import {
 
 mod 元になる環境を失ったとき {
     //! ja: 元になる環境を失ったとき
+    //! en: When the base environment is lost
     //!
     //! boot が失敗すると環境がどこにも無い。この状態で操作を受け付けても、事実と違う報告を
     //! せず、入力したテキストを失わないことだけは守る (原因を直せば :restart で戻る)。
@@ -2002,6 +2138,7 @@ mod 元になる環境を失ったとき {
     }
 
     /// ja: :reset すると、元になる環境が無いと表示して保留を残す
+    /// en: Says there is no base environment and keeps the pending declaration when :reset runs
     #[story("F1", "F2")]
     #[test]
     fn colon_reset_は受け付けずに保留を残す() {
@@ -2021,6 +2158,7 @@ mod 元になる環境を失ったとき {
     }
 
     /// ja: 宣言を再実行しようとすると、再実行できなかったと表示して保留にする
+    /// en: Says the replay failed and keeps the declarations pending when a replay starts
     #[story("F1")]
     #[test]
     fn 再実行せずに保留する() {
@@ -2044,6 +2182,7 @@ mod 元になる環境を失ったとき {
     }
 
     /// ja: sorry を持ち越したまま環境を失うと、その sorry を捨て、:prove で証明モードを始めない
+    /// en: Drops a carried-over sorry when the environment is lost, so :prove does not start proof mode
     #[story("F1", "E1")]
     #[test]
     fn sorry_の持ち越しも捨てる() {
@@ -2071,6 +2210,7 @@ mod 元になる環境を失ったとき {
     }
 
     /// ja: 今の環境に送るコマンドには NoEnvironment を返し、新しい環境を作るコマンドはそのまま送る
+    /// en: Returns NoEnvironment for a command on the environment and sends one that starts a new environment
     #[story("F1")]
     #[test]
     fn 送る前にエラーにする() {
@@ -2095,6 +2235,7 @@ mod 元になる環境を失ったとき {
     }
 
     /// ja: :t を実行すると、型の代わりに取得できなかったと表示する
+    /// en: Says the type could not be obtained when :t runs
     #[story("F1", "D2")]
     #[test]
     fn 型も返さない() {
@@ -2110,9 +2251,11 @@ mod 元になる環境を失ったとき {
 
 mod 解決できない_import_のファイル {
     //! ja: 解決できない import のファイル
+    //! en: Files with unresolvable imports
     use super::*;
 
     /// ja: :l すると、読み込めなかったと表示して今の環境を残す
+    /// en: Says the file could not be loaded and keeps the current environment when :l runs
     #[story("B4", "G4")]
     #[test]
     fn 読み込んだと表示しない() {
@@ -2140,9 +2283,11 @@ mod 解決できない_import_のファイル {
 
 mod 引数の受け取り {
     //! ja: 引数の受け取り
+    //! en: Argument parsing
     use super::*;
 
     /// ja: 数として読めない引数で :undo を実行すると、宣言を 1 件取り消す
+    /// en: Undoes one declaration when :undo runs with an argument that is not a number
     #[story("F2")]
     #[test]
     fn colon_undo_の引数が数でなければ_1_件戻す() {
@@ -2157,9 +2302,11 @@ mod 引数の受け取り {
 
 mod 送る前の確認 {
     //! ja: 送る前の確認
+    //! en: Checks before sending to the engine
     use super::*;
 
     /// ja: エンジンに環境が無いときに宣言を入力すると、エンジンが使えないと表示して宣言を記録しない
+    /// en: Says the engine is unusable and records nothing when a declaration is entered without an environment
     #[story("F1")]
     #[test]
     fn 起動できていないエンジンには送らない() {
@@ -2175,9 +2322,11 @@ mod 送る前の確認 {
 
 mod 証明モード {
     //! ja: 証明モード
+    //! en: Proof mode
     use super::*;
 
     /// ja: exact? を入力して証明が終わると、exact? の代わりに提案の exact を宣言に書く
+    /// en: Writes the suggested exact in place of exact? into the declaration when exact? finishes the proof
     #[story("E2")]
     #[test]
     fn exact_の提案をスクリプトに追加する() {
@@ -2195,6 +2344,7 @@ mod 証明モード {
     }
 
     /// ja: 複数行の文字列で sorry を証明すると、置き換えた宣言の値は入力した文字列と同じになる
+    /// en: Keeps the entered string as the declaration's value when a multi-line string proves its sorry
     #[story("E3")]
     #[test]
     fn 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない() {
@@ -2207,6 +2357,7 @@ mod 証明モード {
     }
 
     /// ja: 閉じていないタクティクを入力すると、次の行に続けて 1 つのタクティクとして実行する
+    /// en: Runs an unclosed tactic with the next line as one tactic when it is entered
     #[story("E1")]
     #[test]
     fn 証明モードで閉じていないタクティクを入力すると次の行に続ける() {
@@ -2220,6 +2371,7 @@ mod 証明モード {
     }
 
     /// ja: セミコロンで並べたタクティクを 1 行で入力すると、すべて実行して証明を終える
+    /// en: Runs all tactics and finishes the proof when one line of semicolon-separated tactics is entered
     #[story("E1")]
     #[test]
     fn セミコロンでタクティクを並べると_1_行で実行する() {
@@ -2230,6 +2382,7 @@ mod 証明モード {
     }
 
     /// ja: パースエラーになるタクティクを入力すると、入力した行の中の位置を表示する
+    /// en: Shows the position in the entered line when a tactic with a parse error is entered
     #[story("E1")]
     #[test]
     fn タクティクのパースエラーは入力した行の位置で表示する() {
@@ -2240,6 +2393,7 @@ mod 証明モード {
     }
 
     /// ja: 余分な語や括弧のあるタクティクを入力すると、入力したとおりの位置でパースエラーを表示する
+    /// en: Shows a parse error at the entered position when a tactic has an extra token or parenthesis
     #[story("E1")]
     #[test]
     fn 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する() {
@@ -2252,6 +2406,7 @@ mod 証明モード {
     }
 
     /// ja: 証明の途中で :goals と :script を実行すると、残りのゴールとそれまでのタクティクを表示する
+    /// en: Shows the remaining goals and the tactics so far when :goals and :script run mid-proof
     #[story("E1")]
     #[test]
     fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
@@ -2268,6 +2423,7 @@ mod 証明モード {
     }
 
     /// ja: sorry の無いまま証明モードの外で :done、:goals、:script を実行すると、証明モードではないと表示する
+    /// en: Says it is not in proof mode when :done, :goals or :script runs outside proof mode with no sorry
     #[story("E1")]
     #[test]
     fn 証明モードの外で証明用のコマンドを入力すると証明モードではないと伝える() {
@@ -2280,6 +2436,7 @@ mod 証明モード {
     }
 
     /// ja: sorry のある宣言を :undo してから :prove を実行すると、その前の宣言を残す
+    /// en: Keeps the earlier declaration when :prove runs after :undo of a declaration with a sorry
     #[story("E1", "F2")]
     #[test]
     fn colon_undo_のあとの_colon_prove_が手前の宣言を消さない() {
@@ -2298,6 +2455,7 @@ mod 証明モード {
     }
 
     /// ja: タクティクのあとで :undo を実行すると、そのタクティクの前のゴールに戻してスクリプトから除く
+    /// en: Restores the goal before the last tactic and drops it from the script when :undo runs
     #[story("E1")]
     #[test]
     fn colon_undo_でタクティクを_1_つ取り消す() {
@@ -2317,6 +2475,7 @@ mod 証明モード {
     }
 
     /// ja: タクティクの直後にインデントした行を入力すると、前のタクティクと合わせて 1 つのタクティクとして実行し直す
+    /// en: Reruns the previous tactic joined with an indented line when that line is entered right after it
     #[story("E1", "C2")]
     #[test]
     fn タクティクの直後にインデントした行を書くと前のタクティクの続きとして読み直す() {
@@ -2333,6 +2492,7 @@ mod 証明モード {
     }
 
     /// ja: :q か :quit を入力すると、証明モードを終了し、そのあとの式を評価する
+    /// en: Exits proof mode and evaluates the next expression when :q or :quit is entered
     #[story("E1")]
     #[test]
     fn 証明モードの_colon_q_は証明モードだけを終了する() {
@@ -2346,6 +2506,7 @@ mod 証明モード {
     }
 
     /// ja: エラーになるタクティクを入力すると、エラーを表示し、スクリプトに記録せずゴールを変えない
+    /// en: Shows the error without recording the tactic or changing the goal when a tactic fails
     #[story("E1")]
     #[test]
     fn エラーになったタクティクはスクリプトに記録しない() {
@@ -2357,6 +2518,7 @@ mod 証明モード {
     }
 
     /// ja: エンジンがタクティクにエラーの応答を返すと、そのエラーを表示してゴールを変えない
+    /// en: Shows the error and keeps the goal when the engine returns an error response to a tactic
     #[story("E1")]
     #[test]
     fn エンジンが返したエラーを表示してゴールを変えない() {
@@ -2376,6 +2538,7 @@ mod 証明モード {
     }
 
     /// ja: エンジンがタクティクの応答で PANIC すると、警告して proofState とスクリプトを変えない
+    /// en: Shows a PANIC warning and keeps the proofState and script when the engine panics on a tactic
     #[story("E1", "F1")]
     #[test]
     fn タクティクで_PANIC_したら警告して_proofState_を進めない() {
@@ -2395,6 +2558,7 @@ mod 証明モード {
     }
 
     /// ja: エンジンが読み取れない提案を返すと、読み取れなかったと表示して入力したタクティクを記録する
+    /// en: Records the entered tactic and says it cannot read the suggestion when the engine returns a malformed one
     #[story("E2")]
     #[test]
     fn 提案を読み取れなければ入力したタクティクを記録する() {
@@ -2414,6 +2578,7 @@ mod 証明モード {
     }
 
     /// ja: 応答に sorry の位置が無いまま証明を終えると、位置を読み取れなかったと表示して宣言を sorry のまま残す
+    /// en: Keeps the declaration with its sorry and says the position is unreadable when a proof ends with no position
     #[story("E3")]
     #[test]
     fn sorry_の位置が分からなければ宣言は_sorry_のままだと知らせる() {
@@ -2448,6 +2613,7 @@ mod 証明モード {
     }
 
     /// ja: sorry の残る宣言があるときに証明モードの外で :goals を実行すると、その sorry のゴールを表示する
+    /// en: Shows the goal of the sorry when :goals runs outside proof mode with a declaration that has a sorry
     #[story("E1")]
     #[test]
     fn 証明モードの外の_colon_goals_で残っている_sorry_を表示する() {
@@ -2461,11 +2627,13 @@ mod 証明モード {
 
 mod 項の位置の_sorry {
     //! ja: 項の位置の sorry
+    //! en: Sorry in term position
     //!
     //! `:= sorry` の位置にはタクティクを書けないので、置き換えに失敗する。
     use super::*;
 
     /// ja: タクティクで証明を終えると、sorry のままだと表示して元の宣言を残す
+    /// en: Says the sorry stays and keeps the original declaration when a tactic finishes the proof
     #[story("E3")]
     #[test]
     fn 置き換えられなければ_sorry_のまま残す() {
@@ -2482,9 +2650,11 @@ mod 項の位置の_sorry {
 
 mod 環境全体が置き換わるとき {
     //! ja: 環境全体が置き換わるとき
+    //! en: When the whole environment is replaced
     use super::*;
 
     /// ja: 証明モードで :l を実行すると、証明モードを終了する
+    /// en: Exits proof mode when :l runs in proof mode
     #[story("B4", "E1")]
     #[test]
     fn 読み込んだら証明モードを終了する() {
@@ -2502,6 +2672,7 @@ mod 環境全体が置き換わるとき {
 
 mod 折り返した提案 {
     //! ja: 折り返した提案
+    //! en: Wrapped suggestions
     //!
     //! simp? の結果は 100 桁前後で折り返される。2 行目以降を取り出さないと、閉じていない
     //! スクリプトを「証明完了」として表示したまま何も知らせない (項の位置の sorry は
@@ -2515,6 +2686,7 @@ mod 折り返した提案 {
         hypothesisNumberFour, hypothesisNumberFive, hypothesisNumberSix]";
 
     /// ja: その提案で証明を終えると、提案の 2 行目以降も含めて sorry を置き換える
+    /// en: Replaces the sorry with the whole suggestion, wrapped lines included, when it finishes the proof
     #[story("E2", "E3")]
     #[test]
     fn 折り返した提案でも_sorry_を置き換えられる() {
@@ -2533,6 +2705,7 @@ mod 折り返した提案 {
     }
 
     /// ja: 項の位置の sorry を折り返した提案で証明すると、スクリプトを最後の行まで表示する
+    /// en: Shows the script to its last line when a wrapped suggestion proves a sorry in term position
     #[story("E2")]
     #[test]
     fn 項の位置の_sorry_でもスクリプトを切り詰めない() {
@@ -2555,6 +2728,7 @@ mod 折り返した提案 {
 
 mod sorry_が複数あるとき {
     //! ja: sorry が複数あるとき
+    //! en: When a declaration has several sorries
     //!
     //! repl は sorry ごとに位置を返すので、leani はその位置で 1 個だけを置き換える。
     //! テキストの "sorry" を数えて位置を決めると、2 個以上あるときに置き換えられず、
@@ -2562,6 +2736,7 @@ mod sorry_が複数あるとき {
     use super::*;
 
     /// ja: :prove 1 で選んだ sorry を証明すると、その sorry だけを置き換える
+    /// en: Replaces only the chosen sorry when :prove 1 picks it and the proof ends
     #[story("E1", "E3")]
     #[test]
     fn 選んだ_sorry_だけを置き換える() {
@@ -2584,6 +2759,7 @@ mod sorry_が複数あるとき {
     }
 
     /// ja: 1 つ目を証明したあとで :prove して残りの sorry を証明すると、sorry の無い宣言になる
+    /// en: Leaves no sorry in the declaration when the remaining sorry is proved after the first
     #[story("E1", "E3")]
     #[test]
     fn 残った_sorry_を続けて証明できる() {
@@ -2597,6 +2773,7 @@ mod sorry_が複数あるとき {
     }
 
     /// ja: 単独の行にある sorry を証明すると、インデントを変えずに sorry をタクティクに置き換える
+    /// en: Replaces a sorry on its own line with the tactic at the same indentation when the proof ends
     #[story("E1", "E3")]
     #[test]
     fn 単独の行にある_sorry_のインデントを変えない() {
@@ -2626,6 +2803,7 @@ mod sorry_が複数あるとき {
     }
 
     /// ja: インデントのある宣言の sorry を順に証明すると、それぞれの sorry を置き換える
+    /// en: Replaces each sorry in an indented declaration when they are proved in turn
     #[story("E1", "E3")]
     #[test]
     fn インデントのある宣言でも順に置き換えられる() {
@@ -2653,6 +2831,7 @@ mod sorry_が複数あるとき {
     }
 
     /// ja: 項の位置の sorry の置き換えに失敗したあとで :prove 2 を実行すると、残りの sorry のゴールを表示する
+    /// en: Shows the goal of the remaining sorry when :prove 2 runs after a term-position sorry is not replaced
     #[story("E3")]
     #[test]
     fn 置き換えられなくても残りの_sorry_の証明を続けられる() {
@@ -2676,12 +2855,14 @@ mod sorry_が複数あるとき {
 
 mod タクティクの途中でエンジンが変わる {
     //! ja: タクティクの途中でエンジンが変わったとき
+    //! en: When the engine changes during a tactic
     //!
     //! proofState は前のプロセスのもの。新しいエンジンは番号を 0 から付け直す
     //! ので、そのまま送ると別の証明の状態に対する応答が返ってくる。
     use super::*;
 
     /// ja: タクティクを送るときにエンジンが異常終了すると、証明モードを終了し、sorry のある宣言を残す
+    /// en: Exits proof mode and keeps the declaration with the sorry when the engine crashes on a tactic
     #[story("F1", "E1")]
     #[test]
     fn エンジンが異常終了したら証明モードを終了して宣言を残す() {
@@ -2713,6 +2894,7 @@ mod タクティクの途中でエンジンが変わる {
     }
 
     /// ja: タクティクを Ctrl-C で中断すると再開できると表示し、そのあと :prove して証明すると sorry を置き換える
+    /// en: Says the proof can resume when a tactic is interrupted, and replaces the sorry after :prove
     #[story("A4", "F1", "E1")]
     #[test]
     fn 中断しても証明モードを再開できる() {
@@ -2734,12 +2916,14 @@ mod タクティクの途中でエンジンが変わる {
 
 mod エラーになった宣言の_sorry {
     //! ja: エラーになった宣言の sorry
+    //! en: Sorry in a declaration with an error
     //!
     //! 環境に含まれていない宣言の sorry は置き換えられない。持ち越すと、置き換えに
     //! 失敗した直後に「sorry 1 個」と表示してから「sorry 2 個」と表示し直す。
     use super::*;
 
     /// ja: その宣言を入力すると、ゴールと :prove の案内を表示せず、:prove は sorry が無いと表示する
+    /// en: Says there is no sorry on :prove and shows no goal or hint when such a declaration is entered
     #[story("E1", "E3")]
     #[test]
     fn ゴールも証明モードの案内も表示しない() {
@@ -2753,6 +2937,7 @@ mod エラーになった宣言の_sorry {
     }
 
     /// ja: sorry の置き換えに失敗すると、置き換えに使った宣言の sorry ではなく元の sorry の数を表示する
+    /// en: Shows the original sorry count, not the sorry of the replacement declaration, when a replacement fails
     #[story("E1", "E3")]
     #[test]
     fn 置き換えに失敗しても件数を報告し直さない() {
@@ -2772,9 +2957,11 @@ mod エラーになった宣言の_sorry {
 
 mod 依存している公理 {
     //! ja: 依存している公理
+    //! en: Axioms a declaration depends on
     use super::*;
 
     /// ja: sorry の無い定理に #print axioms を実行すると、公理に依存しないと表示する
+    /// en: Says no axioms are used when #print axioms runs on a theorem without sorry
     #[story("E4")]
     #[test]
     fn print_axioms_を実行できる() {
@@ -2787,6 +2974,7 @@ mod 依存している公理 {
     }
 
     /// ja: sorry のある宣言に #print axioms を実行すると、sorryAx を表示する
+    /// en: Shows sorryAx when #print axioms runs on a declaration with a sorry
     #[story("E4")]
     #[test]
     fn sorry_のままなら_sorryAx_に依存する() {
@@ -2796,6 +2984,7 @@ mod 依存している公理 {
     }
 
     /// ja: sorry を証明で置き換えた定理に #print axioms を実行すると、公理に依存しないと表示する
+    /// en: Says no axioms are used when #print axioms runs on a theorem whose sorry was proved
     #[story("E4", "E1", "E3")]
     #[test]
     fn 置き換えたら_sorryAx_が消える() {
@@ -2812,12 +3001,14 @@ mod 依存している公理 {
 
 mod 入力の判定の途中でエンジンが異常終了する {
     //! ja: 入力の判定の途中でエンジンが異常終了したとき
+    //! en: When the engine crashes while judging input
     //!
     //! 完結判定もエンジンとの通信なので、そこでエンジンが異常終了することがある。guard が
     //! エンジンを再起動すると証明モードは終了するが、その行の処理はまだ続いている。
     use super::*;
 
     /// ja: 証明モードでタクティクを入力すると、その行を実行しなかったと表示し、:prove で再開できると表示する
+    /// en: Says the tactic line did not run and that :prove can resume when a tactic is entered in proof mode
     #[story("F1", "E1")]
     #[test]
     fn タクティクの行を宣言として送らない() {
@@ -2846,6 +3037,7 @@ mod 入力の判定の途中でエンジンが異常終了する {
 
 mod 完結の判定を中断したとき {
     //! ja: 完結の判定を中断したとき
+    //! en: When the completeness judgment is interrupted
     //!
     //! Ctrl-C で判定を止めたら、ユーザーは入力を送りたくない。判定の結果が無いまま
     //! 送ると、式も宣言として送ることになる。
@@ -2857,6 +3049,7 @@ mod 完結の判定を中断したとき {
     }
 
     /// ja: 宣言の判定を Ctrl-C で止めると、実行しなかったと表示して宣言を記録しない
+    /// en: Says the declaration did not run and records nothing when Ctrl-C stops its judgment
     #[story("A4", "C1")]
     #[test]
     fn 判定を_Ctrl_C_で止めたら入力を送らない() {
@@ -2871,6 +3064,7 @@ mod 完結の判定を中断したとき {
     }
 
     /// ja: 前の宣言の続きを空行で確定するときの判定を Ctrl-C で止めると、取り消した宣言を戻す
+    /// en: Restores the undone declaration when Ctrl-C stops the judgment on the empty line ending a continuation
     #[story("A4", "C6")]
     #[test]
     fn 途中のブロックを確定する判定を止めたら取り消した宣言を戻す() {
@@ -2907,6 +3101,7 @@ mod 完結の判定を中断したとき {
     }
 
     /// ja: 判定でエンジンが異常終了したあとの再実行を Ctrl-C で止めると、取り消した宣言を保留の後ろに並べる
+    /// en: Queues the undone declaration after the pending ones when Ctrl-C stops a replay after an engine crash
     #[story("A4", "F1")]
     #[test]
     fn 判定で再起動したときの再実行を止めたら取り消した宣言を保留の後ろに戻す() {
@@ -2946,6 +3141,7 @@ mod 完結の判定を中断したとき {
 
 mod 保留と環境の切り替え {
     //! ja: 保留と環境の切り替え
+    //! en: Pending declarations and environment switching
     //!
     //! replay でエラーになった宣言は保留 (`Engine::unplayed`) に残る。環境を作り
     //! 直す操作で何も表示せずに消すと、「保留にした」と表示した直後に
@@ -2971,6 +3167,7 @@ mod 保留と環境の切り替え {
     }
 
     /// ja: 保留があるときに :env で切り替えると、保留を引き継ぐ
+    /// en: Keeps pending declarations when :env switches the environment
     #[story("G5", "F1")]
     #[test]
     fn colon_env_の切り替えでも保留を引き継ぐ() {
@@ -2985,6 +3182,7 @@ mod 保留と環境の切り替え {
     }
 
     /// ja: 保留があるときに :l すると、保留を捨てたと表示する
+    /// en: Says pending declarations are discarded when :l runs
     #[story("B4", "F1")]
     #[test]
     fn colon_l_が保留を捨てるなら件数を表示する() {
@@ -3001,9 +3199,11 @@ mod 保留と環境の切り替え {
 
 mod sorry_の置き換えの途中でエンジンが異常終了する {
     //! ja: sorry の置き換えの途中でエンジンが異常終了したとき
+    //! en: When the engine crashes while replacing a sorry
     use super::*;
 
     /// ja: 証明を終えると、再起動したエンジンで sorry を置き換え、sorry のままとは表示しない
+    /// en: Replaces the sorry on the restarted engine without saying it stays when the proof ends
     #[story("E3", "F1")]
     #[test]
     fn 置き換えが成功したのに_sorry_のままと報告しない() {
@@ -3028,6 +3228,7 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
     }
 
     /// ja: 再起動したエンジンで置き換えた宣言がエラーになると、再起動したので sorry のままにすると表示する
+    /// en: Keeps the sorry and says the engine restarted when the replaced declaration fails on the restarted engine
     #[story("E3", "F1")]
     #[test]
     fn 再起動したあとの再実行も失敗したら_sorry_のままと知らせる() {
@@ -3062,9 +3263,11 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
 
 mod sorry_の置き換えを中断したとき {
     //! ja: sorry の置き換えを中断したとき
+    //! en: When replacing a sorry is interrupted
     use super::*;
 
     /// ja: 置き換えと再起動後の再実行を Ctrl-C で止めると、元の宣言を保留の後ろに並べる
+    /// en: Puts the original declaration last in pending when Ctrl-C stops the replacement and the replay on restart
     #[story("E3", "F1")]
     #[test]
     fn 再起動のあとの再実行も中断したら置き換えを戻す宣言を保留の後ろに並べる() {
@@ -3103,9 +3306,11 @@ mod sorry_の置き換えを中断したとき {
 
 mod 再起動に失敗したときの証明モード {
     //! ja: 再起動に失敗したときの証明モード
+    //! en: Proof mode after a failed restart
     use super::*;
 
     /// ja: タクティクの判定中にエンジンが異常終了すると、再起動できなかったと表示して証明モードを終了する
+    /// en: Says the restart failed and exits proof mode when the engine crashes while judging a tactic
     #[story("F1", "E1")]
     #[test]
     fn 無効になった_proofState_を使い続けない() {
@@ -3135,6 +3340,7 @@ mod 再起動に失敗したときの証明モード {
     }
 
     /// ja: タクティクを送るときにエンジンが異常終了すると、証明モードの終了を 1 回だけ表示する
+    /// en: Says once that proof mode exited when the engine crashes as a tactic is sent
     #[story("E1", "F1")]
     #[test]
     fn 再起動に失敗したら証明モードの終了を_1_回だけ知らせる() {
@@ -3155,9 +3361,11 @@ mod 再起動に失敗したときの証明モード {
 
 mod 環境の切り替え {
     //! ja: 環境の切り替え
+    //! en: Switching environments
     use super::*;
 
     /// ja: import を足して起動した core で :env core を実行すると、設定の core に切り替える
+    /// en: Switches to the configured core when :env core runs in a core started with extra imports
     #[story("G5")]
     #[test]
     fn 名前が同じでも設定の違う環境には_colon_env_で切り替える() {
@@ -3190,6 +3398,7 @@ mod 環境の切り替え {
     }
 
     /// ja: 設定に無い今の環境の名前で :env を実行すると、すでにその環境だと表示する
+    /// en: Says the environment is already in use when :env names the current one missing from the config
     #[story("G5")]
     #[test]
     fn 設定に無い環境でも今の名前なら_colon_env_はすでにと表示する() {
@@ -3217,6 +3426,7 @@ mod 環境の切り替え {
     }
 
     /// ja: :time と :l のあとで :env で切り替えると、:time の設定と読み込んだファイルの宣言を残す
+    /// en: Keeps the :time setting and the declarations of the loaded file when :env switches the environment
     #[story("G1", "G5")]
     #[test]
     fn 切り替えても設定と読み込んだファイルが残る() {
@@ -3234,6 +3444,7 @@ mod 環境の切り替え {
     }
 
     /// ja: 設定に無い名前で :env を実行すると、設定に無いと表示し、そのあとの式を評価する
+    /// en: Says the name is not in the config and evaluates the next expression when :env gets an unknown name
     #[story("G5")]
     #[test]
     fn 設定に無い名前を指定してもセッションが続く() {
@@ -3246,6 +3457,7 @@ mod 環境の切り替え {
     }
 
     /// ja: 起動できない環境に :env で切り替えると、起動できなかったと表示して元の環境に戻る
+    /// en: Says startup failed and goes back to the original environment when :env picks one that cannot start
     #[story("G4", "G5")]
     #[test]
     fn 切り替え先が起動できなければ元の環境に戻る() {
@@ -3261,6 +3473,7 @@ mod 環境の切り替え {
     }
 
     /// ja: 引数なしで :env を実行すると、切り替え先の環境の一覧を表示する
+    /// en: Shows the list of target environments when :env runs without arguments
     #[story("G5")]
     #[test]
     fn 引数の無い_colon_env_は今の環境と切り替え先を表示する() {
@@ -3271,6 +3484,7 @@ mod 環境の切り替え {
     }
 
     /// ja: 今の環境の名前で :env を実行すると、すでにその環境だと表示してエンジンを再起動しない
+    /// en: Says the environment is already in use and does not restart the engine when :env names the current one
     #[story("G5")]
     #[test]
     fn 今の環境の名前を指定したら再起動しない() {
@@ -3286,9 +3500,11 @@ mod 環境の切り替え {
 
 mod 切り替えに失敗したとき {
     //! ja: 切り替えに失敗したとき
+    //! en: When switching fails
     use super::*;
 
     /// ja: 起動できない環境に :env で切り替えると、入力した宣言を元の環境に残す
+    /// en: Keeps the entered declarations in the original environment when :env targets one that cannot start
     #[story("G4", "G5")]
     #[test]
     fn 入力した宣言も元の環境に残る() {
@@ -3307,6 +3523,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: エンジンを用意できない環境に :env で切り替えると、lake env の失敗を表示して今のエンジンを残す
+    /// en: Keeps the current engine and shows the lake env failure when :env targets an environment it cannot set up
     #[story("G4", "G5")]
     #[test]
     fn エンジンを用意できない環境に切り替えても今のエンジンを残す() {
@@ -3332,6 +3549,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: 切り替え先と元の環境のどちらも起動できないときに :env を実行すると、ループを抜けて理由を残す
+    /// en: Leaves the loop and keeps the reason when :env runs and neither environment can start
     #[story("G4", "G5")]
     #[test]
     fn colon_env_で元の環境にも戻れなければ入力のループを抜けて理由を残す() {
@@ -3347,6 +3565,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: どの環境も起動できないときに端末で :env を実行すると、内部エラーにせずに理由を返してループを抜ける
+    /// en: Ends the terminal loop with the reason, not an internal error, when :env runs and no environment starts
     #[story("G4", "G5")]
     #[test]
     fn 端末では元の環境にも戻れなければ内部エラーにせずループを抜ける() {
@@ -3374,6 +3593,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: 元の環境に戻る起動を Ctrl-C で中断すると、宣言を保留に残し、:restart でその宣言を再実行する
+    /// en: Keeps declarations pending until :restart when Ctrl-C interrupts the return to the original environment
     #[story("A4", "G5")]
     #[test]
     fn 元の環境に戻るのを中断しても宣言を失わず_colon_restart_でやり直せる() {
@@ -3406,6 +3626,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: :l のあとで元の環境に戻る起動を Ctrl-C で中断すると、:restart でそのファイルを読み込み直す
+    /// en: Reloads the loaded file on :restart when Ctrl-C interrupts the return to the original environment
     #[story("A4", "G5")]
     #[test]
     fn 元の環境に戻るのを中断しても_colon_l_したファイルを_colon_restart_で読み込み直す() {
@@ -3434,6 +3655,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: 元の環境のエンジンを用意するのを Ctrl-C で中断すると、宣言を保留だけに残す
+    /// en: Keeps declarations only pending when Ctrl-C interrupts setting up the original environment's engine
     #[story("F1", "G5")]
     #[test]
     fn 元の環境のエンジンを用意するのを中断したら宣言を保留だけに残す() {
@@ -3464,6 +3686,7 @@ mod 切り替えに失敗したとき {
     }
 
     /// ja: 切り替えたあとの再実行を Ctrl-C で中断すると、再実行しなかった宣言の件数を表示して保留に残す
+    /// en: Shows the count of declarations not replayed and keeps them pending when Ctrl-C interrupts the replay
     #[story("F1", "G5")]
     #[test]
     fn 切り替えたあとの再実行が中断されても宣言を保留に残す() {
@@ -3480,9 +3703,11 @@ mod 切り替えに失敗したとき {
 
 mod 切り替えが成功したとき {
     //! ja: 切り替えが成功したとき
+    //! en: When switching succeeds
     use super::*;
 
     /// ja: :env で切り替えると、入力した宣言を新しい環境に追加する
+    /// en: Adds the entered declarations to the new environment when :env switches
     #[story("G1", "G5")]
     #[test]
     fn 入力した宣言も新しい環境に追加される() {

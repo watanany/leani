@@ -91,11 +91,13 @@ fn abbrev_keys() -> impl Strategy<Value = &'static str> {
 
 mod 継続行の判定 {
     //! ja: 継続行の判定
+    //! en: Judging continuation lines
     //!
     //! 単独では入力になりえない行を見分ける。
     use super::*;
 
     /// ja: インデントした行を前の行の続きと判定する
+    /// en: Judges an indented line as a continuation of the previous line
     #[story("C1")]
     #[test]
     fn インデントした行は前の行の続き() {
@@ -105,6 +107,7 @@ mod 継続行の判定 {
     }
 
     /// ja: 行頭がパイプの行を前の行の続きと判定する
+    /// en: Judges a line starting with a pipe as a continuation of the previous line
     #[story("C1")]
     #[test]
     fn 行頭のパイプは前の行の続き() {
@@ -113,6 +116,7 @@ mod 継続行の判定 {
     }
 
     /// ja: インデントもパイプも無い行を単独の入力と判定する
+    /// en: Judges a line without indentation or a leading pipe as a separate input
     #[story("A1", "C1")]
     #[test]
     fn ふつうの行は単独の入力() {
@@ -124,11 +128,13 @@ mod 継続行の判定 {
 
 mod 続きを待つ行 {
     //! ja: 続きを待つ行
+    //! en: Lines that wait for more input
     //!
     //! 完結していても次の行がありうる構文。
     use super::*;
 
     /// ja: where、with、do、by で終わる行を、続きを待つ行と判定する
+    /// en: Judges a line ending in where, with, do or by as a line that waits for more
     #[story("C1")]
     #[test]
     fn where_with_do_by_で終わる行は空行を待つ() {
@@ -143,6 +149,7 @@ mod 続きを待つ行 {
     }
 
     /// ja: where や by を語の一部として含むだけの行は、待たない行と判定する
+    /// en: Judges a line with where or by only inside a word as a line that does not wait
     #[story("C1")]
     #[test]
     fn 語の一部として含むだけなら待たない() {
@@ -154,11 +161,13 @@ mod 続きを待つ行 {
 
 mod パーサからの応答 {
     //! ja: パーサからの応答
+    //! en: Responses from the parser
     //!
     //! 「まだ途中」という応答だけを継続とみなす。
     use super::*;
 
     /// ja: 入力途中だという応答を、次の行を待つと判定する
+    /// en: Judges a response about unfinished input as waiting for the next line
     #[story("C1")]
     #[test]
     fn 入力の途中なら次の行を待つ() {
@@ -167,6 +176,7 @@ mod パーサからの応答 {
     }
 
     /// ja: 閉じていない raw 文字列か名前のエスケープの応答を、次の行を待つと判定する
+    /// en: Judges a response about an unterminated raw string or name escape as waiting for the next line
     #[story("C6")]
     #[test]
     fn 閉じていない_raw_文字列と名前のエスケープは続きを待つ() {
@@ -175,6 +185,7 @@ mod パーサからの応答 {
     }
 
     /// ja: 入力途中ではないエラーの応答を、待たずに送ると判定する
+    /// en: Judges an error response not about unfinished input as ready to send
     #[story("C1")]
     #[test]
     fn ただのエラーは待たずに送る() {
@@ -184,11 +195,13 @@ mod パーサからの応答 {
 
 mod タクティクの提案 {
     //! ja: タクティクの提案
+    //! en: Tactic suggestions
     //!
     //! exact? や simp? は結果を "Try this:" として返す。
     use super::*;
 
     /// ja: 提案から [apply] の印を除いたタクティクを返す
+    /// en: Returns the tactic without the [apply] mark from a suggestion
     #[story("E2")]
     #[test]
     fn 提案から項だけを取り出す() {
@@ -199,6 +212,7 @@ mod タクティクの提案 {
     }
 
     /// ja: 折り返した提案から、すべての行を返す
+    /// en: Returns every line of a suggestion that wraps over several lines
     #[story("E2")]
     #[test]
     fn 折り返した提案をすべて取り出す() {
@@ -212,6 +226,7 @@ mod タクティクの提案 {
     }
 
     /// ja: Try this と同じ行に書いた提案を返す
+    /// en: Returns a suggestion written on the same line as Try this
     #[story("E2")]
     #[test]
     fn Try_this_と同じ行に書かれた提案も取り出す() {
@@ -220,6 +235,7 @@ mod タクティクの提案 {
     }
 
     /// ja: 括弧が合わない提案を途中で切れていると判定し、合う提案を切れていないと判定する
+    /// en: Judges a suggestion with unmatched brackets as cut off and one with matched brackets as whole
     #[story("E2")]
     #[test]
     fn 括弧が合わない提案は途中で切れていると判定する() {
@@ -232,6 +248,7 @@ mod タクティクの提案 {
     }
 
     /// ja: 括弧が閉じた文字列をどう 2 つ連結しても閉じていると判定する
+    /// en: Judges any concatenation of two balanced strings as balanced
     #[story("E2")]
     #[proptest]
     fn 閉じた文字列同士を連結しても閉じている(
@@ -249,6 +266,7 @@ mod タクティクの提案 {
     }
 
     /// ja: 提案の無いメッセージにも空の一覧にも None を返す
+    /// en: Returns None for a message without a suggestion and for no messages
     #[story("E2")]
     #[test]
     fn 提案でなければ何も返さない() {
@@ -260,6 +278,7 @@ mod タクティクの提案 {
 
 mod 宣言の名前の取り出し {
     //! ja: 宣言の名前の取り出し
+    //! en: Extracting the name of a declaration
     //!
     //! ユーザーが実行した宣言を補完の候補に追加するために使う。
     use super::*;
@@ -272,6 +291,7 @@ mod 宣言の名前の取り出し {
     }
 
     /// ja: 修飾子や属性が付いた宣言でも、その名前を返す
+    /// en: Returns the name of a declaration even with modifiers or attributes
     #[story("D1")]
     #[test]
     fn 修飾子や属性が付いていても名前を取り出せる() {
@@ -287,6 +307,7 @@ mod 宣言の名前の取り出し {
     }
 
     /// ja: 宣言でない入力には名前を返さない
+    /// en: Returns no names for an input that is not a declaration
     #[story("D1")]
     #[test]
     fn 宣言でないものからは名前を取り出さない() {
@@ -296,9 +317,11 @@ mod 宣言の名前の取り出し {
 
 mod 補完する名前の切り出し {
     //! ja: 補完する名前の切り出し
+    //! en: Cutting out the name to complete
     use super::*;
 
     /// ja: 区切り文字の直後から名前を切り出し、. では区切らない
+    /// en: Cuts out the name after a delimiter without splitting at a dot
     #[story("D1")]
     #[test]
     fn 区切り文字の直後から名前を切り出す() {
@@ -307,6 +330,7 @@ mod 補完する名前の切り出し {
     }
 
     /// ja: 名前の前に記号があれば、記号の後ろから名前を切り出す
+    /// en: Cuts out the name after a symbol in front of it
     #[story("D1")]
     #[test]
     fn 名前の前に記号があれば記号の後ろから名前を補完する() {
@@ -332,6 +356,7 @@ mod 補完する名前の切り出し {
     }
 
     /// ja: 名前の前に Lean の名前に使えない文字があれば、その文字の後ろから名前を切り出す
+    /// en: Cuts out the name after a character that Lean does not allow in names
     #[story("D1")]
     #[test]
     fn 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する() {
@@ -346,6 +371,7 @@ mod 補完する名前の切り出し {
     }
 
     /// ja: とても長い名前でも、スタックを使い切らずに名前の先頭を返す
+    /// en: Returns the start of a very long name without running out of stack
     #[story("D1")]
     #[test]
     fn 長い名前でもスタックを使い切らない() {
@@ -354,6 +380,7 @@ mod 補完する名前の切り出し {
     }
 
     /// ja: どの区切りの記号のあとに置いたどの名前も、そのまま切り出す
+    /// en: Cuts out any name exactly as written after any separator symbol
     #[story("D1")]
     #[proptest]
     fn 記号のあとの名前をそのまま切り出す(
@@ -368,11 +395,13 @@ mod 補完する名前の切り出し {
 
 mod 補完の候補をまとめて取得する単位 {
     //! ja: 補完の候補をまとめて取得する単位
+    //! en: Unit for getting completion candidates together
     //!
     //! 名前空間があればそこまで、無ければ先頭 2 文字。
     use super::*;
 
     /// ja: 名前空間のある名前には、名前空間の . までを返す
+    /// en: Returns the name up to the namespace dot for a name with a namespace
     #[story("D1")]
     #[test]
     fn 名前空間の区切りで分ける() {
@@ -384,6 +413,7 @@ mod 補完の候補をまとめて取得する単位 {
     }
 
     /// ja: 名前空間の無い名前には先頭 2 文字を返す
+    /// en: Returns the first two characters for a name without a namespace
     #[story("D1")]
     #[test]
     fn 名前空間が無ければ先頭_2_文字() {
@@ -394,9 +424,11 @@ mod 補完の候補をまとめて取得する単位 {
 
 mod Lean_の文字列リテラル {
     //! ja: Lean の文字列リテラル
+    //! en: Lean string literals
     use super::*;
 
     /// ja: どの文字列からも、Lean が読めるエスケープだけを使ったリテラルを作る
+    /// en: Builds a literal using only escapes that Lean reads from any string
     #[story("C1")]
     #[proptest]
     fn バックスラッシュの後ろには_Lean_が読む文字だけを書く(
@@ -420,11 +452,13 @@ mod Lean_の文字列リテラル {
 
 mod エンジンの出力の_JSON {
     //! ja: エンジンの出力の JSON
+    //! en: JSON in the engine output
     //!
     //! 問い合わせの結果はエンジンの出力の最後の行にある。
     use super::*;
 
     /// ja: 出力の最後の行を JSON として読んで返す
+    /// en: Returns the last line of the output parsed as JSON
     #[story("D1", "C1")]
     #[test]
     fn 出力の最後の行を_JSON_として読む() {
@@ -433,6 +467,7 @@ mod エンジンの出力の_JSON {
     }
 
     /// ja: 出力が無いか、空白だけか、最後の行が JSON でなければ None を返す
+    /// en: Returns None if the output is missing or blank or its last line is not JSON
     #[story("D1", "C1")]
     #[test]
     fn 出力が空か最後の行が_JSON_でなければ_None_を返す() {
@@ -449,11 +484,13 @@ mod エンジンの出力の_JSON {
 
 mod 入力が完結したかの判定 {
     //! ja: 入力が完結したかの判定
+    //! en: Judging whether the input is complete
     //!
     //! パーサの応答 (JSON) だけを見て、送り方と状態を決める。
     use super::*;
 
     /// ja: command として読める入力を、完結した command と判定する
+    /// en: Judges input that parses as a command as a complete command
     #[story("A1", "C1")]
     #[test]
     fn command_として読めたらそのまま送る() {
@@ -462,6 +499,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: term としてしか読めない入力を、完結した term と判定する
+    /// en: Judges input that parses only as a term as a complete term
     #[story("A1")]
     #[test]
     fn term_としてしか読めなければ_eval_に包む() {
@@ -470,6 +508,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: command として読むと途中で終わる入力は、続きを待つと判定する
+    /// en: Judges input that ends early as a command as waiting for more lines
     #[story("C1")]
     #[test]
     fn 途中なら次の行を待つ() {
@@ -481,6 +520,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: command としても term としても読めない入力は、より先まで読めたほうのエラーと判定する
+    /// en: Judges input that parses as neither command nor term as an error of the kind that got further
     #[story("C1")]
     #[test]
     fn より先まで解析できたほうをユーザーの意図とみなす() {
@@ -492,6 +532,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: パーサの応答が無ければ、command のエラーと判定する
+    /// en: Judges input as a command error when there is no parser response
     #[story("C1")]
     #[test]
     fn 判定できなければ_Lean_に本当のエラーを出させる() {
@@ -500,6 +541,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: 証明モードでは、タクティクの列として読めるかで完結、途中、エラーを判定する
+    /// en: Judges input in proof mode as complete, unfinished or an error by parsing it as tactics
     #[story("E1")]
     #[test]
     fn 証明モードではタクティクの列として読めるかだけを見る() {
@@ -511,6 +553,7 @@ mod 入力が完結したかの判定 {
     }
 
     /// ja: インデントした行で終わるブロックは空行を待ち、1 行の入力は待たないと判定する
+    /// en: Judges a block ending in an indented line as waiting for a blank line and one line as not
     #[story("C1")]
     #[test]
     fn インデントで続いたブロックは空行まで待つ() {
@@ -524,11 +567,13 @@ mod 入力が完結したかの判定 {
 
 mod 評価できない理由 {
     //! ja: 評価できない理由
+    //! en: Reasons a value cannot be evaluated
     //!
     //! #eval のエラー文から、評価できない理由を取り出す。
     use super::*;
 
     /// ja: Repr のインスタンスが無いというエラーには、Repr を含む理由を返す
+    /// en: Returns a reason mentioning Repr for an error about a missing Repr instance
     #[story("A2")]
     #[test]
     fn Repr_が無いという理由を取り出す() {
@@ -537,6 +582,7 @@ mod 評価できない理由 {
     }
 
     /// ja: noncomputable にするよう勧めるエラーには、noncomputable を含む理由を返す
+    /// en: Returns a reason mentioning noncomputable for an error that suggests noncomputable
     #[story("A2")]
     #[test]
     fn noncomputable_という理由を取り出す() {
@@ -545,6 +591,7 @@ mod 評価できない理由 {
     }
 
     /// ja: 評価できないことを表すエラーでなければ None を返す
+    /// en: Returns None for an error unrelated to evaluation
     #[story("A2")]
     #[test]
     fn 評価できないエラーでなければ_None_を返す() {
@@ -554,9 +601,11 @@ mod 評価できない理由 {
 
 mod do_の外の_action {
     //! ja: do の外の action
+    //! en: Actions outside do
     use super::*;
 
     /// ja: do の外に action を書いたというエラーを、do の外の action と判定する
+    /// en: Judges an error about an action written outside do as an action outside do
     #[story("A1")]
     #[test]
     fn do_の外に書いた_action_のエラーを見分ける() {
@@ -565,6 +614,7 @@ mod do_の外の_action {
     }
 
     /// ja: ほかのエラーを、do の外の action ではないと判定する
+    /// en: Judges other errors as not about an action outside do
     #[story("A1")]
     #[test]
     fn ほかのエラーは_do_の外の_action_と見なさない() {
@@ -574,11 +624,13 @@ mod do_の外の_action {
 
 mod エラー位置の範囲 {
     //! ja: エラー位置の範囲
+    //! en: Range of an error position
     //!
     //! メッセージの位置を、送ったソースの座標からその行の中に収める。
     use super::*;
 
     /// ja: eval で包んでずれた行と桁を戻した範囲を返す
+    /// en: Returns the range shifted back by the lines and columns that wrapping in eval added
     #[story("A5")]
     #[test]
     fn eval_で包んだ分だけ位置を戻す() {
@@ -588,6 +640,7 @@ mod エラー位置の範囲 {
     }
 
     /// ja: 文字列の中で始まる行では、行だけを戻し、桁は戻さない
+    /// en: Shifts back only the line, not the column, for a line that starts inside a string
     #[story("A5")]
     #[test]
     fn 文字列の中で始まる行は桁を戻さない() {
@@ -598,6 +651,7 @@ mod エラー位置の範囲 {
     }
 
     /// ja: 位置が行の外なら None を返す
+    /// en: Returns None for a position outside the lines
     #[story("A5")]
     #[test]
     fn 位置が行の外なら範囲を返さない() {
@@ -606,6 +660,7 @@ mod エラー位置の範囲 {
     }
 
     /// ja: 範囲の幅を行の長さに収めて返す
+    /// en: Limits the width of a range to the length of the line
     #[story("A5")]
     #[test]
     fn 範囲の幅は行の長さに収める() {
@@ -614,6 +669,7 @@ mod エラー位置の範囲 {
     }
 
     /// ja: 全角文字を 2 桁と数えて、キャレットの位置と長さを決める
+    /// en: Counts a full-width character as two columns for the caret position and length
     #[story("A5")]
     #[test]
     fn 全角文字の幅だけキャレットをずらす() {
@@ -625,6 +681,7 @@ mod エラー位置の範囲 {
     }
 
     /// ja: キャレットの前のタブを、空白にせずタブのまま残す
+    /// en: Keeps a tab before the caret as a tab instead of spaces
     #[story("A5")]
     #[test]
     fn タブはタブのまま残す() {
@@ -635,11 +692,13 @@ mod エラー位置の範囲 {
 
 mod レスポンスの切り出し {
     //! ja: レスポンスの切り出し
+    //! en: Cutting out responses
     //!
     //! 空行で区切られた JSON を、受信し終えた分だけ取り出す。
     use super::*;
 
     /// ja: 空行が届く前は None を返す
+    /// en: Returns None before a blank line arrives
     #[story("A1")]
     #[test]
     fn 受信し終えるまでは何も返さない() {
@@ -647,6 +706,7 @@ mod レスポンスの切り出し {
     }
 
     /// ja: 空行が届いたら、その前の JSON を読んで返す
+    /// en: Returns the JSON before a blank line once the blank line arrives
     #[story("A1")]
     #[test]
     fn 空行を受け取ったら読み込む() {
@@ -657,6 +717,7 @@ mod レスポンスの切り出し {
     }
 
     /// ja: 文字列の値に空行を含む JSON を、その値のまま読む
+    /// en: Reads JSON with a blank line in a string value and keeps the value
     #[story("A1")]
     #[test]
     fn JSON_の中の空行では区切らない() {
@@ -668,11 +729,13 @@ mod レスポンスの切り出し {
 
 mod エンジンの_PANIC {
     //! ja: エンジンの PANIC
+    //! en: PANIC in the engine
     //!
     //! エンジンが PANIC したかを、レスポンスのメッセージから判定する。
     use super::*;
 
     /// ja: PANIC したレスポンスには、バックトレースを除いた PANIC の行を返す
+    /// en: Returns the PANIC line without the backtrace for a response with a PANIC
     #[story("F1")]
     #[test]
     fn PANIC_の行を返す() {
@@ -687,6 +750,7 @@ mod エンジンの_PANIC {
     }
 
     /// ja: 同じメッセージの中で PANIC の前に出力があっても、PANIC の行を返す
+    /// en: Returns the PANIC line when output comes before it in the same message
     #[story("F1")]
     #[test]
     fn PANIC_の前に出力があっても_PANIC_の行を返す() {
@@ -698,6 +762,7 @@ mod エンジンの_PANIC {
     }
 
     /// ja: PANIC の無いレスポンスにも、メッセージの無いレスポンスにも None を返す
+    /// en: Returns None for a response without a PANIC or without any messages
     #[story("F1")]
     #[test]
     fn PANIC_していなければ_None_を返す() {
@@ -709,11 +774,13 @@ mod エンジンの_PANIC {
 
 mod 起動前の準備 {
     //! ja: 起動前の準備
+    //! en: Preparation before startup
     //!
     //! import を追加したり取り除いたりする処理。
     use super::*;
 
     /// ja: init ファイルの中身から import の行を取り除いて返す
+    /// en: Returns the contents of an init file with its import lines removed
     #[story("G2")]
     #[test]
     fn init_ファイルの_import_行は取り除く() {
@@ -722,6 +789,7 @@ mod 起動前の準備 {
     }
 
     /// ja: import の行があるファイルだけを import を含むと判定し、コメントの中の import は見ない
+    /// en: Judges a file as having imports by its import lines and not by import in a comment
     #[story("G2")]
     #[test]
     fn import_を含むファイルには_import_を追加しない() {
@@ -730,6 +798,7 @@ mod 起動前の準備 {
     }
 
     /// ja: lake env のキャッシュの行から、変数の名前と値の組を返す
+    /// en: Returns the variable names and values from the lines of the lake env cache
     #[story("G1")]
     #[test]
     fn lake_env_のキャッシュを読む() {
@@ -741,6 +810,7 @@ mod 起動前の準備 {
     }
 
     /// ja: キャッシュより新しい lean-toolchain があれば、キャッシュが古いと判定する
+    /// en: Judges the cache as stale when lean-toolchain is newer than the cache
     #[story("G4", "G6")]
     #[test]
     fn toolchain_が変わったらキャッシュを作り直す() {
@@ -770,6 +840,7 @@ mod 起動前の準備 {
 
 mod エンジンのバージョン {
     //! ja: エンジンのバージョン
+    //! en: Engine version
     //!
     //! 使う Lean のバージョンから repl のタグとパスを決める。
     use super::*;
@@ -777,6 +848,7 @@ mod エンジンのバージョン {
     const TAGS: [&str; 3] = ["v4.32.0", "v4.33.0", "v4.34.0-rc2"];
 
     /// ja: toolchain の名前からバージョンの部分だけを返す
+    /// en: Returns only the version part of a toolchain name
     #[story("G3")]
     #[test]
     fn toolchain_からバージョンだけ取る() {
@@ -788,6 +860,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: 自分でビルドしたエンジンの toolchain が違えば、両方のバージョンとビルドし直すコマンドを含む警告を返す
+    /// en: Returns a warning with both versions and the rebuild command for a self-built engine on another toolchain
     #[story("G4")]
     #[test]
     fn 自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す() {
@@ -800,6 +873,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: toolchain が同じか、leani が用意したエンジンか、toolchain を読めなければ None を返す
+    /// en: Returns None if the toolchains match, leani set up the engine, or the engine toolchain is unreadable
     #[story("G4")]
     #[test]
     fn toolchain_が同じか_leani_が用意したエンジンなら警告しない() {
@@ -816,6 +890,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: 既定の配布元を省いた toolchain を、省かない toolchain とバージョンだけで比べる
+    /// en: Compares a toolchain that omits the default repository with a full one by version only
     #[story("G3", "G4")]
     #[test]
     fn 既定の配布元を省いた_toolchain_も同じバージョンと見なす() {
@@ -828,6 +903,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: rc を、同じバージョンの正式リリースより前で、古いバージョンより後に並べる
+    /// en: Orders an rc before the release of the same version and after older releases
     #[story("G3")]
     #[test]
     fn rc_は同じバージョンの正式リリースより前() {
@@ -836,6 +912,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: 解釈できないバージョンには None を返す
+    /// en: Returns None for a version it cannot parse
     #[story("G3")]
     #[test]
     fn 解釈できないバージョンは_None() {
@@ -845,6 +922,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: 同じ名前のタグがあれば、そのタグを返す
+    /// en: Returns the tag with the same name if there is one
     #[story("G3")]
     #[test]
     fn 同名のタグがあればそれを使う() {
@@ -852,6 +930,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: タグの無い patch リリースには、その前のタグを返す
+    /// en: Returns the previous tag for a patch release without a tag
     #[story("G3")]
     #[test]
     fn タグの無い_patch_リリースは直前のタグを使う() {
@@ -860,6 +939,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: どのタグより古いバージョンか、解釈できないバージョンには、タグを返さない
+    /// en: Returns no tag for a version older than every tag or one it cannot parse
     #[story("G3")]
     #[test]
     fn どのタグより古いバージョンなら_None() {
@@ -868,6 +948,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: パスの指定が無ければ、キャッシュの下のバージョンの名前のパスを返す
+    /// en: Returns a path named after the version under the cache when no path is given
     #[story("G3")]
     #[test]
     fn パスはバージョンごとに分かれる() {
@@ -876,6 +957,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: 指定されたパスはそのまま返す
+    /// en: Returns a given path unchanged
     #[story("G3")]
     #[test]
     fn 明示されたパスはそのまま使う() {
@@ -884,6 +966,7 @@ mod エンジンのバージョン {
     }
 
     /// ja: .. や . のように、キャッシュの下の 1 つの場所を指さないバージョン名にはエラーを返す
+    /// en: Returns an error for a version name such as .. or . that does not name one place in the cache
     #[story("G3")]
     #[test]
     fn パスの外を指すバージョン名は受け付けない() {
@@ -1008,6 +1091,7 @@ fn hang_after(mark: &Path) -> String {
 
 mod 設定の値の型 {
     //! ja: 設定の値の型
+    //! en: Types of config values
     //!
     //! TOML には何でも書ける。型が違う値は panic ではなく ConfigError にする。
     use super::*;
@@ -1019,6 +1103,7 @@ mod 設定の値の型 {
     }
 
     /// ja: imports を文字列で書くと、配列を求めるエラーを返す
+    /// en: Returns an error asking for an array when imports is a string
     #[story("G4")]
     #[test]
     fn import_を文字列で書いたらエラーにする() {
@@ -1029,6 +1114,7 @@ mod 設定の値の型 {
     }
 
     /// ja: 文字列で書くべき値が別の型なら、そのキーの名前を含むエラーを返す
+    /// en: Returns an error naming the key when a value that should be a string has another type
     #[story("G4")]
     #[test]
     fn 文字列で書くべき値が別の型ならエラーにする() {
@@ -1039,6 +1125,7 @@ mod 設定の値の型 {
     }
 
     /// ja: 表で書くべき env や env.m が別の型なら、表を求めるエラーを返す
+    /// en: Returns an error asking for a table when env or env.m is not a table
     #[story("G4")]
     #[test]
     fn 表で書くべき値が別の型ならエラーにする() {
@@ -1049,6 +1136,7 @@ mod 設定の値の型 {
     }
 
     /// ja: default が文字列でなければ、default を含むエラーを返す
+    /// en: Returns an error naming default when default is not a string
     #[story("G4")]
     #[test]
     fn default_が文字列でなければエラーにする() {
@@ -1057,6 +1145,7 @@ mod 設定の値の型 {
     }
 
     /// ja: 正しく書いた設定からは、名前と imports と prompt をそのまま返す
+    /// en: Returns the name, imports and prompt unchanged from a correctly written config
     #[story("G4", "G5")]
     #[test]
     fn 書き方が正しければ値をそのまま読み込む() {
@@ -1071,6 +1160,7 @@ mod 設定の値の型 {
 
 mod 起動する環境の決め方 {
     //! ja: 起動する環境の決め方
+    //! en: Choosing the environment to start
     //!
     //! guide/config.md の「起動する環境の決まり方」と、エンジンの優先順位。
     use super::*;
@@ -1099,6 +1189,7 @@ engine = "/m/engine"
     }
 
     /// ja: 環境の名前を指定したら、default ではなくその環境を選ぶ
+    /// en: Chooses the named environment over default when a name is given
     #[story("G5")]
     #[test]
     fn 名前を指定したら_default_より優先する() {
@@ -1106,6 +1197,7 @@ engine = "/m/engine"
     }
 
     /// ja: 名前と project と import を指定したら、環境の project と imports を置き換える
+    /// en: Replaces the project and imports of the environment when a name, project and imports are given
     #[story("G5")]
     #[test]
     fn 名前と_import_を指定したら環境の_imports_を置き換える() {
@@ -1117,6 +1209,7 @@ engine = "/m/engine"
     }
 
     /// ja: import だけを指定したら、default でなく、その import の plain の環境を選ぶ
+    /// en: Chooses the plain environment with the given imports when only imports are given
     #[story("G5", "G6")]
     #[test]
     fn import_だけを指定したら_default_を使わない() {
@@ -1129,6 +1222,7 @@ engine = "/m/engine"
     }
 
     /// ja: 環境に engine があればそれを使い、無ければ最上位の engine を使う
+    /// en: Uses the engine of the environment if it has one and the top-level engine otherwise
     #[story("G3", "G5")]
     #[test]
     fn 環境の_engine_は最上位の_engine_より優先する() {
@@ -1139,6 +1233,7 @@ engine = "/m/engine"
     }
 
     /// ja: 設定に engine が無ければ LEANI_ENGINE の値を使う
+    /// en: Uses LEANI_ENGINE when the config has no engine
     #[story("G3")]
     #[test]
     fn 設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
@@ -1149,6 +1244,7 @@ engine = "/m/engine"
     }
 
     /// ja: 名前を付けずに import だけを指定したら、最上位の engine を使う
+    /// en: Uses the top-level engine when only imports are given without a name
     #[story("G3", "G5")]
     #[test]
     fn 名前を付けずに起動したら環境の_engine_は使わない() {
@@ -1160,6 +1256,7 @@ engine = "/m/engine"
 
 mod 起動を中止する理由 {
     //! ja: 起動を中止する理由
+    //! en: Reasons to abort startup
     use super::*;
 
     /// elan、lake、git がそろった PATH の Ctx。
@@ -1172,6 +1269,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: エンジンとプロジェクトのバージョンが違えば、そのことと lake build repl の手順を理由として返す
+    /// en: Returns the version mismatch and the lake build repl step when engine and project versions differ
     #[story("G3", "G4")]
     #[test]
     fn エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
@@ -1185,6 +1283,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: エンジンとプロジェクトの toolchain が書き方だけ違うなら、理由を返さない
+    /// en: Returns no reason when engine and project toolchains differ only in how they are written
     #[story("G4")]
     #[test]
     fn 書き方だけが違う_toolchain_では起動を中止しない() {
@@ -1197,6 +1296,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: プロジェクトの場所が無ければ、Lake プロジェクトが無いという理由を返す
+    /// en: Returns a reason saying there is no Lake project when the project directory does not exist
     #[story("G4")]
     #[test]
     fn Lake_プロジェクトが無ければ起動を中止する() {
@@ -1209,6 +1309,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: 指定したエンジンが無いか未ビルドなら、無いか未ビルドだという理由を返す
+    /// en: Returns a reason saying the given engine is missing or not built when it is
     #[story("G3", "G4")]
     #[test]
     fn 指定されたエンジンが無いか未ビルドなら起動を中止する() {
@@ -1223,6 +1324,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: elan、lake、git のどれかが PATH に無ければ、無いコマンドの名前を含む理由を返す
+    /// en: Returns a reason naming the missing command when elan, lake or git is not on PATH
     #[story("G4")]
     #[test]
     fn elan_lake_git_が_PATH_に無ければ起動を中止する() {
@@ -1240,6 +1342,7 @@ mod 起動を中止する理由 {
     }
 
     /// ja: エンジン、プロジェクト、コマンドがそろっていれば、理由を返さない
+    /// en: Returns no reason when the engine, project and commands are all in place
     #[story("G4")]
     #[test]
     fn 設定がそろっていれば中止しない() {
@@ -1256,9 +1359,11 @@ mod 起動を中止する理由 {
 
 mod 設定ファイルの読み込み {
     //! ja: 設定ファイルの読み込み
+    //! en: Loading the config file
     use super::*;
 
     /// ja: TOML として読めない設定ファイルには、読めないという ConfigError を返す
+    /// en: Returns a ConfigError saying the file cannot be read for a config file that is not valid TOML
     #[story("G4")]
     #[test]
     fn TOML_として読めない設定ファイルは_ConfigError_にする() {
@@ -1270,6 +1375,7 @@ mod 設定ファイルの読み込み {
     }
 
     /// ja: 設定ファイルが無ければ空の設定を返す
+    /// en: Returns an empty config when the config file does not exist
     #[story("G4", "G6")]
     #[test]
     fn 設定ファイルが無ければ空の設定として読む() {
@@ -1281,6 +1387,7 @@ mod 設定ファイルの読み込み {
 
 mod 使うバージョンの決め方 {
     //! ja: 使うバージョンの決め方
+    //! en: Choosing the version to use
     //!
     //! elan run に渡すバージョン。
     //!
@@ -1288,6 +1395,7 @@ mod 使うバージョンの決め方 {
     use super::*;
 
     /// ja: プロジェクトとエンジンの両方に toolchain があれば、プロジェクトの toolchain を返す
+    /// en: Returns the project toolchain when both the project and the engine have one
     #[story("G3")]
     #[test]
     fn プロジェクトのバージョンが最優先() {
@@ -1305,6 +1413,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: プロジェクトが無く、エンジンを指定していれば、エンジンの toolchain を返す
+    /// en: Returns the engine toolchain when an engine is given without a project
     #[story("G3")]
     #[test]
     fn 明示したエンジンのバージョンを使う() {
@@ -1325,6 +1434,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: lean のバージョンを調べている途中で Ctrl-C を押すと、中断を返す
+    /// en: Returns an interrupt when Ctrl-C is pressed while checking the lean version
     #[story("G3")]
     #[test]
     fn lean_のバージョンを調べている途中の_Ctrl__C_は中断を返す() {
@@ -1342,6 +1452,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: プロジェクトもエンジンも無ければ、lean --version が示す elan の既定のバージョンを返す
+    /// en: Returns the elan default version from lean --version when there is no project or engine
     #[story("G3")]
     #[test]
     fn どちらも無ければ_elan_のデフォルト() {
@@ -1369,6 +1480,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: lean --version が nightly のバージョンを示せば、nightly の toolchain を返す
+    /// en: Returns a nightly toolchain when lean --version shows a nightly version
     #[story("G3")]
     #[test]
     fn nightly_の_lean_は_nightly_の_toolchain_と読む() {
@@ -1381,6 +1493,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: lean --version が知らない接尾辞のバージョンを示せば、None を返す
+    /// en: Returns None when lean --version shows a version with an unknown suffix
     #[story("G3")]
     #[test]
     fn 知らない接尾辞のバージョンは分からないとする() {
@@ -1389,6 +1502,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: lean --version がエンジンを用意するときの時間の上限より長くかかっても、待ってそのバージョンの toolchain を返す
+    /// en: Returns the toolchain of the version when lean --version takes longer than the setup timeout
     #[story("G3")]
     #[test]
     fn lean_の_version_を調べるときは時間を区切らずに待つ() {
@@ -1409,6 +1523,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: lean のバージョンを調べるあいだ、端末にだけ表示し、終わったら消す
+    /// en: Shows a message only on a terminal while checking the lean version and clears it after
     #[story("G3")]
     #[test]
     fn lean_の_version_を待つあいだは端末にだけ表示する() {
@@ -1432,6 +1547,7 @@ mod 使うバージョンの決め方 {
     }
 
     /// ja: プロジェクトの toolchain が stable なら今のバージョンを返し、取得できなければ stable を返す
+    /// en: Returns the current version for a stable project toolchain, or stable if it cannot get one
     #[story("G3")]
     #[test]
     fn toolchain_が_stable_なら今のバージョンに置き換える() {
@@ -1453,6 +1569,7 @@ esac"#;
     }
 
     /// ja: 指定したエンジンの toolchain が stable なら、置き換えずに stable を返す
+    /// en: Returns stable unchanged when a given engine has the stable toolchain
     #[story("G3")]
     #[test]
     fn エンジンを自分で指定したら_stable_を置き換えない() {
@@ -1475,12 +1592,14 @@ esac"#;
 
 mod 手動でエンジンを用意する手順 {
     //! ja: 手動でエンジンを用意する手順
+    //! en: Steps to set up the engine by hand
     //!
     //! leani が自動で用意できなかったときに表示する。書いてあるとおりに実行すると、
     //! 自動で用意したものと同じものができる。
     use super::*;
 
     /// ja: タグが分かれば、そのタグの clone と lean-toolchain へのバージョンの書き込みを手順に含める
+    /// en: Includes cloning the tag and writing the version to lean-toolchain if the tag is known
     #[story("G3")]
     #[test]
     fn タグとバージョンの書き換えまで含む() {
@@ -1493,6 +1612,7 @@ mod 手動でエンジンを用意する手順 {
     }
 
     /// ja: タグが分からなければ、clone するタグをバージョン以下で一番新しいタグと書く
+    /// en: Describes the tag to clone as the newest one up to the version if the tag is unknown
     #[story("G3")]
     #[test]
     fn タグが分からなければ選び方を書く() {
@@ -1550,12 +1670,14 @@ fn git_log(dir: &Path) -> String {
 
 mod エンジンを用意するときの安全対策 {
     //! ja: エンジンを用意するときの安全対策
+    //! en: Safety measures in setting up the engine
     //!
     //! leani が削除してよいのは、leani 自身が作ったディレクトリだけ。
     //! leani を 2 つ同時に実行してもよい。
     use super::*;
 
     /// ja: ビルドしていないエンジンを指定すると、作り直さずに未ビルドだと知らせる
+    /// en: Reports an unbuilt engine as unbuilt without rebuilding it if the user specifies it
     #[story("G3")]
     #[test]
     fn 明示されたエンジンは作り直さない() {
@@ -1576,6 +1698,7 @@ mod エンジンを用意するときの安全対策 {
     }
 
     /// ja: lean-toolchain の無いエンジンを指定すると、lean-toolchain を含む中止の理由を返す
+    /// en: Returns an abort reason mentioning lean-toolchain if the specified engine has none
     #[story("G3", "G4")]
     #[test]
     fn 明示されたエンジンにバージョンが無ければ起動を中止する() {
@@ -1595,6 +1718,7 @@ mod エンジンを用意するときの安全対策 {
     }
 
     /// ja: エンジンを用意すると、別の作業用のディレクトリでビルドしてから置き場所に移し、作業用のディレクトリを消す
+    /// en: Builds in a work directory, moves the engine into place, and deletes the work directory on setup
     #[story("G3")]
     #[test]
     fn 作業中の置き場所はプロセスごとに分かれる() {
@@ -1616,6 +1740,7 @@ mod エンジンを用意するときの安全対策 {
     }
 
     /// ja: ビルドを終えたとき置き場所に別の leani のエンジンがあれば、それを残して作業用のディレクトリを消す
+    /// en: Keeps the engine another leani placed and deletes the work directory when the build finishes
     #[story("G3")]
     #[test]
     fn 待っているあいだに別の_leani_が置いたエンジンは消さない() {
@@ -1638,11 +1763,13 @@ mod エンジンを用意するときの安全対策 {
 
 mod エンジンを自動で用意できないとき {
     //! ja: エンジンを自動で用意できないとき
+    //! en: When the engine cannot be set up automatically
     //!
     //! 初回の起動で通る処理。失敗しても、手動で用意する手順を表示する。
     use super::*;
 
     /// ja: repl のタグを取得できなければ、手動で用意する手順を含む中止の理由を返す
+    /// en: Returns an abort reason with the manual setup steps if the repl tags cannot be fetched
     #[story("G3")]
     #[test]
     fn タグを取得できなければ手動の手順を表示する() {
@@ -1663,6 +1790,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: タグの取得中に Ctrl-C を押すと、手動の手順を付けずに中断する
+    /// en: Interrupts without the manual steps when Ctrl-C is pressed while fetching tags
     #[story("G3")]
     #[test]
     fn Ctrl__C_で止めたら手順を付けずに中断を返す() {
@@ -1678,6 +1806,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: コマンドが孫プロセスを起動していても、Ctrl-C を押すと孫プロセスごと止めて中断する
+    /// en: Stops a command with its grandchild process and interrupts when Ctrl-C is pressed
     #[story("G3")]
     #[test]
     fn 止めたコマンドは孫プロセスごと止める() {
@@ -1737,6 +1866,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: タグの一覧の refs/tags/ の行から、タグの名前だけを返す
+    /// en: Returns only the tag names from the refs/tags lines of the tag list
     #[story("G3")]
     #[test]
     fn タグの一覧から_refs_tags_の名前だけを取り出す() {
@@ -1749,6 +1879,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: toolchain をバージョンとして解釈できなければ、repl の master を clone する
+    /// en: Clones the master branch of repl if the toolchain cannot be parsed as a version
     #[story("G3")]
     #[test]
     fn バージョンとして解釈できなければ_master_で試す() {
@@ -1761,6 +1892,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: repl にバージョンのタグが無ければ、clone せずにタグが無いことと手動の手順を知らせる
+    /// en: Reports the missing tag and the manual steps without cloning if repl has no tag for the version
     #[story("G3", "G4")]
     #[test]
     fn 対応するタグが無ければ起動を中止する() {
@@ -1773,6 +1905,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: LEANI_NO_SETUP があれば、--setup のときだけエンジンを用意する
+    /// en: Sets up the engine only with --setup if LEANI_NO_SETUP is set
     #[story("G3")]
     #[test]
     fn LEANI_NO_SETUP_のときはエンジンを用意しない() {
@@ -1788,6 +1921,7 @@ mod エンジンを自動で用意できないとき {
     }
 
     /// ja: ビルドに失敗したら、選んだタグを書いた手動の手順を含む中止の理由を返す
+    /// en: Returns an abort reason with manual steps naming the chosen tag if the build fails
     #[story("G3")]
     #[test]
     fn ビルドに失敗したら手動の手順にタグを含める() {
@@ -1802,6 +1936,7 @@ mod エンジンを自動で用意できないとき {
 
 mod lake_env_の取得 {
     //! ja: lake env の取得
+    //! en: Getting lake env
     //!
     //! lake env の結果はキャッシュして、起動のたびに実行しない。
     use super::*;
@@ -1820,6 +1955,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: Lake プロジェクトが無ければ、lake env を実行せずに空の環境変数を返す
+    /// en: Returns no variables without running lake env if there is no project
     #[story("G1")]
     #[test]
     fn プロジェクトが無ければ_lake_env_を実行しない() {
@@ -1833,6 +1969,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: エンジンの olean の場所を、lake env の LEAN_PATH か、プロジェクトが無ければ起動時の LEAN_PATH の先頭に足す
+    /// en: Prepends the engine olean path to LEAN_PATH from lake env, or the inherited one without a project
     #[story("G3", "G6")]
     #[test]
     fn エンジンの_olean_の場所を_LEAN_PATH_の先頭に足す() {
@@ -1851,6 +1988,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: 同じプロジェクトで 2 回取得すると、2 回目は lake env を実行せずにキャッシュを返す
+    /// en: Returns the cache without running lake env when getting it twice for the same project
     #[story("G1", "G6")]
     #[test]
     fn キャッシュが新しければ_lake_env_を実行しない() {
@@ -1869,6 +2007,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: lake が無いか lake env が失敗したら、そのことを理由として知らせる
+    /// en: Reports the reason if lake is missing or lake env fails
     #[story("G4", "G6")]
     #[test]
     fn lake_env_を実行できなければ理由を知らせる() {
@@ -1891,6 +2030,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: lake env を実行すると、Ctrl-C で中断できると表示する
+    /// en: Shows that Ctrl-C can interrupt lake env when it runs
     #[story("G6")]
     #[test]
     fn lake_env_を実行する前に案内を表示する() {
@@ -1906,6 +2046,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: lake env がエンジンを用意するときの時間の上限より長くかかっても、待って結果を返す
+    /// en: Returns the result of lake env when it takes longer than the setup timeout
     #[story("G6")]
     #[test]
     fn lake_env_は時間を区切らずに待つ() {
@@ -1922,6 +2063,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: lake env の実行中に Ctrl-C を押すと、中断する
+    /// en: Interrupts when Ctrl-C is pressed while lake env runs
     #[story("G6")]
     #[test]
     fn lake_env_を_Ctrl__C_で止めたら中断を返す() {
@@ -1938,6 +2080,7 @@ mod lake_env_の取得 {
     }
 
     /// ja: lake env の結果を保存できなければ、保存できなかったと知らせて一時ファイルを残さない
+    /// en: Reports the failure and leaves no temp file if the lake env result cannot be saved
     #[story("G6")]
     #[test]
     fn lake_env_の結果を保存できなければ知らせる() {
@@ -1983,6 +2126,7 @@ fn mark(src: &str, word: &str, nth: usize) -> Json {
 
 mod 証明モードのタクティクの記録 {
     //! ja: 証明モードのタクティクの記録
+    //! en: Recording tactics in proof mode
     use super::*;
 
     fn start() -> Proof {
@@ -1994,6 +2138,7 @@ mod 証明モードのタクティクの記録 {
     }
 
     /// ja: タクティクを進めると、前の状態とゴールを積み、スクリプトにタクティクを足す
+    /// en: Pushes the previous state and goals and adds the tactic to the script when a tactic is applied
     #[story("E1")]
     #[test]
     fn タクティクを進めると前の状態とゴールを積む() {
@@ -2007,6 +2152,7 @@ mod 証明モードのタクティクの記録 {
     }
 
     /// ja: 取り消すと状態とゴールとスクリプトを前に戻し、戻す先が無ければ None を返す
+    /// en: Restores the state, goals, and script when undone, and returns None with nothing to undo
     #[story("E1")]
     #[test]
     fn 取り消すと状態とゴールとスクリプトがそろって戻る() {
@@ -2018,9 +2164,11 @@ mod 証明モードのタクティクの記録 {
 
 mod 証明モードで送るタクティク {
     //! ja: 証明モードで送るタクティク
+    //! en: Tactics sent in proof mode
     use super::*;
 
     /// ja: タクティクを括弧で囲み、括弧はそれぞれ別の行に置く
+    /// en: Wraps the tactic in parentheses placed on their own lines
     #[story("E1")]
     #[test]
     fn タクティクを括弧で囲み括弧は別の行に置く() {
@@ -2031,6 +2179,7 @@ mod 証明モードで送るタクティク {
     }
 
     /// ja: 完結判定にエラーがあれば、パースエラーを完結判定で読んだ位置とメッセージにする
+    /// en: Takes the parse error position and message from the completeness check if it has an error
     #[story("E1")]
     #[test]
     fn パースエラーは完結判定で読んだ位置とメッセージで表示する() {
@@ -2042,6 +2191,7 @@ mod 証明モードで送るタクティク {
     }
 
     /// ja: 完結判定にエラーが無ければ、パースエラーの行を括弧の行の分だけ戻す
+    /// en: Moves the parse error line back by the parenthesis line if the completeness check has no error
     #[story("E1")]
     #[test]
     fn 完結判定のエラーが無ければパースエラーの行を括弧の行の分だけ戻す() {
@@ -2059,6 +2209,7 @@ mod 証明モードで送るタクティク {
 
 mod sorry_の置き換え {
     //! ja: sorry の置き換え
+    //! en: Replacing sorry
     //!
     //! repl の pos / endPos で切り出してスクリプトに置き換える。桁はコードポイント
     //! 単位で、`pure::offset` が byte の位置に直す。
@@ -2069,6 +2220,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: sorry の前に日本語があっても、位置どおりに sorry を置き換える
+    /// en: Replaces sorry at its position with Japanese text before it
     #[story("E3")]
     #[test]
     fn 日本語を含んでも位置で切り出せる() {
@@ -2080,6 +2232,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 単独の行にある sorry は、インデントを変えずに置き換える
+    /// en: Replaces sorry on its own line without changing the indentation
     #[story("E3")]
     #[test]
     fn 単独の行にある_sorry_のインデントを変えない() {
@@ -2092,6 +2245,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 複数行のスクリプトは、各行を sorry の桁にそろえる
+    /// en: Aligns every line of a multi-line script to the sorry column
     #[story("E3")]
     #[test]
     fn 複数行のスクリプトは_sorry_の桁にそろえる() {
@@ -2109,6 +2263,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 行の途中の sorry を複数行のスクリプトにすると、スクリプトを by の次の行に下げる
+    /// en: Moves a multi-line script to the line after by when it replaces a sorry in the middle of a line
     #[story("E3")]
     #[test]
     fn 行の途中の_sorry_を複数行のスクリプトにするときは_by_の次の行に下げる() {
@@ -2120,6 +2275,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 匿名コンストラクタの中の sorry は、空白を足さずに置き換える
+    /// en: Replaces sorry inside an anonymous constructor without adding spaces
     #[story("E3")]
     #[test]
     fn 匿名コンストラクタの中の_sorry_に空白を足さない() {
@@ -2131,6 +2287,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 複数行の文字列を含むスクリプトでは、文字列の外の行だけにインデントを付ける
+    /// en: Indents only the lines outside strings in a script with a multi-line string
     #[story("E3")]
     #[test]
     fn 複数行の文字列を含むスクリプトは文字列の途中の行に空白を足さない() {
@@ -2148,6 +2305,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 文字列の中で始まる行を除いて、各行にインデントを付ける
+    /// en: Indents every line except those that start inside a string
     #[story("A1", "E3")]
     #[test]
     fn 文字列の中で始まる行には空白を足さない() {
@@ -2160,6 +2318,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: コメントの中の引用符のあとの行を、文字列の外と判定する
+    /// en: Judges the line after a quote in a comment as outside strings
     #[story("A1", "E3")]
     #[test]
     fn コメントの中の引用符では文字列を始めない() {
@@ -2168,6 +2327,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 文字のリテラルと名前のエスケープの中の引用符のあとの行を、文字列の外と判定する
+    /// en: Judges the line after a quote in a char literal or a name escape as outside strings
     #[story("A1", "E3")]
     #[test]
     fn 文字のリテラルと名前のエスケープの中の引用符では文字列を始めない() {
@@ -2176,6 +2336,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 補間の中の文字列が閉じても、外側の文字列はまだ閉じていないと判定する
+    /// en: Judges the outer string as still open after a string in an interpolation closes
     #[story("A1", "E3")]
     #[test]
     fn 補間の中の文字列が閉じても外側の文字列は続く() {
@@ -2184,6 +2345,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 行の中で閉じない名前のエスケープは、行末で終わったと判定する
+    /// en: Judges a name escape that does not close on its line as ended at the line end
     #[story("A1", "E3")]
     #[test]
     fn 行の中で閉じない名前のエスケープは行末で終わる() {
@@ -2192,6 +2354,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: どの入力でも、行の数と同じ数の判定を返す
+    /// en: Returns one judgment per line for any input
     #[story("A1", "E3")]
     #[proptest]
     fn 行ごとの判定は行の数だけ返す(
@@ -2204,6 +2367,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: 位置が sorry を指していなければ、置き換えずに None を返す
+    /// en: Returns None without replacing if the position does not point at sorry
     #[story("E3")]
     #[test]
     fn 位置が_sorry_を指していなければ置き換えない() {
@@ -2217,6 +2381,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: どの行と桁でも、その文字の byte の位置を返す
+    /// en: Returns the byte offset of the character for any line and column
     #[story("E3")]
     #[proptest]
     fn 行と桁を文字のインデックスに変換できる(
@@ -2237,6 +2402,7 @@ mod sorry_の置き換え {
     }
 
     /// ja: sorry の前後がどんな行でも、前後を書き換えずに sorry だけを置き換える
+    /// en: Replaces only sorry and leaves the text around it unchanged for any surrounding lines
     #[story("E3")]
     #[proptest]
     fn sorry_の前後は書き換えない(
@@ -2274,11 +2440,13 @@ mod sorry_の置き換え {
 
 mod ファイルの_import {
     //! ja: ファイルの import
+    //! en: Imports of a file
     //!
     //! :save のヘッダに書き戻すため、読み込んだファイルの import を記録する。
     use super::*;
 
     /// ja: import の行から module の名前だけを返す
+    /// en: Returns only the module names from the import lines
     #[story("B3", "B4")]
     #[test]
     fn import_の行だけを取り出す() {
@@ -2287,6 +2455,7 @@ mod ファイルの_import {
     }
 
     /// ja: 宣言と、module の名前の無い import しか無ければ、空を返す
+    /// en: Returns nothing for a declaration and an import without a module name
     #[story("B3")]
     #[test]
     fn import_が無ければ空() {
@@ -2294,6 +2463,7 @@ mod ファイルの_import {
     }
 
     /// ja: コメントの中の import は数えず、import を取り除くときも残す
+    /// en: Skips imports in comments and keeps them when stripping imports
     #[story("B3", "B4")]
     #[test]
     fn コメントの中の_import_は数えない() {
@@ -2307,6 +2477,7 @@ mod ファイルの_import {
     }
 
     /// ja: 宣言のあとの import しか無ければ、空を返す
+    /// en: Returns nothing for an import after a declaration
     #[story("B3")]
     #[test]
     fn 宣言のあとの_import_は数えない() {
@@ -2315,6 +2486,7 @@ mod ファイルの_import {
     }
 
     /// ja: 入れ子のコメントが閉じたあとの import だけを返す
+    /// en: Returns only the import after a nested comment closes
     #[story("B4")]
     #[test]
     fn 入れ子のコメントの終わりを正しく判定する() {
@@ -2323,6 +2495,7 @@ mod ファイルの_import {
     }
 
     /// ja: 行の中にブロックコメントがあっても、import の module の名前を返す
+    /// en: Returns the module names of imports with block comments on the same line
     #[story("B4")]
     #[test]
     fn 行の中のブロックコメントを除いて_import_を読む() {
@@ -2332,6 +2505,7 @@ mod ファイルの_import {
     }
 
     /// ja: 名前のエスケープの中に -- や /- があっても、その名前を返す
+    /// en: Returns names in name escapes that contain -- or /-
     #[story("B4")]
     #[test]
     fn 名前のエスケープの中の記号をコメントと読まない() {
@@ -2341,6 +2515,7 @@ mod ファイルの_import {
     }
 
     /// ja: public や meta や all の付いた import から module の名前を返す
+    /// en: Returns the module names of imports with public, meta, or all
     #[story("B4")]
     #[test]
     fn 修飾子の付いた_import_も読む() {
@@ -2361,6 +2536,7 @@ mod ファイルの_import {
     }
 
     /// ja: コメントの付いた module の行を module の宣言と判定する
+    /// en: Judges a module line with a comment as a module declaration
     #[story("B4")]
     #[test]
     fn コメントの付いた_module_の行も読む() {
@@ -2371,6 +2547,7 @@ mod ファイルの_import {
     }
 
     /// ja: ファイルが module なら、足す import を module の行の後ろに public で置く
+    /// en: Puts the added import after the module line as public in a module file
     #[story("B4")]
     #[test]
     fn module_の後ろに_import_を足す() {
@@ -2401,6 +2578,7 @@ mod ファイルの_import {
     }
 
     /// ja: どのヘッダでも、本物の import 行だけを数え、取り除くと import が残らない
+    /// en: Counts only real import lines in any header and leaves no imports after stripping
     #[story("B3", "B4")]
     #[proptest]
     fn 取り除くのは本物の_import_行だけ(
@@ -2428,12 +2606,14 @@ mod ファイルの_import {
 
 mod 履歴ファイルの形式 {
     //! ja: 履歴ファイルの形式
+    //! en: History file format
     //!
     //! prompt_toolkit の形式の履歴ファイルを読む純粋関数。
     use super::*;
     use leani_core::history::history_strings;
 
     /// ja: CRLF で書かれた履歴からは、行末の CR を外した入力を返す
+    /// en: Returns inputs without the trailing CR from a history file with CRLF
     #[story("F3")]
     #[test]
     fn 行末の_CR_を外して読む() {
@@ -2446,12 +2626,14 @@ mod 履歴ファイルの形式 {
 
 mod 略記の展開 {
     //! ja: 略記の展開
+    //! en: Expanding abbreviations
     //!
     //! `\name` を Lean の記号に変換する。変換は space か Tab で確定し、キー入力の
     //! たびには確認しない。
     use super::*;
 
     /// ja: 末尾の略記の名前を記号に変換する
+    /// en: Converts the abbreviation name at the end to a symbol
     #[story("C5")]
     #[test]
     fn 名前を記号に変換する() {
@@ -2460,6 +2642,7 @@ mod 略記の展開 {
     }
 
     /// ja: 短い略記で始まる長い略記は、長い略記として変換する
+    /// en: Converts a long abbreviation that starts with a shorter one as the long one
     #[story("C5")]
     #[test]
     fn 長い略記が短い略記として変換されない() {
@@ -2471,6 +2654,7 @@ mod 略記の展開 {
     }
 
     /// ja: めったに使わない略記を変換する
+    /// en: Converts rarely used abbreviations
     #[story("C5")]
     #[test]
     fn めったに使わない略記も変換できる() {
@@ -2480,6 +2664,7 @@ mod 略記の展開 {
     }
 
     /// ja: 表に無い名前と、略記の無い入力には None を返す
+    /// en: Returns None for a name not in the table or input without an abbreviation
     #[story("C5")]
     #[test]
     fn 表に無い名前は変えない() {
@@ -2488,6 +2673,7 @@ mod 略記の展開 {
     }
 
     /// ja: 略記の名前のあとに記号が続けば、None を返す
+    /// en: Returns None if a symbol follows the abbreviation name
     #[story("C5")]
     #[test]
     fn 略記のあとに記号が続く場合は変換しない() {
@@ -2497,6 +2683,7 @@ mod 略記の展開 {
     }
 
     /// ja: 表のどの略記でも、手前に何があっても記号に変換する
+    /// en: Converts every abbreviation in the table whatever precedes it
     #[story("C5")]
     #[proptest]
     fn 表のどの略記も変換できる(
@@ -2512,11 +2699,13 @@ mod 略記の展開 {
 
 mod 略記の候補 {
     //! ja: 略記の候補
+    //! en: Abbreviation candidates
     //!
     //! Tab で略記を補完するときに、カーソルの手前の `\name` から記号の候補を作る。
     use super::*;
 
     /// ja: カーソルの手前の略記の名前を返す
+    /// en: Returns the abbreviation name before the cursor
     #[story("C8", "J2")]
     #[test]
     fn カーソルの手前の略記の名前を取り出す() {
@@ -2526,6 +2715,7 @@ mod 略記の候補 {
     }
 
     /// ja: 略記の途中でなければ None を返す
+    /// en: Returns None outside an abbreviation
     #[story("C8", "J2")]
     #[test]
     fn 略記の途中でなければ名前を取り出さない() {
@@ -2534,6 +2724,7 @@ mod 略記の候補 {
     }
 
     /// ja: 文字列のエスケープのあとの名前は、略記ではなく名前を補完の対象として返す
+    /// en: Returns a name, not an abbreviation, as the completion target after an escape in a string
     #[story("D1")]
     #[test]
     fn 文字列のエスケープの後ろで補完すると名前を候補に出す() {
@@ -2549,6 +2740,7 @@ mod 略記の候補 {
     }
 
     /// ja: 名前と一致する略記の記号を先頭に置き、名前で始まる略記の記号を含める
+    /// en: Puts the exact match symbol first and includes those of abbreviations starting with the name
     #[story("C8", "J2")]
     #[test]
     fn 一致する略記の記号を先頭に置く() {
@@ -2561,6 +2753,7 @@ mod 略記の候補 {
 
 mod 定理検索 {
     //! ja: 定理検索
+    //! en: Theorem search
     //!
     //! loogle に問い合わせた結果を表示用の形に整形する。
     //! 外部と通信する部分だけが副作用を持ち、整形は純粋関数で行う。
@@ -2587,6 +2780,7 @@ mod 定理検索 {
     }
 
     /// ja: 件数と、名前と型と、定義されている module を表示する
+    /// en: Shows the count, the name with its type, and the defining module
     #[story("D4")]
     #[test]
     fn 名前と型と定義されている_module_を表示する() {
@@ -2601,6 +2795,7 @@ mod 定理検索 {
     }
 
     /// ja: 件数を絞ったときは、全体の件数と表示した件数を表示する
+    /// en: Shows the total and the shown count when the results are limited
     #[story("D4")]
     #[test]
     fn 件数を絞ったときは全体の件数も表示する() {
@@ -2613,6 +2808,7 @@ mod 定理検索 {
     }
 
     /// ja: 端末の幅より長い行は、幅に合わせて … で切り詰める
+    /// en: Truncates a line longer than the terminal width with an ellipsis
     #[story("D4")]
     #[test]
     fn 長い行は端末の幅で切り詰める() {
@@ -2628,6 +2824,7 @@ mod 定理検索 {
     }
 
     /// ja: 結果が 0 件なら、見つからなかったと表示する
+    /// en: Shows that nothing was found for zero results
     #[story("D4")]
     #[test]
     fn 見つからなければ見つからなかったと表示する() {
@@ -2635,6 +2832,7 @@ mod 定理検索 {
     }
 
     /// ja: loogle のエラーは翻訳せずに表示し、候補を添える
+    /// en: Shows a loogle error untranslated with its suggestions
     #[story("D4")]
     #[test]
     fn エラーは翻訳せずに候補を添える() {
@@ -2677,6 +2875,7 @@ mod 定理検索 {
     }
 
     /// ja: クエリの記号を URL エンコードして送る
+    /// en: Sends the query with its symbols URL-encoded
     #[story("D4")]
     #[test]
     fn 記号を含むクエリも_URL_エンコードして送る() {
@@ -2689,6 +2888,7 @@ mod 定理検索 {
     }
 
     /// ja: 応答が無ければ SearchError を返す
+    /// en: Returns a SearchError if the server does not respond
     #[story("D4")]
     #[test]
     fn 応答が無ければ_SearchError() {
@@ -2701,6 +2901,7 @@ mod 定理検索 {
     }
 
     /// ja: HTTP のエラーは、コードと理由を SearchError として返す
+    /// en: Returns an HTTP error as a SearchError with its code and reason
     #[story("D4", "F4")]
     #[test]
     fn HTTP_のエラーはコードと理由を_SearchError_にする() {
@@ -2710,6 +2911,7 @@ mod 定理検索 {
     }
 
     /// ja: 応答が JSON のオブジェクトでなければ SearchError を返す
+    /// en: Returns a SearchError if the response is not a JSON object
     #[story("D4", "F4")]
     #[test]
     fn 応答がオブジェクトでなければ_SearchError() {
@@ -2721,16 +2923,28 @@ mod 定理検索 {
 
 mod 性質一覧 {
     //! ja: 性質一覧
+    //! en: Property list
     //!
-    //! SPEC.md はテストの doc の ja: の文から生成する (crates/spec)。手で書き足す場所を
-    //! 作らない代わりに、生成し忘れをこのテストで検出する。
+    //! SPEC.ja.md と SPEC.en.md は、テストの doc の ja: と en: の文から生成する (crates/spec)。
+    //! 手で書き足す場所を作らない代わりに、生成し忘れをこのテストで検出する。
     use super::*;
 
-    /// ja: テストとストーリーの文から、SPEC.md と同じ内容を生成する
+    /// ja: テストとストーリーの ja: の文から、SPEC.ja.md と同じ内容を生成する
+    /// en: Generates the same content as SPEC.ja.md from the ja lines of the tests and stories
     #[story("X1")]
     #[test]
-    fn SPEC_md_がテストとそろっている() {
-        if let Err(why) = spec::check(&spec::root()) {
+    fn SPEC_ja_md_がテストとそろっている() {
+        if let Err(why) = spec::check(&spec::root(), spec::Lang::Ja) {
+            panic!("{why}");
+        }
+    }
+
+    /// ja: テストとストーリーの en: の文から、SPEC.en.md と同じ内容を生成する
+    /// en: Generates the same content as SPEC.en.md from the en lines of the tests and stories
+    #[story("X2")]
+    #[test]
+    fn generates_the_same_content_as_spec_en_md_from_the_en_lines_of_the_tests_and_stories() {
+        if let Err(why) = spec::check(&spec::root(), spec::Lang::En) {
             panic!("{why}");
         }
     }
@@ -2738,6 +2952,7 @@ mod 性質一覧 {
 
 mod Lake_プロジェクトの判定 {
     //! ja: Lake プロジェクトの判定
+    //! en: Detecting Lake projects
     //!
     //! 設定に環境が無いとき、カレントディレクトリから Lake プロジェクトを探す。
     use super::*;
@@ -2748,6 +2963,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: サブディレクトリから探すと、lakefile のある親ディレクトリを返す
+    /// en: Returns the parent directory with a lakefile when searching from a subdirectory
     #[story("G6")]
     #[test]
     fn lakefile_を持つ一番近い親ディレクトリを返す() {
@@ -2762,6 +2978,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: lakefile が無ければ None を返す
+    /// en: Returns None without a lakefile
     #[story("G3", "G6")]
     #[test]
     fn lakefile_が無ければ_None_を返す() {
@@ -2770,6 +2987,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: lakefile.toml から lean_lib の名前を返す
+    /// en: Returns the lean_lib names from lakefile.toml
     #[story("G6")]
     #[test]
     fn lakefile_toml_の_lean_lib_を返す() {
@@ -2779,6 +2997,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: lakefile.lean から lean_lib の名前を返す
+    /// en: Returns the lean_lib names from lakefile.lean
     #[story("G6")]
     #[test]
     fn lakefile_lean_の_lean_lib_を返す() {
@@ -2788,6 +3007,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: TOML として読めない lakefile.toml からは、空を返す
+    /// en: Returns nothing from a lakefile.toml that is not valid TOML
     #[story("G4", "G6")]
     #[test]
     fn TOML_として読めない_lakefile_toml_からは空を返す() {
@@ -2796,6 +3016,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: 設定が無ければ、上にある Lake プロジェクトのディレクトリ名と lean_lib で環境を作る
+    /// en: Names the environment after the enclosing Lake project and imports its lean_lib without a config
     #[story("G6")]
     #[test]
     fn 設定が無ければ_Lake_プロジェクトの環境で起動する() {
@@ -2816,6 +3037,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: -p のパスの書き方によらず、プロジェクトのディレクトリ名を環境の名前にする
+    /// en: Names the environment after the project directory for any form of the -p path
     #[story("G6")]
     #[test]
     fn dash_p_の書き方によらずディレクトリ名を環境の名前にする() {
@@ -2846,6 +3068,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: Lake プロジェクトの外では、プロジェクトの無い plain という環境にする
+    /// en: Uses the plain environment with no project outside a Lake project
     #[story("G3", "G6")]
     #[test]
     fn Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
@@ -2856,6 +3079,7 @@ mod Lake_プロジェクトの判定 {
     }
 
     /// ja: import を指定すれば、lean_lib の代わりにそれを使う
+    /// en: Uses the given imports instead of lean_lib
     #[story("G6")]
     #[test]
     fn import_を指定したら_lean_lib_の代わりにそれを使う() {
@@ -2874,6 +3098,7 @@ mod Lake_プロジェクトの判定 {
 
 mod 起動オプション {
     //! ja: 起動オプション
+    //! en: Command-line options
     use super::*;
 
     fn parse(argv: &[&str]) -> Args {
@@ -2881,6 +3106,7 @@ mod 起動オプション {
     }
 
     /// ja: -i と --import を繰り返すと、すべての import を順に返す
+    /// en: Returns every import in order for repeated -i and --import
     #[story("G6")]
     #[test]
     fn dash_i_を繰り返すと_import_がすべて残る() {
@@ -2888,6 +3114,7 @@ mod 起動オプション {
     }
 
     /// ja: -e か --env の値を環境の名前として返す
+    /// en: Takes the value of -e or --env as the environment name
     #[story("G5")]
     #[test]
     fn dash_e_で環境の名前を受け取る() {
@@ -2896,6 +3123,7 @@ mod 起動オプション {
     }
 
     /// ja: 値の無い -e、-i、-p には、オプションの名前を含むエラーを返す
+    /// en: Returns an error naming the option for -e, -i, or -p without a value
     #[story("G5", "G6")]
     #[test]
     fn 値の無いオプションはエラーで終了する() {
@@ -2907,6 +3135,7 @@ mod 起動オプション {
     }
 
     /// ja: 不明なオプションには、そのオプションを不明と書いたエラーを返す
+    /// en: Returns an error naming an unknown option
     #[story("H1")]
     #[test]
     fn 不明なオプションはエラーで終了する() {
@@ -2915,6 +3144,7 @@ mod 起動オプション {
     }
 
     /// ja: ファイル名を、読み込むファイルとして返す
+    /// en: Takes a file name as the file to load
     #[story("B4")]
     #[test]
     fn ファイル名は読み込むファイルとして受け取る() {
@@ -2922,6 +3152,7 @@ mod 起動オプション {
     }
 
     /// ja: ファイルを 2 つ指定すると、1 つだけと書いたエラーを返す
+    /// en: Returns an error that only one file is allowed for two file names
     #[story("B4")]
     #[test]
     fn ファイルを_2_つ指定するとエラーで終了する() {
@@ -2933,6 +3164,7 @@ mod 起動オプション {
 
 mod 起動 {
     //! ja: 起動
+    //! en: Startup
     //!
     //! cli::main。`leani` コマンドを起動して、終了コードと表示を確かめる。エンジンの
     //! 用意は、偽の elan、lake、git を PATH に置いて差し替える。
@@ -3006,6 +3238,7 @@ mod 起動 {
     const NO_ENGINE: &str = "default = \"t\"\n[env.t]\nimports = []\n";
 
     /// ja: エンジンが用意済みなら、leani --setup を実行すると用意せずに用意済みと表示する
+    /// en: Shows that the engine is ready without setting it up when leani --setup runs with a built engine
     #[story("G3")]
     #[test]
     fn dash_dash_setup_は用意済みならエンジンを用意しない() {
@@ -3023,6 +3256,7 @@ mod 起動 {
     }
 
     /// ja: エンジンが無ければ、LEANI_NO_SETUP があっても leani --setup でエンジンを用意する
+    /// en: Sets up the engine when leani --setup runs without one, even with LEANI_NO_SETUP
     #[story("G3")]
     #[test]
     fn dash_dash_setup_は未用意ならエンジンを用意する() {
@@ -3052,6 +3286,7 @@ mod 起動 {
     }
 
     /// ja: leani を実行してエンジンが起動しなければ、起動しなかったと表示して exit 1 で終わる
+    /// en: Shows that the engine did not start and exits with 1 if the engine fails to start
     #[story("G4")]
     #[test]
     fn エンジンが起動しなければメッセージを表示して_exit_1_で終わる() {
@@ -3068,6 +3303,7 @@ mod 起動 {
     }
 
     /// ja: 設定ファイルを読めないか起動できない理由があれば、起動せずに理由を表示して exit 1 で終わる
+    /// en: Shows why and exits with 1 without starting if the config is unreadable or startup is blocked
     #[story("G4")]
     #[test]
     fn 設定のエラーでは起動せずに知らせる() {
@@ -3091,6 +3327,7 @@ mod 起動 {
     }
 
     /// ja: ファイルを指定して leani を実行すると、そのファイルの宣言を使った入力を評価する
+    /// en: Evaluates input that uses declarations from the file when leani runs with a file
     #[story("B4")]
     #[test]
     fn 指定したファイルを_Repl_に渡す() {
@@ -3108,6 +3345,7 @@ mod 起動 {
     }
 
     /// ja: 出力先が閉じると、panic せずに exit 0 で終わる
+    /// en: Exits with 0 without panicking when the output is closed
     #[story("F4")]
     #[test]
     fn 出力先が閉じたら_panic_せずに終了コード_0_で終わる() {
@@ -3137,6 +3375,7 @@ mod 起動 {
     const SEND_SIGINT: &str = "kill -INT $PPID; sleep 30";
 
     /// ja: エンジンの用意の途中で Ctrl-C を押すと、手動の手順を表示せずに exit 130 で終わる
+    /// en: Exits with 130 without the manual steps when Ctrl-C is pressed during engine setup
     #[story("G3")]
     #[test]
     fn 用意の途中の_Ctrl__C_は_exit_130_で終わる() {
@@ -3160,6 +3399,7 @@ mod 起動 {
     }
 
     /// ja: バージョンを調べている途中で Ctrl-C を押すと、exit 130 で終わる
+    /// en: Exits with 130 when Ctrl-C is pressed while checking the version
     #[story("G3")]
     #[test]
     fn バージョンを調べている途中の_Ctrl__C_も中断を返す() {
@@ -3183,6 +3423,7 @@ mod 起動 {
     }
 
     /// ja: -V を付けて実行すると、環境と Lean のバージョンと設定ファイルの場所を表示する
+    /// en: Shows the environment, the Lean version, and the config file path when leani -V runs
     #[story("G7")]
     #[test]
     fn dash_V_は環境とバージョンと設定ファイルの場所を表示して終わる() {
@@ -3205,11 +3446,13 @@ mod 起動 {
 
 mod 略記の一覧 {
     //! ja: 略記の一覧
+    //! en: Abbreviation list
     //!
     //! `:abbrev` の表示。`man ascii` のように、キーと記号の組を複数の列に並べる。
     use super::*;
 
     /// ja: 入力で始まるキーの略記だけを、先頭のバックスラッシュの有無によらず返す
+    /// en: Returns abbreviations whose keys start with the input, with or without a leading backslash
     #[story("C7")]
     #[test]
     fn キーの先頭で絞り込む() {
@@ -3220,6 +3463,7 @@ mod 略記の一覧 {
     }
 
     /// ja: 記号には、その記号に変換される略記を返す
+    /// en: Returns the abbreviations that convert to a given symbol
     #[story("C7")]
     #[test]
     fn 記号からその記号を入力する略記を調べる() {
@@ -3228,6 +3472,7 @@ mod 略記の一覧 {
     }
 
     /// ja: 列の下まで並べたら、右の列に続ける
+    /// en: Continues in the next column after filling a column to the bottom
     #[story("C7")]
     #[test]
     fn 列の下まで並べたら右の列に続ける() {
@@ -3240,6 +3485,7 @@ mod 略記の一覧 {
     }
 
     /// ja: 全角の文字を 2 文字分の幅として列をそろえる
+    /// en: Aligns columns counting a full-width character as two cells wide
     #[story("C7")]
     #[test]
     fn 全角の文字は_2_文字分の幅で列をそろえる() {
@@ -3252,6 +3498,7 @@ mod 略記の一覧 {
     }
 
     /// ja: 幅が広いほど、幅に収まる範囲で列を増やす
+    /// en: Adds as many columns as the width allows
     #[story("C7")]
     #[test]
     fn 幅に収まる範囲で列を増やす() {

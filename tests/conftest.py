@@ -16,7 +16,7 @@ import textwrap
 
 import pytest
 
-# stories は @story と、SPEC.md に載らないテストを見つける hook を持つ。
+# stories は @story と、SPEC に載らないテストを見つける hook を持つ。
 pytest_plugins = ["pytester", "stories"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

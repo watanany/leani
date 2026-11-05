@@ -1,7 +1,7 @@
-"""ストーリーの指定と、テストが SPEC.md に載る形かの確認。
+"""ストーリーの指定と、テストが SPEC に載る形かの確認。
 
 crates/spec は tests/test_*.py を行単位で読み、describe_ の中で @story を付けた
-関数だけを SPEC.md に載せる。conftest.py はこのモジュールの hook を使う。
+関数だけを SPEC (SPEC.ja.md と SPEC.en.md) に載せる。conftest.py はこのモジュールの hook を使う。
 """
 
 import os
@@ -21,7 +21,7 @@ def story(*ids):
     このテストが対象にするユーザーストーリー (stories.toml) を指定する。
 
     テストの中身にも分け方にも影響しない。ID が stories.toml にあるかは
-    import するときに確認する。crates/spec は SPEC.md を生成するとき、この指定を
+    import するときに確認する。crates/spec は SPEC を生成するとき、この指定を
     行単位で読む。1 つのテストが複数のストーリーを対象にしてよく、
     1 つのストーリーを複数のテストが対象にしてよい。ストーリーはテストの目次ではなく、
     テストが足りているかを数える表なので、対応は N:M になる。
@@ -38,7 +38,7 @@ def story(*ids):
 
 
 def listed(item):
-    """crates/spec が SPEC.md に載せる形のテストか。
+    """crates/spec が SPEC に載せる形のテストか。
 
     describe_ の関数の中 (入れ子でもよい) の関数で、@story が付いているもの。
     pytest-describe は describe の中の _ で始まらない関数をすべてテストとして集め、
@@ -57,12 +57,12 @@ def listed(item):
 
 
 def pytest_runtest_setup(item):
-    """SPEC.md に載らないテストを、実行する前に失敗させる。
+    """SPEC に載らないテストを、実行する前に失敗させる。
 
     集めたときにエラーにすると、pytest-xdist の worker が落ちて理由が表示されない。
     """
     if not listed(item):
         pytest.fail(
-            "SPEC.md に載らない。describe_ の中に書いて、@story を付ける",
+            "SPEC に載らない。describe_ の中に書いて、@story を付ける",
             pytrace=False,
         )

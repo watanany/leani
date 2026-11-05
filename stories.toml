@@ -6,211 +6,269 @@ unbuilt = ["C4"]
 [[group]]
 id = "A"
 ja = "式を試す"
+en = "Try expressions"
 
 [[group]]
 id = "B"
 ja = "スクリプトを少しずつ組み立てる"
+en = "Build a script step by step"
 
 [[group]]
 id = "C"
 ja = "複数行の宣言を書く"
+en = "Write multi-line declarations"
 
 [[group]]
 id = "D"
 ja = "名前と型を探す"
+en = "Find names and types"
 
 [[group]]
 id = "E"
 ja = "証明する"
+en = "Prove"
 
 [[group]]
 id = "F"
 ja = "失敗してもセッションを続ける"
+en = "Keep the session going after failures"
 
 [[group]]
 id = "G"
 ja = "起動と設定"
+en = "Start and configure"
 
 [[group]]
 id = "H"
 ja = "コマンドを知る"
+en = "Learn the commands"
 
 [[group]]
 id = "J"
 ja = "ノートブックで使う"
+en = "Use in a notebook"
 
 [[group]]
 id = "X"
 ja = "保守 (ユーザーストーリーではない)"
+en = "Maintain leani (not a user story)"
 
 [[story]]
 id = "A1"
 ja = "式の値をすぐ知りたい。ファイルを作って lake env lean を実行する手間を省く"
+en = "I want to see the value of an expression right away, without making a file and running lake env lean"
 
 [[story]]
 id = "A2"
 ja = "評価できないとき、なぜできないのか (noncomputable か Repr 無し) を知りたい"
+en = "When an expression cannot be evaluated, I want to know why (noncomputable or no Repr)"
 
 [[story]]
 id = "A3"
 ja = "結果が出るまでの時間を知りたい。重い計算を切り分けたい"
+en = "I want to know how long a result takes, to find the slow computations"
 
 [[story]]
 id = "A4"
 ja = "重い計算を Ctrl-C で止めて、それまでの宣言は失わずに続けたい"
+en = "I want to stop a slow computation with Ctrl-C and go on without losing the earlier declarations"
 
 [[story]]
 id = "A5"
 ja = "エラーがあったとき、入力のどこが悪いのかを行の中で知りたい"
+en = "When there is an error, I want to see where in the line the input is wrong"
 
 [[story]]
 id = "B1"
 ja = "do ブロックでファイルを読みプロセスを起動したい (shell script の代わり)"
+en = "I want to read files and start processes in a do block (instead of a shell script)"
 
 [[story]]
 id = "B2"
 ja = "途中まで書いた処理を関数に切り出し、REPL 上で少しずつ組み立てたい"
+en = "I want to turn half-written code into functions and build it up step by step in the REPL"
 
 [[story]]
 id = "B3"
 ja = "組み立て終わったものを .lean ファイルに書き出し、そのまま実行したい"
+en = "I want to write what I have built to a .lean file and run it as it is"
 
 [[story]]
 id = "B4"
 ja = "すでにあるファイルを読み込んで関数を呼びたい。編集したら読み込み直したい"
+en = "I want to load an existing file and call its functions, and load it again after I edit it"
 
 [[story]]
 id = "B5"
 ja = ":! で実行する shell のコマンドでも、コマンド名とパスを Tab で補完したい"
+en = "I want Tab to complete command names and paths in shell commands run with :!"
 
 [[story]]
 id = "C1"
 ja = "def f : Nat -> Nat に | 0 => ... を続ける形を、余分な記号なしで入力したい"
+en = "I want to type def f : Nat -> Nat followed by | 0 => ... without extra symbols"
 
 [[story]]
 id = "C2"
 ja = "確定した宣言に、あとから 1 行追加したい"
+en = "I want to add a line to a declaration after it has been entered"
 
 [[story]]
 id = "C3"
 ja = "長い宣言全体を、履歴から 1 回の操作で呼び出したい"
+en = "I want to recall a whole long declaration from the history in one step"
 
 [[story]]
 id = "C4"
 ja = "複雑な複数行はエディタで書きたい"
+en = "I want to write complex multi-line input in an editor"
 
 [[story]]
 id = "C5"
 ja = "∀ や → を、エディタの略記 (\\all \\to) と同じ書き方で入力したい"
+en = "I want to type symbols such as ∀ and → with the same abbreviations as in the editor (\\all, \\to)"
 
 [[story]]
 id = "C6"
 ja = "空行を含む宣言を、途中で実行させずに 1 つの入力として書きたい"
+en = "I want to write a declaration with blank lines as one input, without it running halfway"
 
 [[story]]
 id = "C7"
 ja = "略記を一覧で探したい。記号から、その記号を入力する略記を調べたい"
+en = "I want to look through a list of abbreviations, and find the abbreviation that types a given symbol"
 
 [[story]]
 id = "C8"
 ja = "(·.f) や (\\to) のように、略記で入力した記号のすぐあとに空白なしで続けたい"
+en = "I want to type the next character right after a symbol entered with an abbreviation, with no space between, as in (·.f) or (\\to)"
 
 [[story]]
 id = "D1"
 ja = "名前の一部だけ覚えているとき、Tab で候補を表示したい。すぐに表示してほしい"
+en = "When I remember only part of a name, I want Tab to show candidates right away"
 
 [[story]]
 id = "D2"
 ja = "関数の型と docstring を見たい"
+en = "I want to see the type and docstring of a function"
 
 [[story]]
 id = "D3"
 ja = "定義の中身を見たい"
+en = "I want to see the body of a definition"
 
 [[story]]
 id = "D4"
 ja = "「こういう性質の定理がありそう」から名前を探したい"
+en = "I want to find the name of a theorem from a property I expect it to have"
 
 [[story]]
 id = "D5"
 ja = "open した名前空間の名前も、ソースに書くのと同じ短い名前で Tab 補完したい"
+en = "I want Tab to complete names in opened namespaces by the same short names I write in source"
 
 [[story]]
 id = "E1"
 ja = "sorry のゴールを見ながらタクティクを 1 つずつ試し、失敗したら元に戻したい"
+en = "I want to try tactics one at a time while watching the goal of a sorry, and undo them when they fail"
 
 [[story]]
 id = "E2"
 ja = "exact? や aesop で証明を探し、見つかった証明をそのまま使える形で残したい"
+en = "I want to search for proofs with exact? or aesop and keep the found proof in a form I can use as it is"
 
 [[story]]
 id = "E3"
 ja = "証明が完成したら、sorry を証明に置き換えた宣言として環境に追加したい"
+en = "When a proof is done, I want the declaration with the sorry replaced by the proof added to the environment"
 
 [[story]]
 id = "E4"
 ja = "その定理が何の公理に依存しているか確かめたい"
+en = "I want to check which axioms a theorem depends on"
 
 [[story]]
 id = "F1"
 ja = "エンジンが異常終了しても、実行済みの宣言を失わずに続けたい"
+en = "When the engine crashes, I want to go on without losing the declarations I have run"
 
 [[story]]
 id = "F2"
 ja = "環境を 1 つ前に戻したい。起動直後に戻したい"
+en = "I want to take the environment back one step, or back to just after startup"
 
 [[story]]
 id = "F3"
 ja = "前回のセッションの履歴を引き継ぎたい。異常終了でも失いたくない"
+en = "I want to keep the history of the previous session, without losing it even after a crash"
 
 [[story]]
 id = "F4"
 ja = "外部コマンドやパイプ入力のトラブルでセッションを失いたくない"
+en = "I do not want to lose the session because of trouble with external commands or piped input"
 
 [[story]]
 id = "G1"
 ja = "Mathlib 無しで速く起動したい。必要になったらセッションの途中から追加したい"
+en = "I want a fast startup without Mathlib, and to add Mathlib in the middle of a session when I need it"
 
 [[story]]
 id = "G2"
 ja = "毎回書く補助関数や open を起動時に自動で読み込みたい"
+en = "I want the helper functions and open lines I always write to be loaded at startup"
 
 [[story]]
 id = "G3"
 ja = "Lake プロジェクト無しで、バージョンごとのエンジンを leani に用意してほしい"
+en = "I want leani to set up the engine for each version, without a Lake project"
 
 [[story]]
 id = "G4"
 ja = "import や設定を書き間違えたとき、おかしな環境のまま起動せずに知らせてほしい"
+en = "When I make a mistake in imports or the config, I want to be told instead of starting in a broken environment"
 
 [[story]]
 id = "G5"
 ja = "環境を設定ファイルに複数書いて、名前で選んで切り替えたい (-e / :env)"
+en = "I want to write several environments in the config file and switch between them by name (-e / :env)"
 
 [[story]]
 id = "G6"
 ja = "Lake プロジェクトの中では、設定を書かずにそのライブラリを使いたい"
+en = "In a Lake project, I want to use its library without writing a config"
 
 [[story]]
 id = "G7"
 ja = "どの環境、Lean のバージョン、設定ファイルで動いているかを確かめたい"
+en = "I want to check which environment, Lean version, and config file I am running with"
 
 [[story]]
 id = "H1"
 ja = "使えるコマンドを一覧で確かめたい。無いコマンドを入力したら知らせてほしい"
+en = "I want to see the list of commands, and be told when I type a command that does not exist"
 
 [[story]]
 id = "J1"
 ja = "ノートブックで、端末と同じようにセルを実行したい。エラーのセルで止めたい"
+en = "I want to run cells in a notebook as in the terminal, and stop at a cell with an error"
 
 [[story]]
 id = "J2"
 ja = "ノートブックでも、名前と略記を Tab で補完したい"
+en = "In a notebook, I want Tab to complete names and abbreviations"
 
 [[story]]
 id = "J3"
 ja = "ノートブックでも、エンジンの異常終了や中断で宣言を失いたくない"
+en = "In a notebook, I do not want to lose declarations when the engine crashes or is interrupted"
 
 [[story]]
 id = "X1"
 ja = "ドキュメントがテストとずれないようにしたい"
+en = "I want the documents to stay in line with the tests"
+
+[[story]]
+id = "X2"
+ja = "日本語を読まない人にも、leani ができることの一覧を読んでもらいたい"
+en = "I want people who do not read Japanese to be able to read the list of what leani can do"

@@ -53,15 +53,15 @@ uv run ruff format . && uv run ruff check .
 uv run mypy
 ```
 
-テストの文 (doc comment と docstring の `ja:` の行) やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.md` を生成し直す。
+テストの文 (doc comment と docstring の `ja:` と `en:` の行) やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.ja.md` と `SPEC.en.md` を生成し直す。
 カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
-`SPEC.md` の内容がテストと一致していないと、テストが失敗する。
+`SPEC.ja.md` か `SPEC.en.md` の内容がテストと一致していないと、テストが失敗する。
 
 ## 作業の流れ
 
 - 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `stories.toml` に追加し、テストには `#[story("A1")]` でストーリーの ID を付ける (カーネルのテストでは `@story("A1")`)。1 つのストーリーに複数のテストを付けてよい
-- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.md` を作るので、crate の中の単体テストは `SPEC.md` に載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` の後ろに 1 行で書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` に書く
-- コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
+- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.ja.md` と `SPEC.en.md` を作るので、crate の中の単体テストはどちらにも載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` と `en:` の後ろに 1 行ずつ書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` と `en:` に書く
+- コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
 - 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
 
@@ -78,10 +78,17 @@ uv run mypy
 - `#[proptest]` のテストでは「どの〜でも」と書き、1 つの例のように書かない
 - 「〜しない」と書くときは、テストが確かめているほかの結果も書く。例:「:t を実行すると、型の代わりに取得できなかったと表示する」
 - 「〜できる」と書かずに、テストが確かめている結果を書く
-- ほかのテストを指す「も」を使わない。`SPEC.md` ではテストがストーリーごとに並ぶので、指す先のテストが近くに無い
+- ほかのテストを指す「も」を使わない。`SPEC.ja.md` ではテストがストーリーごとに並ぶので、指す先のテストが近くに無い
 - テストが確かめていないことを書かない
 - 主語を省いてよいのは、結果の主語 (leani か、describe の文に書いてある関数) と、ユーザーの操作 (入力する、送る、実行する、押す) の主語だけである。これは「文書の書き方」の「主語と目的語を省かない」の例外である。ほかの操作の主語 (セル、エンジン) と目的語は省かない
 - `\` を書かない。Python の docstring では `\` がエスケープになる。`\to` のような略記は「to の略記」と書く
+
+`en:` の文は `ja:` の文を英語に訳したもので、次のように書く。`en:` の文が `ja:` の文と合っているかは、`crates/spec` では確かめない。
+
+- テスト: Then の動詞 (3 人称単数) から始め、`when` で When を、`with` `in` `if` `for` などで Given を続ける。例: `Shows the proof mode help when :help runs in proof mode`
+- `mod` と describe: 名詞句か、`When ...` `After ...` の形で書く。例: `Tactics sent in proof mode`
+- ASCII の文字だけで書き、文末に `.` を付けない。`\` を書かない
+- 同じ日本語の語には、同じ英語の語を当てる (エンジン: engine、宣言: declaration、セル: cell など)
 
 ## コードの書き方
 
@@ -93,7 +100,7 @@ crate は副作用の有無で分けてある。
 | `leani-read` | 読み取り。環境変数とファイルを読むが、何も書き換えない   |
 | `leani`      | 副作用。プロセス、端末、ファイル、ネットワークを操作する |
 | `story`      | テストに付ける `#[story]`。何もせずに関数を返す          |
-| `spec`       | `SPEC.md` を生成する                                     |
+| `spec`       | `SPEC.ja.md` と `SPEC.en.md` を生成する                  |
 
 各 crate のモジュールの一覧は、その crate の `lib.rs` の先頭に書いてある。
 コードを追加するときは、次の決まりに従う。
@@ -129,7 +136,8 @@ Jupyter のカーネル (Python 版) のモジュールの決まりは、`src/le
 | [guide/proof.md](guide/proof.md)                   | 証明モード                                                             |
 | [guide/config.md](guide/config.md)                 | 設定、環境変数、ファイルの場所                                         |
 | [guide/jupyter.md](guide/jupyter.md)               | Jupyter のカーネルとして使う方法                                       |
-| [SPEC.md](SPEC.md)                                 | leani ができることの一覧。`crates/spec` がテストから生成する           |
+| [SPEC.ja.md](SPEC.ja.md)                           | leani ができることの一覧。`crates/spec` がテストから生成する           |
+| [SPEC.en.md](SPEC.en.md)                           | `SPEC.ja.md` の英語版。`crates/spec` がテストの `en:` の文から生成する |
 | [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                               |
 | `stories.toml`                                     | ユーザーストーリーの一覧                                               |
 | `crates/`                                          | leani のコード。設計の理由は doc comment とコメントに書いてある        |
