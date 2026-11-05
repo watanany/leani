@@ -12,9 +12,6 @@ uv tool install 'leani[jupyter] @ git+https://github.com/watanany/leani'
 leani-kernel install
 ```
 
-`leani --install-kernel` でカーネルを登録した Python 版の leani がある場合は、先に
-`uv tool uninstall leani` で消す。Python 版の `leani` コマンド (`~/.local/bin`) が残ると、
-端末の `leani` コマンド (`~/.cargo/bin`) とどちらが起動するかが PATH の順で決まる。
 登録した「Lean 4 (leani)」カーネルは、別にインストールした JupyterLab からも使える。
 
 ## 端末との違い

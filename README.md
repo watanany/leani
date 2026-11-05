@@ -18,8 +18,6 @@
 cargo install --git https://github.com/watanany/leani leani
 ```
 
-`uv tool install` でインストールした Python 版の leani がある場合は、先に `uv tool uninstall leani` で消す。
-
 ## 使い方
 
 ```sh
