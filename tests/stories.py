@@ -66,3 +66,18 @@ def pytest_runtest_setup(item):
             "SPEC に載らない。describe_ の中に書いて、@story を付ける",
             pytrace=False,
         )
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item):
+    """skip したテストと、xfail のテストを失敗にする。
+
+    どちらも、確かめていないのに SPEC に載る。crates/spec は skip と xfail のマーカーを
+    エラーにするが、テストの中で pytest.skip() を呼んだときは、結果を見ないと分からない。
+    """
+    report = (yield).get_result()
+    if report.skipped or hasattr(report, "wasxfail"):
+        report.outcome = "failed"
+        report.longrepr = f"skip か xfail のテストは SPEC に載せられない: {item.nodeid}"
+        if hasattr(report, "wasxfail"):
+            del report.wasxfail

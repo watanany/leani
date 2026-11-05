@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-44 stories, 473 tests. In parentheses: where the test is
+44 stories, 474 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -797,6 +797,7 @@ Not built yet.
 ### X1 I want the documents to stay in line with the tests
 
 - Fails the run and shows only the names of tests SPEC cannot list when pytest finds such tests (kernel / Correspondence with SPEC)
+- Fails the run when a test is skipped or marked as expected to fail (kernel / Correspondence with SPEC)
 - Generates the same content as SPEC.ja.md from the ja lines of the tests and stories (parsing / Property list)
 
 ### X2 I want people who do not read Japanese to be able to read the list of what leani can do

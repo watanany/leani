@@ -27,6 +27,13 @@
 //! すぐ後ろの docstring の `ja:` と `en:` の行から読む。Python の構文を解析する crate は使わない。
 //! カーネルのテストは数が少なく、書き方も決まっているので、行単位で足りる。
 //!
+//! SPEC に載るのに実行されないことがあるテストと、実行されるのに SPEC に載らないテストは、
+//! エラーにする。Rust では、`#[ignore]`、`#[cfg]`、`#[cfg_attr]` の付いたテストと `mod`、
+//! 先頭に `#![cfg]` のあるファイル。Python では、skip と xfail のマーカー、`pytestmark`、
+//! `if` や `for` や `with` の下の describe とテスト、`del` で消すか別の値を入れた `def` の名前。
+//! どちらでも、`crates/leani/tests/` と `tests/` のサブディレクトリに置いたテストのファイル。
+//! テストの中で `pytest.skip()` を呼んだときは、`tests/stories.py` が実行の結果で見つける。
+//!
 //! テストの関数名と `mod` の名前は、en の文から作る ([`ident`])。名前が違えばエラーにする。
 //! 名前を別に考えなくてよいように、名前は文から機械的に決める。
 //!
@@ -184,7 +191,7 @@ pub struct Story {
 }
 
 /// `stories.toml` の中身。書いた順に `SPEC.ja.md` と `SPEC.en.md` に並べるので、`[[group]]` と `[[story]]` の
-/// 配列で書く。各ストーリーは、id の先頭の文字と同じ id の group の下に並ぶ。
+/// 配列で書く。各ストーリーは、id が group の id の後ろに数字を続けたものになる group の下に並ぶ。
 #[derive(Deserialize)]
 pub struct Stories {
     pub unbuilt: Vec<String>,
@@ -253,7 +260,7 @@ fn text(lines: &[String], at: &str) -> Result<Text, String> {
 }
 
 /// doc の `ja:` と `en:` の文。どちらかが無いか空なら、en に ASCII でない文字があれば、
-/// どちらかに `\` があれば、エラーにする。
+/// どちらかに `\` かタブのような制御文字があれば、エラーにする。
 fn both(lines: &[String], at: &str) -> Result<Both, String> {
     let Text { ja, en } = text(lines, at)?;
     match (ja.filter(|s| !s.is_empty()), en.filter(|s| !s.is_empty())) {
@@ -264,6 +271,9 @@ fn both(lines: &[String], at: &str) -> Result<Both, String> {
         }
         (Some(ja), Some(en)) if ja.contains('\\') || en.contains('\\') => {
             Err(format!("ja: か en: の文に \\ がある: {at}"))
+        }
+        (Some(ja), Some(en)) if ja.chars().chain(en.chars()).any(char::is_control) => {
+            Err(format!("ja: か en: の文に制御文字がある: {at}"))
         }
         (Some(ja), Some(en)) => Ok(Both { ja, en }),
     }
@@ -300,8 +310,34 @@ const KEYWORDS: &[&str] = &[
     "use", "virtual", "where", "while", "with", "yield",
 ];
 
-/// テストのファイルが使う crate の名前。`mod` の名前がこれと同じだと、`use` が `mod` を指す。
-const CRATES: &[&str] = &["leani", "proptest", "spec", "story"];
+/// テストのファイルが使える crate の名前。`mod` の名前がこれと同じだと、`use` が `mod` を指す。
+/// `crates/leani/Cargo.toml` の依存をすべて含むことは、単体テストで確かめる。
+const CRATES: &[&str] = &[
+    "alloc",
+    "chrono",
+    "core",
+    "crossterm",
+    "leani",
+    "leani_core",
+    "leani_read",
+    "nix",
+    "portable_pty",
+    "proptest",
+    "reedline",
+    "regex",
+    "serde_json",
+    "sha1_smol",
+    "signal_hook",
+    "spec",
+    "std",
+    "story",
+    "tempfile",
+    "terminal_size",
+    "test_strategy",
+    "toml",
+    "ureq",
+    "vt100",
+];
 
 /// en の文から作った名前を使えない理由。
 fn unusable(id: &str, kind: Kind) -> Option<&'static str> {
@@ -370,17 +406,19 @@ pub struct Test {
     pub stories: Vec<String>,
 }
 
-/// `#[story(...)]` に書かれたストーリー番号。付いていなければ空。
-fn marked(attrs: &[Attribute]) -> Vec<String> {
+/// `#[story(...)]` に書かれたストーリー番号。付いていなければ空。番号を文字列で書いて
+/// いなければエラーにする。`story` のマクロは何でも受け付けるので、コンパイルは通る。
+fn marked(attrs: &[Attribute], at: &str) -> Result<Vec<String>, String> {
     attrs
         .iter()
         .filter(|a| a.path().segments.last().is_some_and(|s| s.ident == "story"))
-        .flat_map(|a| {
+        .map(|a| {
             a.parse_args_with(Punctuated::<LitStr, Token![,]>::parse_terminated)
                 .map(|ids| ids.iter().map(LitStr::value).collect::<Vec<_>>())
-                .unwrap_or_default()
+                .map_err(|_| format!("#[story(...)] の番号は \"A1\" のように文字列で書く: {at}"))
         })
-        .collect()
+        .collect::<Result<Vec<_>, _>>()
+        .map(|v| v.concat())
 }
 
 /// `#[test]` か `#[proptest]` が付いているか。テストはこの 2 つの属性で見分ける。
@@ -433,22 +471,13 @@ fn nest(outer: &str, inner: &str) -> String {
 }
 
 /// Rust のテストファイル 1 つのテスト。場所は「層 / describe」で、`mod` の外のテストは
-/// describe の代わりに層の名前を書く。`dir` は、`mod x;` と書いたときに `x` のファイルを
-/// 探すディレクトリ。
+/// 層の名前だけにする。`dir` は、`mod x;` と書いたときに `x` のファイルを探すディレクトリ。
 fn rust_tests(items: &[Item], layer: &str, dir: &Path) -> Result<Vec<Test>, String> {
     Ok(descend(items, layer, dir)?
         .into_iter()
-        .map(|t| {
-            let place = t.place.map(|p| {
-                format!(
-                    "{layer} / {}",
-                    match p {
-                        "" => layer,
-                        p => p,
-                    }
-                )
-            });
-            Test { place, ..t }
+        .map(|t| Test {
+            place: t.place.map(|p| nest(layer, p)),
+            ..t
         })
         .collect())
 }
@@ -549,22 +578,26 @@ fn item_tests(item: &Item, at: &str, dir: &Path) -> Result<(Option<Both>, Vec<Te
         )),
         Item::Fn(f) if is_test(&f.attrs) => {
             let name = f.sig.ident.to_string();
-            let what = both(&doc_lines(&f.attrs, false), &format!("{at} / {name}"))?;
-            named(&name, &what.en, Kind::RustTest, &format!("{at} / {name}"))?;
+            let here = format!("{at} / {name}");
+            let what = both(&doc_lines(&f.attrs, false), &here)?;
+            named(&name, &what.en, Kind::RustTest, &here)?;
             Ok((
                 None,
                 vec![Test {
                     name,
                     what,
                     place: Both::default(),
-                    stories: marked(&f.attrs),
+                    stories: marked(&f.attrs, &here)?,
                 }],
             ))
         }
-        Item::Fn(f) if !marked(&f.attrs).is_empty() => Err(format!(
-            "テストでない関数に #[story] が付いている: {at} / {}",
-            f.sig.ident
-        )),
+        Item::Fn(f) => match marked(&f.attrs, &format!("{at} / {}", f.sig.ident))?.is_empty() {
+            true => Ok((None, Vec::new())),
+            false => Err(format!(
+                "テストでない関数に #[story] が付いている: {at} / {}",
+                f.sig.ident
+            )),
+        },
         _ => Ok((None, Vec::new())),
     }
 }
@@ -617,6 +650,8 @@ enum Scope {
     Class,
     /// ほかの `def`。テストの中の `def` を、describe の直下の `def` と区別するために数える。
     Function,
+    /// `if`、`for`、`with` などのブロック。この下の describe とテストは、実行されないことがある。
+    Block,
 }
 
 /// 開いているブロック。`names` は直下の `def` と `class` の名前、`describes` は直下の
@@ -663,8 +698,9 @@ impl Waiting {
 /// docstring を読んでいるところ。
 enum Doc {
     Off,
-    /// `def` の行を読んだが、docstring はまだ始まっていない。
-    Before(Waiting),
+    /// `def` の行を読んだが、docstring はまだ始まっていない。`bool` は、`def` の行が `:` で
+    /// 終わったか。引数を複数行に書くと、`def` の行は `):` の行で終わる。
+    Before(Waiting, bool),
     /// docstring の中。読んだ行をためる。
     Inside(Waiting, Vec<String>),
 }
@@ -673,6 +709,8 @@ struct Scan {
     frames: Vec<Frame>,
     /// 次の `def` に付く `@story` の番号。
     pending: Vec<String>,
+    /// 次の `def` に `@pytest.fixture` が付いているか。
+    fixture: bool,
     /// 開いている三重引用符。閉じるまで行を読まない。
     string: Option<&'static str>,
     doc: Doc,
@@ -701,6 +739,7 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
     let start = Scan {
         frames: vec![Frame::new(None, Scope::Top)],
         pending: Vec::new(),
+        fixture: false,
         string: None,
         doc: Doc::Off,
         out: Vec::new(),
@@ -710,10 +749,84 @@ fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
         .try_fold(start, |scan, line| python_line(scan, line, layer))?;
     match done.doc {
         Doc::Off => Ok(done.out),
-        Doc::Before(w) | Doc::Inside(w, _) => {
-            Err(format!("docstring が閉じていない: {layer} / {}", w.name()))
+        Doc::Before(w, _) => Err(no_doc(layer, &w)),
+        Doc::Inside(w, _) => Err(format!(
+            "docstring が閉じていない。\"\"\" だけの行で閉じる: {layer} / {}",
+            w.name()
+        )),
+    }
+}
+
+/// `def` のすぐ後ろに docstring が無いときのエラー。
+fn no_doc(layer: &str, w: &Waiting) -> String {
+    format!(
+        "def のすぐ後ろに、\"\"\" だけの行で始めて \"\"\" だけの行で閉じる docstring を書く: {layer} / {}",
+        w.name()
+    )
+}
+
+/// `def` の行がこの行で終わるか。行の後ろのコメントは見ない。
+fn ends_header(body: &str) -> bool {
+    body.split(" #")
+        .next()
+        .unwrap_or(body)
+        .trim_end()
+        .ends_with(':')
+}
+
+/// ブロックを始める行か。`match` と `case` は名前にも使えるので、`:` で終わる行だけにする。
+fn opens_block(body: &str) -> bool {
+    let body = body.strip_prefix("async ").unwrap_or(body);
+    match body
+        .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+        .next()
+    {
+        Some("if" | "elif" | "else" | "for" | "while" | "with" | "try" | "except" | "finally") => {
+            true
+        }
+        Some("match" | "case") => ends_header(body),
+        _ => false,
+    }
+}
+
+/// `del a, b` で消す名前か、`a = ...` か `a: T = ...` で値を入れ直す名前。
+fn rebound(body: &str) -> Vec<&str> {
+    match body.strip_prefix("del ") {
+        Some(rest) => rest.split(',').map(str::trim).collect(),
+        None => {
+            let end = body
+                .find(|c: char| !(c.is_alphanumeric() || c == '_'))
+                .unwrap_or(body.len());
+            let (name, rest) = body.split_at(end);
+            let assigns = (rest.starts_with(" =") && !rest.starts_with(" =="))
+                || (rest.starts_with(':') && rest.contains(" = "));
+            match !name.is_empty() && assigns {
+                true => vec![name],
+                false => Vec::new(),
+            }
         }
     }
+}
+
+/// `@story("J1", "E3")` の番号。番号は二重引用符の文字列で書く。
+fn story_ids(body: &str, layer: &str) -> Result<Vec<String>, String> {
+    let inside = body
+        .strip_prefix("@story(")
+        .and_then(|r| r.rsplit_once(')'))
+        .map_or("", |(args, _)| args);
+    inside
+        .split(',')
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .map(|a| {
+            a.strip_prefix('"')
+                .and_then(|a| a.strip_suffix('"'))
+                .map(str::to_string)
+                .ok_or_else(|| {
+                    format!("@story の番号は \"J1\" のように二重引用符で書く: {layer} / {body}")
+                })
+        })
+        .collect()
 }
 
 /// Python の 1 行を読む。
@@ -725,22 +838,25 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
             scan.doc = Doc::Inside(w, lines.into_iter().chain([body.to_string()]).collect());
             return Ok(scan);
         }
-        Doc::Before(w) if quotes(body) => {
+        Doc::Before(w, true) if quotes(body) => {
             scan.doc = Doc::Inside(w, Vec::new());
             return Ok(scan);
         }
-        Doc::Before(w)
+        // `def` の行と docstring の間には、空行とコメントだけを書ける。
+        Doc::Before(w, true) if body.is_empty() || body.starts_with('#') => {
+            scan.doc = Doc::Before(w, true);
+            return Ok(scan);
+        }
+        Doc::Before(w, true) => return Err(no_doc(layer, &w)),
+        Doc::Before(w, false)
             if ["def ", "async def ", "@", "class "]
                 .iter()
                 .any(|p| body.starts_with(p)) =>
         {
-            return Err(format!(
-                "def のすぐ後ろに ja: の docstring が無い: {layer} / {}",
-                w.name()
-            ));
+            return Err(no_doc(layer, &w));
         }
-        Doc::Before(w) => {
-            scan.doc = Doc::Before(w);
+        Doc::Before(w, false) => {
+            scan.doc = Doc::Before(w, ends_header(body));
             return Ok(scan);
         }
         Doc::Off => {}
@@ -751,14 +867,48 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
         return Ok(scan);
     }
     let indent = line.len() - body.len();
+    if body.starts_with("pytestmark") || body.contains("mark.skip") || body.contains("mark.xfail") {
+        // pytest が実行しないことがあるのに、SPEC に載る。
+        return Err(format!("実行されないことがあるテスト: {layer} / {body}"));
+    }
+    if body.starts_with('@') && body.contains("story(") && !body.starts_with("@story(") {
+        return Err(format!("@story(...) と書く: {layer} / {body}"));
+    }
     if body.starts_with("@story") && !body.contains(')') {
         // 次の行のストーリーを読まないので、テストが SPEC に載らないか、ストーリーが減る。
         return Err(format!("@story(...) は 1 行で書く: {layer} / {body}"));
     }
     if body.starts_with("@story(") {
-        scan.pending
-            .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
+        scan.pending.extend(story_ids(body, layer)?);
         return Ok(scan);
+    }
+    if let Some(deco) = body.strip_prefix('@') {
+        let path = deco.split('(').next().unwrap_or("").trim();
+        scan.fixture |= path.rsplit('.').next() == Some("fixture");
+        return Ok(scan);
+    }
+    if opens_block(body) {
+        scan.frames
+            .retain(|f| f.indent.is_none_or(|at| at < indent));
+        scan.frames.push(Frame::new(Some(indent), Scope::Block));
+        return Ok(scan);
+    }
+    let owner = scan
+        .frames
+        .iter()
+        .rev()
+        .find(|f| f.indent.is_none_or(|at| at < indent))
+        .filter(|f| matches!(f.scope, Scope::Top | Scope::Describe(_)));
+    let gone = owner.and_then(|f| {
+        rebound(body)
+            .into_iter()
+            .find(|n| f.names.iter().any(|m| m == n))
+    });
+    if let Some(name) = gone {
+        // 後から消したり入れ直したりした describe とテストを、pytest は集めない。
+        return Err(format!(
+            "def の名前を消すか、別の値を入れている: {layer} / {name}"
+        ));
     }
     let def = body
         .strip_prefix("async ")
@@ -779,6 +929,17 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
     }
     scan.frames[parent].names.push(name.to_string());
     let stories = std::mem::take(&mut scan.pending);
+    let fixture = std::mem::take(&mut scan.fixture);
+    if fixture && !stories.is_empty() {
+        // pytest-describe は fixture をテストとして集めない。
+        return Err(format!("fixture に @story が付いている: {layer} / {name}"));
+    }
+    let wanted = name.starts_with("describe_") || !stories.is_empty();
+    if wanted && matches!(scan.frames[parent].scope, Scope::Block) {
+        return Err(format!(
+            "if、for、with などの下の describe とテストは、実行されないことがある: {layer} / {name}"
+        ));
+    }
     if class.is_some() {
         scan.frames.push(Frame::new(Some(indent), Scope::Class));
         return Ok(scan);
@@ -787,17 +948,20 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
         if !stories.is_empty() {
             return Err(format!("describe に @story が付いている: {layer} / {name}"));
         }
-        scan.doc = Doc::Before(Waiting::Describe {
-            name: name.to_string(),
-            indent,
-        });
+        scan.doc = Doc::Before(
+            Waiting::Describe {
+                name: name.to_string(),
+                indent,
+            },
+            ends_header(body),
+        );
         return Ok(scan);
     }
     let names: Option<Vec<&Both>> = scan.frames[1..]
         .iter()
         .map(|f| match &f.scope {
             Scope::Describe(d) => Some(d),
-            Scope::Top | Scope::Class | Scope::Function => None,
+            Scope::Top | Scope::Class | Scope::Function | Scope::Block => None,
         })
         .collect();
     let place = names.filter(|n| !n.is_empty()).map(|n| Both {
@@ -821,11 +985,14 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
             "describe の外のテストは pytest-describe が実行しない: {layer} / {name}"
         ));
     };
-    scan.doc = Doc::Before(Waiting::Test {
-        name: name.to_string(),
-        place: place.map(|p| format!("{layer} / {p}")),
-        stories,
-    });
+    scan.doc = Doc::Before(
+        Waiting::Test {
+            name: name.to_string(),
+            place: place.map(|p| format!("{layer} / {p}")),
+            stories,
+        },
+        ends_header(body),
+    );
     Ok(scan)
 }
 
@@ -883,8 +1050,55 @@ fn layers(dir: &Path, prefix: &str, ext: &str) -> Result<Vec<(String, PathBuf)>,
         .collect())
 }
 
-/// テストを、層の名前の順、ファイル内で出てくる順に返す。
+/// `dir` の下のファイル。サブディレクトリの中も含める。
+fn files_under(dir: &Path) -> Vec<PathBuf> {
+    fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .flat_map(|p| match p.is_dir() {
+            true => files_under(&p),
+            false => vec![p],
+        })
+        .collect()
+}
+
+/// テストのランナーは実行するのに、このモジュールが読まないファイル。`tests/` の
+/// サブディレクトリの `test_*.py` (pytest はサブディレクトリも探す) と、
+/// `crates/leani/tests/` のサブディレクトリの `main.rs` (cargo はテストにする)。
+fn unread(root: &Path) -> Vec<PathBuf> {
+    let subdirs = |dir: PathBuf| -> Vec<PathBuf> {
+        fs::read_dir(dir)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.is_dir())
+            .collect()
+    };
+    let py = subdirs(root.join("tests"))
+        .into_iter()
+        .flat_map(|d| files_under(&d))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("test_") && n.ends_with(".py"))
+        });
+    let rs = subdirs(root.join("crates/leani/tests"))
+        .into_iter()
+        .map(|d| d.join("main.rs"))
+        .filter(|p| p.is_file());
+    py.chain(rs).collect()
+}
+
+/// テストを、層の名前の順、ファイル内で出てくる順に返す。テストのランナーが実行するのに
+/// 読まないファイルがあればエラーにする。
 pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
+    if let Some(path) = unread(root).first() {
+        return Err(format!(
+            "spec が読まないテストのファイル。tests/ か crates/leani/tests/ の直下に置く: {}",
+            path.display()
+        ));
+    }
     let mut files = layers(&root.join("crates/leani/tests"), "", "rs")?;
     files.extend(layers(&root.join("tests"), "test_", "py")?);
     files.sort();
@@ -913,6 +1127,13 @@ fn repeated<'a>(items: impl Iterator<Item = &'a str>) -> Vec<&'a str> {
         .collect()
 }
 
+/// ストーリー `sid` が group `gid` に入るか。`sid` は `gid` の後ろに数字を続けたもの。
+/// 前方一致にすると、group が A と AB のときに AB1 が両方に入る。
+fn in_group(sid: &str, gid: &str) -> bool {
+    sid.strip_prefix(gid)
+        .is_some_and(|n| !n.is_empty() && n.chars().all(|c| c.is_ascii_digit()))
+}
+
 /// `stories.toml` の中だけで分かる誤り。ID の重複と、どの group にも入らないストーリー。
 /// group に入らないストーリーは `SPEC.ja.md` と `SPEC.en.md` に出てこないので、テストがあっても気づけない。
 fn story_complaints(stories: &Stories) -> Vec<String> {
@@ -925,7 +1146,7 @@ fn story_complaints(stories: &Stories) -> Vec<String> {
     let orphan = stories
         .story
         .iter()
-        .filter(|s| !stories.group.iter().any(|g| s.id.starts_with(&g.id)))
+        .filter(|s| !stories.group.iter().any(|g| in_group(&s.id, &g.id)))
         .map(|s| format!("どの group にも入らない: {}", s.id));
     dup_story.chain(dup_group).chain(orphan).collect()
 }
@@ -1009,7 +1230,7 @@ pub fn render(stories: &Stories, tests: &[Test], lang: Lang) -> Result<String, V
         let ids: Vec<&Story> = stories
             .story
             .iter()
-            .filter(|s| s.id.starts_with(&g.id))
+            .filter(|s| in_group(&s.id, &g.id))
             .collect();
         if ids.is_empty() {
             None
@@ -1787,6 +2008,252 @@ en = "I want to see the type"
             ("describe_type", "Type", Kind::PyDescribe),
         ] {
             assert_eq!(named(name, en, kind, "at"), Ok(()), "{en}");
+        }
+    }
+
+    /// describe 1 つの中に `body` を書いた Python のテストのファイル。
+    fn in_describe(body: &str) -> String {
+        format!(
+            "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n\n{body}"
+        )
+    }
+
+    /// describe の直下に置くテスト 1 件。`deco` はテストの前に書くデコレータの行。
+    fn py_test(deco: &str) -> String {
+        format!(
+            "{deco}    @story(\"J1\")\n    def runs_it(kernel):\n        \"\"\"\n        ja: 実行する\n        en: Runs it\n        \"\"\"\n        pass\n"
+        )
+    }
+
+    #[test]
+    fn rejects_python_tests_that_pytest_may_skip() {
+        assert!(python(&in_describe(&py_test(""))).is_ok());
+        for deco in [
+            "    @pytest.mark.skip\n",
+            "    @pytest.mark.skipif(sys.platform == \"win32\", reason=\"x\")\n",
+            "    @pytest.mark.xfail\n",
+        ] {
+            let text = in_describe(&py_test(deco));
+            let got = python(&text);
+            assert!(
+                got.as_ref()
+                    .is_err_and(|e| e.contains("実行されないことがある")),
+                "{deco}: {got:?}"
+            );
+        }
+        let module = format!(
+            "pytestmark = pytest.mark.slow\n{}",
+            in_describe(&py_test(""))
+        );
+        assert!(python(&module).is_err());
+        let param = in_describe(&format!(
+            "    @pytest.mark.parametrize(\"x\", [pytest.param(1, marks=pytest.mark.skip)])\n{}",
+            py_test("")
+        ));
+        assert!(python(&param).is_err());
+    }
+
+    #[test]
+    fn rejects_python_tests_and_describes_under_if_for_or_with() {
+        let test = py_test("")
+            .replace("\n    ", "\n        ")
+            .replacen("    @", "        @", 1);
+        for block in [
+            "    if sys.platform == \"linux\":\n",
+            "    for _ in range(1):\n",
+            "    with x:\n",
+        ] {
+            let text = in_describe(&format!("{block}{test}"));
+            assert!(python(&text).is_err(), "{text}");
+        }
+        let describe = format!(
+            "if False:\n{}",
+            in_describe(&py_test(""))
+                .lines()
+                .map(|l| format!("    {l}\n"))
+                .collect::<String>()
+        );
+        assert!(python(&describe).is_err(), "{describe}");
+        let inside = in_describe(&py_test("").replace(
+            "        pass\n",
+            "        if kernel:\n            pass\n        with kernel:\n            pass\n",
+        ));
+        assert!(python(&inside).is_ok(), "{inside}");
+    }
+
+    #[test]
+    fn rejects_python_names_that_are_deleted_or_assigned_again() {
+        for after in [
+            "    del runs_it\n",
+            "    runs_it = None\n",
+            "    runs_it: object = None\n",
+        ] {
+            let text = in_describe(&format!("{}{after}", py_test("")));
+            assert!(python(&text).is_err(), "{after}");
+        }
+        let top = format!("{}del describe_cell\n", in_describe(&py_test("")));
+        assert!(python(&top).is_err());
+        let ok = in_describe(&py_test("").replace(
+            "        pass\n",
+            "        runs_it = 1\n        f(runs_it=1)\n",
+        ));
+        assert!(python(&ok).is_ok(), "{ok}");
+    }
+
+    #[test]
+    fn rejects_story_on_a_fixture_or_an_unreadable_story() {
+        for deco in [
+            "    @pytest.fixture\n",
+            "    @pytest.fixture(autouse=True)\n",
+        ] {
+            let after = in_describe(&py_test(deco));
+            assert!(python(&after).is_err(), "{after}");
+            let before = in_describe(&py_test("").replacen(
+                "    def runs_it",
+                &format!("{deco}    def runs_it"),
+                1,
+            ));
+            assert!(python(&before).is_err(), "{before}");
+        }
+        for story in ["@story('J1')", "@story(J1)", "@stories.story(\"J1\")"] {
+            let text = in_describe(&py_test("").replace("@story(\"J1\")", story));
+            assert!(python(&text).is_err(), "{story}");
+        }
+    }
+
+    #[test]
+    fn rejects_a_python_docstring_that_is_not_right_after_the_def() {
+        for body in [
+            "        x = 1\n        \"\"\"\n        ja: 実行する\n        en: Runs it\n        \"\"\"\n",
+            "        \"\"\"ja: 実行する\"\"\"\n",
+        ] {
+            let text = in_describe(&format!(
+                "    @story(\"J1\")\n    def runs_it(kernel):\n{body}        pass\n"
+            ));
+            let got = python(&text);
+            assert!(
+                got.as_ref().is_err_and(|e| e.contains("\"\"\" だけの行")),
+                "{body}: {got:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_test_files_that_spec_does_not_read() {
+        let test =
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn evaluates() {}\n";
+        let stories = "unbuilt = []\n[[group]]\nid = \"A\"\nja = \"式\"\nen = \"Expr\"\n[[story]]\nid = \"A1\"\nja = \"値\"\nen = \"Value\"\n";
+        let base = [
+            ("stories.toml", stories),
+            ("crates/leani/tests/parsing.rs", test),
+            ("crates/leani/tests/common/mod.rs", ""),
+            ("tests/conftest.py", ""),
+            ("tests/stories.py", ""),
+        ];
+        let ok = scratch("unread-ok", &base);
+        let got = collect(&ok);
+        fs::remove_dir_all(&ok).unwrap();
+        assert!(got.is_ok(), "{got:?}", got = got.err());
+        for (i, extra) in [
+            "tests/sub/test_more.py",
+            "crates/leani/tests/dirtest/main.rs",
+        ]
+        .iter()
+        .enumerate()
+        {
+            let files: Vec<(&str, &str)> = base.iter().copied().chain([(*extra, "")]).collect();
+            let dir = scratch(&format!("unread-{i}"), &files);
+            let got = collect(&dir);
+            fs::remove_dir_all(&dir).unwrap();
+            assert!(got.is_err(), "{extra}");
+        }
+    }
+
+    #[test]
+    fn rejects_story_ids_that_are_not_strings() {
+        for attr in ["#[story(A1)]", "#[story(\"A1\", B2)]"] {
+            let text = format!(
+                "mod expr {{ //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n{attr} #[test] fn evaluates() {{}} }}"
+            );
+            let got = rust(&text);
+            assert!(
+                got.as_ref().is_err_and(|e| e.contains("#[story")),
+                "{attr}: {got:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn puts_each_story_only_in_the_group_whose_id_is_followed_by_digits() {
+        let stories: Stories = toml::from_str(
+            r#"
+unbuilt = []
+[[group]]
+id = "A"
+ja = "式"
+en = "Expr"
+[[group]]
+id = "AB"
+ja = "別"
+en = "Other"
+[[story]]
+id = "A1"
+ja = "値"
+en = "Value"
+[[story]]
+id = "AB1"
+ja = "別の値"
+en = "Other value"
+[[story]]
+id = "AX"
+ja = "番号が無い"
+en = "No number"
+"#,
+        )
+        .unwrap();
+        assert_eq!(story_complaints(&stories), ["どの group にも入らない: AX"]);
+        let fine = Stories {
+            story: stories.story.into_iter().filter(|s| s.id != "AX").collect(),
+            ..stories
+        };
+        let got = render(&fine, &[], Lang::En).unwrap();
+        assert_eq!(got.matches("### AB1").count(), 1, "{got}");
+        assert_eq!(got.matches("### A1").count(), 1, "{got}");
+    }
+
+    #[test]
+    fn rejects_control_characters_in_the_texts() {
+        for doc in [
+            "/// ja: 評価\tする\n/// en: Evaluates",
+            "/// ja: 評価する\n/// en: Eval\tuates",
+        ] {
+            let text = format!(
+                "mod expr {{ //! ja: 式\n//! en: Expr\n{doc}\n#[story(\"A1\")] #[test] fn evaluates() {{}} }}"
+            );
+            assert!(rust(&text).is_err(), "{doc}");
+        }
+    }
+
+    #[test]
+    fn places_a_test_outside_any_mod_at_the_layer() {
+        let got =
+            rust("/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {}");
+        assert_eq!(
+            got.unwrap(),
+            [row("parsing", "評価する", "evaluates", &["A1"])]
+        );
+    }
+
+    #[test]
+    fn lists_every_crate_that_the_tests_can_use() {
+        let path = root().join("crates/leani/Cargo.toml");
+        let manifest: toml::Table = toml::from_str(&fs::read_to_string(path).unwrap()).unwrap();
+        let deps = ["dependencies", "dev-dependencies"]
+            .iter()
+            .filter_map(|k| manifest.get(*k).and_then(toml::Value::as_table))
+            .flat_map(|t| t.keys().map(|k| k.replace('-', "_")));
+        for name in deps.chain(["leani".to_string(), "std".to_string()]) {
+            assert!(CRATES.contains(&name.as_str()), "{name}");
         }
     }
 }

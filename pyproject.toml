@@ -54,6 +54,8 @@ extraPaths = ["src", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# crates/spec は tests/ の直下の test_*.py だけを読む。pytest の既定では *_test.py も集める。
+python_files = ["test_*.py"]
 addopts = "-q"
 
 [tool.ruff.lint]

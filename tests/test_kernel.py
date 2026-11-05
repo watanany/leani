@@ -838,3 +838,33 @@ def describe_correspondence_with_spec():
             assert name in out
         for name in ("listed_in_spec", "_helper"):
             assert name not in out
+
+    @story("X1")
+    def fails_the_run_when_a_test_is_skipped_or_marked_as_expected_to_fail(pytester):
+        """
+        ja: skip したテストか xfail のテストがあると、そのテストを失敗にする
+        en: Fails the run when a test is skipped or marked as expected to fail
+        """
+        pytester.makepyfile(
+            test_skips="""
+            import pytest
+            from stories import story
+
+            def describe_cell():
+                @story("J1")
+                def skips_inside():
+                    pytest.skip("x")
+
+                @story("J1")
+                @pytest.mark.xfail
+                def fails_as_expected():
+                    assert False
+
+                @story("J1")
+                @pytest.mark.xfail
+                def passes_unexpectedly():
+                    pass
+            """
+        )
+        result = pytester.runpytest("-p", "stories", "-p", "no:xdist")
+        result.assert_outcomes(failed=3)
