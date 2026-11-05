@@ -1364,6 +1364,26 @@ pub fn tactic_undo(proof: &Proof) -> Option<Proof> {
         })
 }
 
+/// エンジンに送るタクティク。REPL のタクティクモードはタクティクを 1 つしか読まないので、
+/// `( )` で囲み、`;` で並べたタクティクも 1 つのタクティクとして送る。括弧は別の行に
+/// 置く。同じ行に置くと、行コメントで終わるタクティクでは `)` がコメントの中に入る。
+pub fn grouped_tactic(src: &str) -> String {
+    format!("(\n{src}\n)")
+}
+
+/// `grouped_tactic` で送ったタクティクのパースエラーの位置を、入力した行に合わせる。
+/// `(` の行の分だけ、行の番号を 1 つ戻す。
+pub fn ungroup_error(msg: &str) -> String {
+    ERR_POS
+        .replace_all(msg, |m: &regex::Captures| {
+            let line = m[1]
+                .parse::<u64>()
+                .map_or(1, |n| n.saturating_sub(1).max(1));
+            format!("<input>:{line}:{}:", &m[2])
+        })
+        .into_owned()
+}
+
 /// エンジンが PANIC を出力していたら、PANIC の行。無ければ None。
 ///
 /// 同じメッセージの中で、PANIC の前に #eval の出力が、後にバックトレースが続く
@@ -1443,7 +1463,7 @@ fn dedent(text: &str) -> String {
 
 /// メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。桁と幅は文字の数。
 ///
-/// 位置は送ったソース上の座標なので、#eval でラップした分のずれ (line_off /
+/// 位置は送ったソース上の座標なので、#eval や括弧で包んだ分のずれ (line_off /
 /// col_off) を引いてから、その行の長さに収める。col_off は `indent_code` が空白を
 /// 足した行 (文字列の中で始まらない行) だけから引く。
 pub fn span<S: AsRef<str>>(

@@ -31,7 +31,7 @@ pub enum State {
     Err,
 }
 
-/// 証明モードの状態。1 行 = 1 タクティクで進む。タクティクを進めたり取り消したり
+/// 証明モードの状態。1 回の入力 = 1 タクティクで進む。タクティクを進めたり取り消したり
 /// するときは、新しい `Proof` を作る (`pure::tactic_step` と `pure::tactic_undo`)。
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Proof {

@@ -220,6 +220,13 @@ def fib : Nat → Nat
         status, _, err = run(kernel, "rfl\nrfl")
         assert status == "ok", err
 
+    @story("J1", "E1")
+    def it_セミコロンで並べたタクティクを_1_行で実行する(kernel):
+        run(kernel, "theorem cell_semi : 1 = 1 ∧ 2 = 2 := by sorry")
+        run(kernel, ":prove")
+        _, out, err = run(kernel, "constructor; rfl; rfl")
+        assert "証明完了" in out, out + err
+
     @story("J1")
     def it_閉じていない_raw_文字列は次の行に続ける(kernel):
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')

@@ -54,6 +54,7 @@ from leani.pure import (
     dim,
     errors,
     green,
+    grouped_tactic,
     has_error,
     head_line,
     indent_code,
@@ -75,6 +76,7 @@ from leani.pure import (
     tactic_step,
     tactic_undo,
     try_this,
+    ungroup_error,
     yellow,
 )
 from leani.queries import (
@@ -1122,13 +1124,13 @@ class Repl:
     # -- 証明モード -------------------------------------------------------
 
     def tactic(self, src: str) -> None:
-        """1 行 = 1 タクティク。proofState を進める。"""
+        """1 回の入力 = 1 タクティク。proofState を進める。"""
         proof = self.proof
         if proof is None:
             return
 
         state = proof.state
-        resp = self.guard(lambda: self.eng.send_tactic(src, state))
+        resp = self.guard(lambda: self.eng.send_tactic(grouped_tactic(src), state))
         if self.proof is not proof or proof.gen != self.eng.gen:
             # guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
             # ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
@@ -1142,10 +1144,10 @@ class Repl:
         self.last = Last(src, advanced=False, proof=True)
 
         if resp.get("message"):  # エンジンが直接返すエラー
-            self.out.fail(red(resp["message"].rstrip()))
+            self.out.fail(red(ungroup_error(resp["message"]).rstrip()))
             return
         elif has_error(resp):
-            render(self.out, resp, src)
+            render(self.out, resp, src, 1)
             return
 
         for m in messages(resp):
@@ -1153,7 +1155,7 @@ class Repl:
                 self.out.write(m["data"].rstrip())
 
         if "proofState" not in resp:
-            render(self.out, resp, src)
+            render(self.out, resp, src, 1)
             return
 
         found = try_this(messages(resp))

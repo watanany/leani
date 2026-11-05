@@ -2051,6 +2051,24 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
+    fn セミコロンで並べたタクティクを_1_行で実行する() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem semi : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        let out = repl.feed(&["constructor; rfl; rfl"]);
+        assert!(out.contains("証明完了"), "{out}");
+    }
+
+    #[story("E1")]
+    #[test]
+    fn タクティクのパースエラーは入力した行の位置で表示する() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem semi2 : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
+        let out = repl.feed(&["constructor; rfl;; rfl"]);
+        assert!(out.contains("<input>:1:17"), "{out}");
+    }
+
+    #[story("E1")]
+    #[test]
     fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
         let mut repl = Driver::new();
         repl.feed(&[

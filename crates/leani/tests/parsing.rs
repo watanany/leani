@@ -1849,6 +1849,29 @@ mod 証明モードのタクティクの記録 {
     }
 }
 
+mod 証明モードで送るタクティク {
+    use super::*;
+
+    #[story("E1")]
+    #[test]
+    fn タクティクを括弧で囲み括弧は別の行に置く() {
+        assert_eq!(
+            pure::grouped_tactic("constructor; rfl -- c"),
+            "(\nconstructor; rfl -- c\n)"
+        );
+    }
+
+    #[story("E1")]
+    #[test]
+    fn パースエラーの行は括弧の行の分だけ戻す() {
+        assert_eq!(
+            pure::ungroup_error("Lean error:\n<input>:2:17: expected ')'"),
+            "Lean error:\n<input>:1:17: expected ')'"
+        );
+        assert_eq!(pure::ungroup_error("Type mismatch"), "Type mismatch");
+    }
+}
+
 mod sorry_の置き換え {
     //! repl の pos / endPos で切り出してスクリプトに置き換える。桁はコードポイント
     //! 単位で、`pure::offset` が byte の位置に直す。

@@ -850,6 +850,26 @@ def tactic_undo(proof: Proof) -> Proof | None:
             return None
 
 
+def grouped_tactic(src: str) -> str:
+    """
+    エンジンに送るタクティク。REPL のタクティクモードはタクティクを 1 つしか
+    読まないので、`( )` で囲み、`;` で並べたタクティクも 1 つのタクティクとして送る。
+    括弧は別の行に置く。同じ行に置くと、行コメントで終わるタクティクでは `)` が
+    コメントの中に入る。
+    """
+    return f"(\n{src}\n)"
+
+
+def ungroup_error(msg: str) -> str:
+    """
+    `grouped_tactic` で送ったタクティクのパースエラーの位置を、入力した行に合わせる。
+    `(` の行の分だけ、行の番号を 1 つ戻す。
+    """
+    return ERR_POS.sub(
+        lambda m: f"<input>:{max(int(m.group(1)) - 1, 1)}:{m.group(2)}:", msg
+    )
+
+
 def plain(s: str) -> str:
     return s
 
@@ -902,7 +922,7 @@ def span(
     """
     メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。
 
-    位置は送ったソース上の座標なので、#eval でラップした分のずれ (line_off /
+    位置は送ったソース上の座標なので、#eval や括弧で包んだ分のずれ (line_off /
     col_off) を引いてから、その行の長さに収める。col_off は `indent_code` が空白を
     足した行 (文字列の中で始まらない行) だけから引く。
     """
