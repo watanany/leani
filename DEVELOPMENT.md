@@ -77,16 +77,16 @@ crate は副作用の有無で分けてある。
 各 crate のモジュールの一覧は、その crate の `lib.rs` の先頭に書いてある。
 コードを追加するときは、次の決まりに従う。
 
-- 原則として、純粋関数型の考え方でコードを書く。基本的な書き方は Haskell を意識する。値を書き換えるより新しい値を返し、小さな関数を組み合わせる。`leani-core` と `leani-read` では、関数の複雑さと長さを `clippy` が検査する (`clippy.toml`)
+- 原則として、純粋関数型の考え方でコードを書く。基本的な書き方は Haskell を意識する。値を書き換えるより新しい値を返し、小さな関数を組み合わせる
 - 分岐は、書ける箇所では `match` で書く。不自然になるなら `if` を式として書く
 - 純粋関数と読み取りの関数では、`if` の `else` を省略しない。どの分岐でも値を返すことが、コードの形でわかるようにする
 - 副作用のある関数では、`else` を省略してよい。Go のように、条件に合わなければ先に return する
 - 判定と整形は `leani-core` に書く。`leani` には、プロセス、端末、ファイルの操作だけを書く。こうすると、判定と整形のテストを入力と出力だけで書ける
-- 依存の向きは `leani-core` ← `leani-read` ← `leani` だけにする。`leani-core` と `leani-read` で使ってはいけない関数と型は、それぞれの `clippy.toml` の `disallowed-methods` と `disallowed-types` に書いてある
+- 依存の向きは `leani-core` ← `leani-read` ← `leani` だけにする
 - プロセス全体の状態 (環境変数、カレントディレクトリ、SIGINT のハンドラ) に触るのは `main.rs` だけにする。`main.rs` が起動時に 1 回だけ環境変数を読んで `Ctx` を作り、ほかの関数は `Ctx` を引数で受け取る。lib は `std::env::set_var` と `set_current_dir` を呼ばない。子プロセスには `Command::env` と `current_dir` で渡す
 - セッションの状態 (エンジンのプロセス、宣言のログ、入力バッファなど) を持つのは `Engine` と `Repl` だけにする。`Engine` のフィールドは private にして、`Engine` のメソッドだけが書き換える
-- 表示は `print!` で出さず、`Repl` に渡した `Output` (`self.out`) の `write` と `fail` で出す。端末では `show::Console` が、テストでは文字列にためるだけの型が表示を受け取る。`print!` は workspace の lint で禁じてあり、使ってよいモジュールにだけ `#[allow(clippy::print_stdout)]` を付ける
-- テストがエンジンとのやりとりを差し替えるためのメソッドは、`testing` feature のときだけ作る。テストでは常に有効になる (`crates/leani/Cargo.toml` の `[dev-dependencies]`)
+- 表示は `print!` で出さず、`Repl` に渡した `Output` (`self.out`) の `write` と `fail` で出す。テストでは、文字列にためるだけの型が表示を受け取る
+- テストがエンジンとのやりとりを差し替えるためのメソッドは、`testing` feature のときだけ作る
 - lint は `clippy` の一般的な設定に従う。ただし、このリポジトリの決まりと合わないときは、このリポジトリの決まりを優先する
 
 Jupyter のカーネル (Python 版) のモジュールの決まりは、`src/leani/__init__.py` の docstring と
