@@ -229,11 +229,11 @@ mod tactic_suggestions {
         assert_eq!(found.as_deref(), Some("exact Nat.le_refl n"));
     }
 
-    /// ja: 括弧が合わない提案を途中で切れていると判定し、合う提案を切れていないと判定する
-    /// en: Judges a suggestion with unmatched brackets as cut off and one with matched brackets as whole
+    /// ja: 括弧が合わない提案を閉じていないと判定し、合う提案を閉じていると判定する
+    /// en: Judges a suggestion with unmatched brackets as unbalanced and one with matched brackets as balanced
     #[story("E2")]
     #[test]
-    fn judges_a_suggestion_with_unmatched_brackets_as_cut_off_and_one_with_matched_brackets_as_whole()
+    fn judges_a_suggestion_with_unmatched_brackets_as_unbalanced_and_one_with_matched_brackets_as_balanced()
      {
         // スクリプトに追加する前の最後の確認。途中で切ると必ず括弧が合わなくなる。
         assert!(pure::balanced("simp only [aaa, bbb]"));
@@ -243,11 +243,11 @@ mod tactic_suggestions {
         assert!(!pure::balanced("exact ⟨foo]"));
     }
 
-    /// ja: 括弧が閉じた文字列をどう 2 つ連結しても閉じていると判定する
-    /// en: Judges any concatenation of two balanced strings as balanced
+    /// ja: 括弧が閉じたどの 2 つの文字列でも、連結した文字列を閉じていると判定し、閉じ括弧を 1 つ足した文字列を閉じていないと判定する
+    /// en: Judges any concatenation of two balanced strings as balanced and any balanced string with one more closing bracket as unbalanced
     #[story("E2")]
     #[proptest]
-    fn judges_any_concatenation_of_two_balanced_strings_as_balanced(
+    fn judges_any_concatenation_of_two_balanced_strings_as_balanced_and_any_balanced_string_with_one_more_closing_bracket_as_unbalanced(
         #[strategy(balanced_src())] a: String,
         #[strategy(balanced_src())] b: String,
         #[strategy(closer())] close: char,
@@ -626,8 +626,8 @@ mod range_of_an_error_position {
     //! メッセージの位置を、送ったソースの座標からその行の中に収める。
     use super::*;
 
-    /// ja: eval で包んでずれた行と桁を戻した範囲を返す
-    /// en: Returns the range shifted back by the lines and columns that wrapping in eval added
+    /// ja: #eval で包んでずれた行と桁を戻した範囲を返す
+    /// en: Returns the range shifted back by the lines and columns that wrapping in #eval added
     #[story("A5")]
     #[test]
     fn returns_the_range_shifted_back_by_the_lines_and_columns_that_wrapping_in_eval_added() {
@@ -2317,11 +2317,11 @@ mod tactics_sent_in_proof_mode {
         );
     }
 
-    /// ja: 完結判定にエラーが無ければ、パースエラーの行を括弧の行の分だけ戻す
-    /// en: Moves the parse error line back by the parenthesis line if the completeness check has no error
+    /// ja: 完結判定にエラーが無ければ、パースエラーの行を括弧の行の分だけ戻し、位置の無いメッセージはそのまま返す
+    /// en: Moves the parse error line back by the parenthesis line and returns a message without a position as it is if the completeness check has no error
     #[story("E1")]
     #[test]
-    fn moves_the_parse_error_line_back_by_the_parenthesis_line_if_the_completeness_check_has_no_error()
+    fn moves_the_parse_error_line_back_by_the_parenthesis_line_and_returns_a_message_without_a_position_as_it_is_if_the_completeness_check_has_no_error()
      {
         assert_eq!(
             pure::tactic_parse_error("Lean error:\n<input>:2:17: expected ')'", None),
@@ -3017,11 +3017,11 @@ mod theorem_search {
         assert!(line.starts_with("GET /json?q=%3Fa%20%2B%20%3Fb "), "{line}");
     }
 
-    /// ja: 応答が無ければ SearchError を返す
-    /// en: Returns a SearchError if the server does not respond
+    /// ja: 接続できなければ SearchError を返す
+    /// en: Returns a SearchError if the connection fails
     #[story("D4")]
     #[test]
-    fn returns_a_searcherror_if_the_server_does_not_respond() {
+    fn returns_a_searcherror_if_the_connection_fails() {
         // ネットワークの問題で REPL を終了させない。呼び出し側がエラーを受け取って
         // 1 行で報告する。
         let closed = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -3245,10 +3245,10 @@ mod command_line_options {
     }
 
     /// ja: -e か --env の値を環境の名前として返す
-    /// en: Takes the value of -e or --env as the environment name
+    /// en: Returns the value of -e or --env as the environment name
     #[story("G5")]
     #[test]
-    fn takes_the_value_of_e_or_env_as_the_environment_name() {
+    fn returns_the_value_of_e_or_env_as_the_environment_name() {
         assert_eq!(parse(&["-e", "m"]).name.as_deref(), Some("m"));
         assert_eq!(parse(&["--env", "m"]).name.as_deref(), Some("m"));
     }
@@ -3275,10 +3275,10 @@ mod command_line_options {
     }
 
     /// ja: ファイル名を、読み込むファイルとして返す
-    /// en: Takes a file name as the file to load
+    /// en: Returns a file name as the file to load
     #[story("B4")]
     #[test]
-    fn takes_a_file_name_as_the_file_to_load() {
+    fn returns_a_file_name_as_the_file_to_load() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
     }
 

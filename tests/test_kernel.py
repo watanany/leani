@@ -88,6 +88,14 @@ def run(kernel, code, timeout=120):
     return reply["content"]["status"], "".join(out), "".join(err)
 
 
+def shows(out, value):
+    """
+    `out` に、`value` だけが書かれた行があるか。`in` で見ると、ほかの数字の
+    一部でも通ってしまう。
+    """
+    return value in [line.strip() for line in out.splitlines()]
+
+
 def run_silent(kernel, code, timeout=120):
     """silent でセルを実行して (status, stream の文字列のリスト) を返す。"""
     _, kc = kernel
@@ -130,14 +138,14 @@ def describe_running_cells():
     """
 
     @story("J1")
-    def shows_the_value_when_a_cell_with_an_expression_runs(kernel):
+    def shows_the_value_when_a_cell_with_eval_runs(kernel):
         """
-        ja: 式のセルを実行すると値を表示する
-        en: Shows the value when a cell with an expression runs
+        ja: #eval のセルを実行すると値を表示する
+        en: Shows the value when a cell with #eval runs
         """
         status, out, _ = run(kernel, "#eval 1 + 1")
         assert status == "ok"
-        assert "2" in out, out
+        assert shows(out, "2"), out
 
     @story("J1")
     def shows_the_value_when_a_cell_evaluates_a_function_declared_in_the_previous_cell(
@@ -155,7 +163,7 @@ def fib : Nat → Nat
         status, _, err = run(kernel, cell)
         assert status == "ok", err
         _, out, _ = run(kernel, "#eval fib 10")
-        assert "55" in out, out
+        assert shows(out, "55"), out
 
     @story("J1")
     def sets_the_status_to_error_when_a_cell_with_an_error_runs(kernel):
@@ -210,7 +218,9 @@ def fib : Nat → Nat
         run(kernel, ":prove")
         status, _, err = run(kernel, "rfl")
         assert status == "ok", err
-        _, out, _ = run(kernel, "#print axioms cell_t")
+        status, out, _ = run(kernel, "#print axioms cell_t")
+        assert status == "ok"
+        assert "does not depend on any axioms" in out, out
         assert "sorryAx" not in out, out
 
     @story("J1", "E1")
@@ -228,7 +238,9 @@ def fib : Nat → Nat
         run(kernel, ":prove")
         status, _, err = run(kernel, "exact ⟨hp,\nhq⟩")
         assert status == "ok", err
-        _, out, _ = run(kernel, "#print axioms cell_pair")
+        status, out, _ = run(kernel, "#print axioms cell_pair")
+        assert status == "ok"
+        assert "does not depend on any axioms" in out, out
         assert "sorryAx" not in out, out
 
     @story("J1")
@@ -242,7 +254,7 @@ def fib : Nat → Nat
         # #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
         status, out, err = run(kernel, '"Hello\nWorld".length')
         assert status == "ok", err
-        assert "11" in out, out
+        assert shows(out, "11"), out
 
     @story("J1", "E3")
     def replaces_the_sorry_with_the_multi_line_string_unchanged_when_it_is_sent_with_exact_in_proof_mode(
@@ -257,21 +269,22 @@ def fib : Nat → Nat
         status, _, err = run(kernel, 'exact "Hello\nWorld"')
         assert status == "ok", err
         _, out, _ = run(kernel, "#eval cell_greeting.length")
-        assert "11" in out, out
+        assert shows(out, "11"), out
 
     @story("J1", "E1")
-    def keeps_the_previous_tactic_when_a_command_is_sent_before_its_continuation_is_finished_in_proof_mode(
+    def says_the_unfinished_input_was_discarded_and_keeps_the_previous_tactic_when_a_command_is_sent_before_its_continuation_is_finished_in_proof_mode(
         kernel,
     ):
         """
-        ja: 証明モードでタクティクの続きを書きかけたままコマンドを送ると、直前のタクティクを残す
-        en: Keeps the previous tactic when a command is sent before its continuation is finished in proof mode
+        ja: 証明モードでタクティクの続きを書きかけたままコマンドを送ると、書きかけの入力を捨てたと表示し、直前のタクティクを残す
+        en: Says the unfinished input was discarded and keeps the previous tactic when a command is sent before its continuation is finished in proof mode
         """
         # インデントした行は直前のタクティクの続きとして読み直すので、直前の
         # タクティクを一度取り消す。続きを書かずにやめたら、取り消しを戻す。
         run(kernel, "theorem cell_two : 1 = 1 ∧ 2 = 2 := by sorry")
         run(kernel, ":prove")
         _, out, _ = run(kernel, "constructor\n  <;> exact (\n:goals")
+        assert "入力が途中だったので捨てた" in out, out
         goals = out[out.index("捨てた") :]
         assert "1 = 1" in goals, out
         assert "∧" not in goals, out
@@ -316,7 +329,7 @@ def fib : Nat → Nat
         """
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')
         assert status == "ok", err
-        assert "3" in out, out
+        assert shows(out, "3"), out
 
     @story("J1")
     def fails_showing_is_missing_and_runs_the_next_cell_when_a_cell_leaves_a_multi_line_block_open(
@@ -331,13 +344,15 @@ def fib : Nat → Nat
         assert ":} が無い" in err, err
         status, out, _ = run(kernel, "#eval 2 + 3")
         assert status == "ok"
-        assert "5" in out, out
+        assert shows(out, "5"), out
 
     @story("J1")
-    def shows_stdout_and_stderr_in_the_cell_when_a_command_runs_with(kernel):
+    def shows_stdout_and_stderr_in_the_cell_with_status_ok_when_a_command_run_with_exits_with_a_nonzero_code(
+        kernel,
+    ):
         """
-        ja: :! でコマンドを実行すると、その stdout と stderr をセルに表示する
-        en: Shows stdout and stderr in the cell when a command runs with :!
+        ja: :! で実行したコマンドが 0 以外の終了コードで終わると、status を ok にして、その stdout と stderr をセルに表示する
+        en: Shows stdout and stderr in the cell with status ok when a command run with :! exits with a nonzero code
         """
         status, out, err = run(kernel, ":! echo to-out; echo to-err >&2; exit 3")
         assert status == "ok"  # 終了コードは見ない (端末と同じ)
@@ -378,7 +393,7 @@ def fib : Nat → Nat
         _, out, _ = run(kernel, ":q")
         assert "ノートブックでは何もしない" in out, out
         _, out, _ = run(kernel, "#eval 3 + 3")
-        assert "6" in out, out
+        assert shows(out, "6"), out
 
     @story("J1")
     def evaluates_the_expression_without_changing_the_string_when_a_cell_has_a_string_with_a_form_feed(
@@ -393,7 +408,7 @@ def fib : Nat → Nat
         # 区切りと見なすと、文字列の中にインデントが入る。
         status, out, err = run(kernel, '"a\fb".length')
         assert status == "ok", err
-        assert "3" in out.split(), out
+        assert shows(out, "3"), out
 
 
 def describe_completion():
@@ -572,19 +587,21 @@ def describe_engine_crashes_and_interrupts():
         """
         km, _ = kernel
         run(kernel, "def kept := 41")
-        for pid in engine_pids(km):
+        pids = engine_pids(km)
+        assert pids, "エンジンのプロセスが見つからない"
+        for pid in pids:
             os.kill(pid, signal.SIGKILL)
 
         _, out, _ = run(kernel, "#eval kept + 1")
-        assert "42" in out, out
+        assert shows(out, "42"), out
 
     @story("J3", "A4")
-    def stops_the_evaluation_with_an_error_and_keeps_earlier_declarations_when_it_is_interrupted(
+    def stops_the_evaluation_fails_the_cell_restarts_the_engine_and_replays_earlier_declarations_when_it_is_interrupted(
         kernel, tmp_path
     ):
         """
-        ja: 評価の途中で中断すると、評価を止めてエラーにし、それまでの宣言を残す
-        en: Stops the evaluation with an error and keeps earlier declarations when it is interrupted
+        ja: 評価の途中で中断すると、評価を止めてセルを失敗させ、エンジンを再起動してそれまでの宣言を再実行する
+        en: Stops the evaluation, fails the cell, restarts the engine and replays earlier declarations when it is interrupted
         """
         km, kc = kernel
         run(kernel, "def before := 5")
@@ -597,19 +614,24 @@ def describe_engine_crashes_and_interrupts():
             assert time.time() - t0 < 30, "評価が始まらない"
             time.sleep(0.1)
         km.interrupt_kernel()
+        err = []
         while True:
             m = kc.get_iopub_msg(timeout=60)
-            if (
-                m["parent_header"].get("msg_id") == msg_id
-                and m["msg_type"] == "status"
-                and m["content"]["execution_state"] == "idle"
+            if m["parent_header"].get("msg_id") != msg_id:
+                continue
+            if m["msg_type"] == "stream" and m["content"]["name"] == "stderr":
+                err.append(m["content"]["text"])
+            elif (
+                m["msg_type"] == "status" and m["content"]["execution_state"] == "idle"
             ):
                 break
         assert time.time() - t0 < 30, "中断しても止まらず、評価が最後まで実行された"
         assert kc.get_shell_msg(timeout=60)["content"]["status"] == "error"
+        assert "エンジンを再起動する" in "".join(err), err
 
+        # 再起動したエンジンに宣言を再実行していなければ、before は無い。
         _, out, _ = run(kernel, "#eval before")
-        assert "5" in out, out
+        assert shows(out, "5"), out
 
 
 def execute(k, code="1"):
@@ -698,12 +720,12 @@ def describe_startup_and_restart_failures():
         assert make.call_count == 2
 
     @story("J3")
-    def fails_the_cell_with_an_internal_error_and_keeps_the_session_when_an_unexpected_exception_occurs(
+    def fails_the_cell_with_an_internal_error_discards_the_unfinished_block_and_keeps_the_session_when_an_unexpected_exception_occurs(
         direct, capsys
     ):
         """
-        ja: 想定外の例外が起きると、内部エラーと表示してセルを失敗させ、セッションを残す
-        en: Fails the cell with an internal error and keeps the session when an unexpected exception occurs
+        ja: 想定外の例外が起きると、内部エラーと表示してセルを失敗させ、入力中のブロックを捨ててセッションを残す
+        en: Fails the cell with an internal error, discards the unfinished block and keeps the session when an unexpected exception occurs
         """
         k, _, fake = direct
         execute(k)
@@ -758,12 +780,12 @@ def describe_lean_version():
         ]
 
     @story("J1", "G3")
-    def returns_stable_as_it_is_without_running_lean_if_the_config_sets_the_engine(
+    def returns_the_value_in_the_lean_toolchain_of_the_engine_directory_as_it_is_without_running_lean_if_the_config_sets_the_engine(
         lean, tmp_path
     ):
         """
-        ja: 設定でエンジンを指定してあれば、stable をそのまま返し、lean を実行しない
-        en: Returns stable as it is without running lean if the config sets the engine
+        ja: 設定でエンジンを指定してあれば、エンジンのディレクトリの lean-toolchain の値が stable でもそのまま返し、lean を実行しない
+        en: Returns the value in the lean-toolchain of the engine directory as it is without running lean if the config sets the engine
         """
         (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
         cfg = leani.config.EnvConfig.make("t", engine=str(tmp_path))
@@ -778,12 +800,12 @@ def describe_registering_the_kernel():
     """
 
     @story("J1")
-    def writes_a_kernel_json_that_starts_leani_kernel_with_the_current_python_when_install_runs(
+    def writes_a_kernel_json_that_starts_leani_kernel_with_the_current_python_and_sets_force_color_to_1_when_install_runs(
         tmp_path,
     ):
         """
-        ja: install を実行すると、今の Python で leani.kernel を起動する kernel.json を書く
-        en: Writes a kernel.json that starts leani.kernel with the current Python when install runs
+        ja: install を実行すると、今の Python で leani.kernel を起動し、FORCE_COLOR を 1 にする kernel.json を書く
+        en: Writes a kernel.json that starts leani.kernel with the current Python and sets FORCE_COLOR to 1 when install runs
         """
         env = dict(os.environ, JUPYTER_DATA_DIR=str(tmp_path), PYTHONPATH=SRC)
         subprocess.run(

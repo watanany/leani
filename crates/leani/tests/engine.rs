@@ -92,6 +92,7 @@ mod startup_checks {
             repl.repl.eng_mut().alive(),
             "戻った先のエンジンまで終了させた"
         );
+        assert_eq!(repl.repl.eng().cfg().name, "core", "元の環境に戻っていない");
     }
 }
 
@@ -183,11 +184,11 @@ mod evaluating_expressions {
     }
 
     /// ja: do の外で ← を使った式を入力すると、do で包んでエラーにせず実行する
-    /// en: Wraps it in do and runs it without an error when an expression with a left arrow is entered
+    /// en: Wraps it in do and runs it without an error when an expression with a left arrow is entered outside do
     #[story("A1", "B1")]
     #[test]
-    fn wraps_it_in_do_and_runs_it_without_an_error_when_an_expression_with_a_left_arrow_is_entered()
-    {
+    fn wraps_it_in_do_and_runs_it_without_an_error_when_an_expression_with_a_left_arrow_is_entered_outside_do()
+     {
         let mut repl = Driver::new();
         let path = repl.tmp().join("note.txt");
         std::fs::write(&path, "from file\n").expect("write");
@@ -338,10 +339,10 @@ mod multi_line_declarations {
     }
 
     /// ja: :{ のすぐあとに :} を入力すると、何も実行せず何も表示しない
-    /// en: Runs and shows nothing when :} is entered right after :{
+    /// en: Runs nothing and shows nothing when :} is entered right after :{
     #[story("C6")]
     #[test]
-    fn runs_and_shows_nothing_when_is_entered_right_after() {
+    fn runs_nothing_and_shows_nothing_when_is_entered_right_after() {
         let mut repl = Driver::new();
         assert_eq!(repl.feed(&[":{", ":}"]), "");
         assert!(repl.declarations().is_empty());
@@ -706,10 +707,10 @@ mod when_a_replay_stops_partway {
     use super::*;
 
     /// ja: :restart の再実行を中断すると、残りの宣言を保留にし、環境の宣言に含めない
-    /// en: Keeps the remaining declarations pending and out of the environment when the replay is interrupted
+    /// en: Keeps the remaining declarations pending and out of the environment when the replay of :restart is interrupted
     #[story("F1", "F2")]
     #[test]
-    fn keeps_the_remaining_declarations_pending_and_out_of_the_environment_when_the_replay_is_interrupted()
+    fn keeps_the_remaining_declarations_pending_and_out_of_the_environment_when_the_replay_of_restart_is_interrupted()
      {
         let mut repl = Driver::new();
         for one in ["def r1 := 1", "def r2 := 2", "def r3 := 3"] {
@@ -1293,33 +1294,6 @@ mod when_a_file_cannot_be_reloaded_after_a_restart {
         assert!(repl.repl.eng().loaded().is_none());
         assert!(!repl.repl.eng().sources().join("\n").contains("fromFile"));
     }
-
-    /// ja: init を送る途中で再起動を中断すると、init を残し、次の :restart で init を戻す
-    /// en: Keeps init and restores it on the next :restart when the restart is interrupted while sending init
-    #[story("F1", "G2")]
-    #[test]
-    fn keeps_init_and_restores_it_on_the_next_restart_when_the_restart_is_interrupted_while_sending_init()
-     {
-        // init ファイルの内容に問題があるわけではないので、次の :restart で戻せる。
-        let mut repl = Driver::new();
-        init_with(&mut repl, "def fromInit := 99\n");
-        let init_src = repl.repl.eng().init_src().expect("init_src").to_string();
-
-        // init の送信を失敗させる。Kill はプロセスを止めるので、止めずに失敗させられる
-        // Interrupt を使う。
-        repl.hook(move |stage| match stage {
-            Stage::Before(obj) if cmd(obj) == init_src => Hooked::Interrupt,
-            _ => Hooked::Pass,
-        });
-        let out = repl.feed(&[":restart"]);
-        // 再起動そのものを止めたので、宣言の再実行には進まない。
-        assert!(out.contains("再起動を中断した"), "{out}");
-        assert!(repl.repl.eng().init_src().is_some());
-
-        repl.unhook();
-        repl.feed(&[":restart"]);
-        assert!(repl.feed(&["fromInit"]).contains("99"));
-    }
 }
 
 mod handling_init {
@@ -1343,6 +1317,33 @@ mod handling_init {
             repl.feed(&["fromInit"]).contains("99"),
             ":restart で init が消えた"
         );
+    }
+
+    /// ja: :restart で init を送る前に再起動を中断すると、中断したと表示して init を残し、次の :restart で init の宣言を戻す
+    /// en: Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init
+    #[story("F1", "G2")]
+    #[test]
+    fn says_the_restart_was_interrupted_keeps_init_and_restores_it_on_the_next_restart_when_it_is_interrupted_before_sending_init()
+     {
+        // init ファイルの内容に問題があるわけではないので、次の :restart で戻せる。
+        let mut repl = Driver::new();
+        init_with(&mut repl, "def fromInit := 99\n");
+        let init_src = repl.repl.eng().init_src().expect("init_src").to_string();
+
+        // init を送る前に中断する。Kill はプロセスを止めるので、止めずに失敗させられる
+        // Interrupt を使う。
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if cmd(obj) == init_src => Hooked::Interrupt,
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed(&[":restart"]);
+        // 再起動そのものを止めたので、宣言の再実行には進まない。
+        assert!(out.contains("再起動を中断した"), "{out}");
+        assert!(repl.repl.eng().init_src().is_some());
+
+        repl.unhook();
+        repl.feed(&[":restart"]);
+        assert!(repl.feed(&["fromInit"]).contains("99"));
     }
 
     /// ja: :reset を実行すると、init の宣言を残す
@@ -1683,11 +1684,12 @@ mod writing_history {
         assert!(!has_history(false));
     }
 
-    /// ja: 行編集が 1 行を履歴に追加しようとすると、その行を記録しない
-    /// en: Records nothing when line editing tries to add a single line to history
+    /// ja: 行編集が 1 行を履歴に追加しようとすると、その行を記録せず、読み込んだ履歴を空のままにする
+    /// en: Records nothing and leaves the loaded history empty when line editing tries to add a single line to history
     #[story("C3", "F3")]
     #[test]
-    fn records_nothing_when_line_editing_tries_to_add_a_single_line_to_history() {
+    fn records_nothing_and_leaves_the_loaded_history_empty_when_line_editing_tries_to_add_a_single_line_to_history()
+     {
         // 行編集の crate は 1 行読むたびに 1 行追加しようとする。受け付けると
         // 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も必要になる。
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1934,7 +1936,10 @@ mod declarations_missing_from_the_environment {
         std::fs::write(&path, "def other := 1\n").expect("write"); // libB を消す
         let out = repl.feed(&[":restart"]);
 
-        assert!(out.contains("再実行に失敗した宣言"), "{out}");
+        assert!(
+            out.contains("再実行に失敗した宣言: def usesB := libB + 1"),
+            "{out}"
+        );
         assert_eq!(repl.repl.eng().unplayed(), ["def usesB := libB + 1"]);
     }
 
@@ -2215,12 +2220,12 @@ mod when_the_base_environment_is_lost {
         assert!(repl.repl.eng().log().is_empty());
     }
 
-    /// ja: sorry を持ち越したまま環境を失うと、その sorry を捨て、:prove で証明モードを始めない
-    /// en: Drops a carried-over sorry when the environment is lost, so :prove does not start proof mode
+    /// ja: sorry を持ち越したまま環境を失うと、その sorry を捨て、:prove には sorry が無いと表示して証明モードを始めない
+    /// en: Drops a carried-over sorry when the environment is lost, so :prove says there is no sorry and does not start proof mode
     #[story("F1", "E1")]
     #[test]
-    fn drops_a_carried_over_sorry_when_the_environment_is_lost_so_prove_does_not_start_proof_mode()
-    {
+    fn drops_a_carried_over_sorry_when_the_environment_is_lost_so_prove_says_there_is_no_sorry_and_does_not_start_proof_mode()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem ghostSorry : True := by sorry"]);
         assert!(repl.repl.held().is_some());
@@ -2240,7 +2245,8 @@ mod when_the_base_environment_is_lost {
         // 残すと :goals が環境に無い宣言のゴールを表示し、:prove がその無効な
         // proofState で証明モードを始める。
         assert!(repl.repl.held().is_none());
-        assert!(repl.feed(&[":prove"]).contains("sorry")); // 「sorry が無い」と表示するだけ
+        let out = repl.feed(&[":prove"]);
+        assert!(out.contains("sorry が無い"), "{out}");
         assert!(repl.repl.proof().is_none());
     }
 
@@ -2534,17 +2540,22 @@ mod proof_mode {
         assert!(!repl.feed(&["#print axioms t7"]).contains("sorryAx"));
     }
 
-    /// ja: :q か :quit を入力すると、証明モードを終了し、そのあとの式を評価する
-    /// en: Exits proof mode and evaluates the next expression when :q or :quit is entered
+    /// ja: :q か :quit を入力すると、証明モードを終了し、そのあとに入力した式の値を表示する
+    /// en: Exits proof mode and shows the value of an expression entered afterwards when :q or :quit is entered
     #[story("E1")]
     #[test]
-    fn exits_proof_mode_and_evaluates_the_next_expression_when_q_or_quit_is_entered() {
+    fn exits_proof_mode_and_shows_the_value_of_an_expression_entered_afterwards_when_q_or_quit_is_entered()
+     {
         for quit in [":q", ":quit"] {
             let mut repl = Driver::new();
             repl.feed(&["theorem t6 : 1 = 1 := by sorry", ":prove"]);
             assert!(repl.feed(&[quit]).contains("証明モードを終了した"));
             assert!(repl.repl.proof().is_none());
-            assert!(repl.feed(&["1 + 1"]).contains('2'), "REPL まで終了した");
+            let out = repl.feed(&["1 + 1"]);
+            assert!(
+                out.lines().any(|l| l.trim() == "2"),
+                "REPL まで終了した: {out}"
+            );
         }
     }
 
@@ -3505,17 +3516,20 @@ mod switching_environments {
         );
     }
 
-    /// ja: 設定に無い名前で :env を実行すると、設定に無いと表示し、そのあとの式を評価する
-    /// en: Says the name is not in the config and evaluates the next expression when :env gets an unknown name
+    /// ja: 設定に無い名前で :env を実行すると、設定に無いと表示し、環境を変えずに、そのあとに入力した式の値を表示する
+    /// en: Says the name is not in the config and shows the value of an expression entered afterwards in the same environment when :env gets an unknown name
     #[story("G5")]
     #[test]
-    fn says_the_name_is_not_in_the_config_and_evaluates_the_next_expression_when_env_gets_an_unknown_name()
+    fn says_the_name_is_not_in_the_config_and_shows_the_value_of_an_expression_entered_afterwards_in_the_same_environment_when_env_gets_an_unknown_name()
      {
         let mut repl = Driver::new();
+        let before = repl.repl.eng().cfg().name.clone();
         assert!(repl.feed(&[":env nosuch"]).contains("設定に無い"));
+        assert_eq!(repl.repl.eng().cfg().name, before);
+        let out = repl.feed(&["1 + 1"]);
         assert!(
-            repl.feed(&["1 + 1"]).contains('2'),
-            "環境を失ってセッションが終了している"
+            out.lines().any(|l| l.trim() == "2"),
+            "環境を失ってセッションが終了している: {out}"
         );
     }
 

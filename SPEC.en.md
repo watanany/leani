@@ -22,7 +22,7 @@ layer). The number of items changes only when a story or a test is added or remo
 - Shows the value of the unchanged string when an expression with a multi-line string is entered (engine / Evaluating expressions)
 - Runs the action and shows its output when an IO expression is entered (engine / Evaluating expressions)
 - Runs the block as IO without an error when a do block mixing BaseIO and IO actions is entered (engine / Evaluating expressions)
-- Wraps it in do and runs it without an error when an expression with a left arrow is entered (engine / Evaluating expressions)
+- Wraps it in do and runs it without an error when an expression with a left arrow is entered outside do (engine / Evaluating expressions)
 - Runs it as IO without an error when an expression with a left arrow on a BaseIO action is entered (engine / Evaluating expressions)
 - Judges a line without indentation or a leading pipe as a separate input (parsing / Judging continuation lines)
 - Judges input that parses as a command as a complete command (parsing / Judging whether the input is complete)
@@ -65,13 +65,13 @@ layer). The number of items changes only when a story or a test is added or remo
 - Queues the undone declaration after the pending ones when Ctrl-C stops a replay after an engine crash (engine / When the completeness judgment is interrupted)
 - Keeps declarations pending until :restart when Ctrl-C interrupts the return to the original environment (engine / When switching fails)
 - Reloads the loaded file on :restart when Ctrl-C interrupts the return to the original environment (engine / When switching fails)
-- Stops the evaluation with an error and keeps earlier declarations when it is interrupted (kernel / Engine crashes and interrupts)
-- Interrupts the evaluation and still shows the values of earlier declarations when Ctrl-C is pressed during it (terminal / Line editing)
+- Stops the evaluation, fails the cell, restarts the engine and replays earlier declarations when it is interrupted (kernel / Engine crashes and interrupts)
+- Interrupts the evaluation, restarts the engine and replays earlier declarations when Ctrl-C is pressed during it (terminal / Line editing)
 
 ### A5 When there is an error, I want to see where in the line the input is wrong
 
 - Shows the error position within the original input when an expression with a left arrow fails (engine / Evaluating expressions)
-- Returns the range shifted back by the lines and columns that wrapping in eval added (parsing / Range of an error position)
+- Returns the range shifted back by the lines and columns that wrapping in #eval added (parsing / Range of an error position)
 - Shifts back only the line, not the column, for a line that starts inside a string (parsing / Range of an error position)
 - Returns None for a position outside the lines (parsing / Range of an error position)
 - Limits the width of a range to the length of the line (parsing / Range of an error position)
@@ -84,7 +84,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
 - Runs the action and shows its output when an IO expression is entered (engine / Evaluating expressions)
 - Runs the block as IO without an error when a do block mixing BaseIO and IO actions is entered (engine / Evaluating expressions)
-- Wraps it in do and runs it without an error when an expression with a left arrow is entered (engine / Evaluating expressions)
+- Wraps it in do and runs it without an error when an expression with a left arrow is entered outside do (engine / Evaluating expressions)
 - Runs it as IO without an error when an expression with a left arrow on a BaseIO action is entered (engine / Evaluating expressions)
 - Shows the file contents when a do block that reads a file is entered (engine / Evaluating expressions)
 - Shows the process output without an error when a do block that starts a process is entered (engine / Evaluating expressions)
@@ -145,7 +145,7 @@ layer). The number of items changes only when a story or a test is added or remo
 - Judges a module line with a comment as a module declaration (parsing / Imports of a file)
 - Puts the added import after the module line as public in a module file (parsing / Imports of a file)
 - Counts only real import lines in any header and leaves no imports after stripping (parsing / Imports of a file)
-- Takes a file name as the file to load (parsing / Command-line options)
+- Returns a file name as the file to load (parsing / Command-line options)
 - Returns an error that only one file is allowed for two file names (parsing / Command-line options)
 - Evaluates input that uses declarations from the file when leani runs with a file (parsing / Startup)
 - Loads the declarations in a file when leani starts with the file as an argument (terminal / Input not from a terminal)
@@ -198,14 +198,14 @@ layer). The number of items changes only when a story or a test is added or remo
 ### C3 I want to recall a whole long declaration from the history in one step
 
 - Loads a multi-line input back as one entry when it is recorded (engine / Writing history)
-- Records nothing when line editing tries to add a single line to history (engine / Writing history)
+- Records nothing and leaves the loaded history empty when line editing tries to add a single line to history (engine / Writing history)
 - Runs a complete block without waiting for a blank line when Enter is pressed (engine / Input recalled from history)
 - Waits for more lines without sending when Enter is pressed on an unfinished block (engine / Input recalled from history)
 - Puts the cursor at column 78 without wrapping or counting prompt colors when 74 characters are typed in 80 columns (terminal / Line editing)
 - Shows the value of a line recalled with Ctrl-P when it is edited with Backspace and sent (terminal / Line editing)
 - Recalls the line of a block discarded with Ctrl-C when Ctrl-P is pressed (terminal / Line editing)
 - Saves a multi-line block as one history entry with its newlines when the block runs (terminal / History)
-- Recalls the whole block when Ctrl-P is pressed once after a block, and sends it as one input (terminal / History)
+- Recalls the whole block and sends it as one input when Ctrl-P is pressed once after a block and then Enter (terminal / History)
 
 ### C4 I want to write complex multi-line input in an editor
 
@@ -225,7 +225,7 @@ Not built yet.
 ### C6 I want to write a declaration with blank lines as one input, without it running halfway
 
 - Runs one declaration only after :} when input with a blank line is between :{ and :} (engine / Multi-line declarations)
-- Runs and shows nothing when :} is entered right after :{ (engine / Multi-line declarations)
+- Runs nothing and shows nothing when :} is entered right after :{ (engine / Multi-line declarations)
 - Shows that :} is missing without running the block when the cell ends inside :{ (engine / End of a notebook cell)
 - Runs the unfinished block when input ends (engine / End of input)
 - Shows that :} is missing without running the block when input ends inside :{ (engine / End of input)
@@ -318,7 +318,7 @@ Not built yet.
 - Shows that nothing was found for zero results (parsing / Theorem search)
 - Shows a loogle error untranslated with its suggestions (parsing / Theorem search)
 - Sends the query with its symbols URL-encoded (parsing / Theorem search)
-- Returns a SearchError if the server does not respond (parsing / Theorem search)
+- Returns a SearchError if the connection fails (parsing / Theorem search)
 - Returns an HTTP error as a SearchError with its code and reason (parsing / Theorem search)
 - Returns a SearchError if the response is not a JSON object (parsing / Theorem search)
 
@@ -342,7 +342,7 @@ Not built yet.
 - Keeps the finished proof when Ctrl-C is pressed after a tactic continuation finishes it (engine / When a rewrite is abandoned)
 - Shows the sorry's goal on :prove when Ctrl-C is pressed while continuing a declaration with sorry (engine / When a rewrite is abandoned)
 - Says :prove finds no sorry when a rewrite after a declaration with sorry is abandoned after an engine crash (engine / Pending declarations and engine generations)
-- Drops a carried-over sorry when the environment is lost, so :prove does not start proof mode (engine / When the base environment is lost)
+- Drops a carried-over sorry when the environment is lost, so :prove says there is no sorry and does not start proof mode (engine / When the base environment is lost)
 - Runs an unclosed tactic with the next line as one tactic when it is entered (engine / Proof mode)
 - Runs all tactics and finishes the proof when one line of semicolon-separated tactics is entered (engine / Proof mode)
 - Shows the position in the entered line when a tactic with a parse error is entered (engine / Proof mode)
@@ -352,7 +352,7 @@ Not built yet.
 - Keeps the earlier declaration when :prove runs after :undo of a declaration with a sorry (engine / Proof mode)
 - Restores the goal before the last tactic and drops it from the script when :undo runs (engine / Proof mode)
 - Reruns the previous tactic joined with an indented line when that line is entered right after it (engine / Proof mode)
-- Exits proof mode and evaluates the next expression when :q or :quit is entered (engine / Proof mode)
+- Exits proof mode and shows the value of an expression entered afterwards when :q or :quit is entered (engine / Proof mode)
 - Shows the error without recording the tactic or changing the goal when a tactic fails (engine / Proof mode)
 - Shows the error and keeps the goal when the engine returns an error response to a tactic (engine / Proof mode)
 - Shows a PANIC warning and keeps the proofState and script when the engine panics on a tactic (engine / Proof mode)
@@ -371,7 +371,7 @@ Not built yet.
 - Says the restart failed and exits proof mode when the engine crashes while judging a tactic (engine / Proof mode after a failed restart)
 - Says once that proof mode exited when the engine crashes as a tactic is sent (engine / Proof mode after a failed restart)
 - Runs a tactic together with the next line when its bracket is not closed in proof mode (kernel / Running cells)
-- Keeps the previous tactic when a command is sent before its continuation is finished in proof mode (kernel / Running cells)
+- Says the unfinished input was discarded and keeps the previous tactic when a command is sent before its continuation is finished in proof mode (kernel / Running cells)
 - Runs every tactic and completes the proof when tactics separated by semicolons are sent in proof mode (kernel / Running cells)
 - Shows a parse error at the position in the input when an unparsable tactic is sent in proof mode (kernel / Running cells)
 - Judges input in proof mode as complete, unfinished or an error by parsing it as tactics (parsing / Judging whether the input is complete)
@@ -379,7 +379,7 @@ Not built yet.
 - Restores the state, goals, and script when undone, and returns None with nothing to undo (parsing / Recording tactics in proof mode)
 - Wraps the tactic in parentheses placed on their own lines (parsing / Tactics sent in proof mode)
 - Replaces the parse error with the completeness check error moved back by the by line and the indent if the check has an error (parsing / Tactics sent in proof mode)
-- Moves the parse error line back by the parenthesis line if the completeness check has no error (parsing / Tactics sent in proof mode)
+- Moves the parse error line back by the parenthesis line and returns a message without a position as it is if the completeness check has no error (parsing / Tactics sent in proof mode)
 
 ### E2 I want to search for proofs with exact? or aesop and keep the found proof in a form I can use as it is
 
@@ -390,8 +390,8 @@ Not built yet.
 - Returns the tactic without the [apply] mark from a suggestion (parsing / Tactic suggestions)
 - Returns every line of a suggestion that wraps over several lines (parsing / Tactic suggestions)
 - Returns a suggestion written on the same line as Try this (parsing / Tactic suggestions)
-- Judges a suggestion with unmatched brackets as cut off and one with matched brackets as whole (parsing / Tactic suggestions)
-- Judges any concatenation of two balanced strings as balanced (parsing / Tactic suggestions)
+- Judges a suggestion with unmatched brackets as unbalanced and one with matched brackets as balanced (parsing / Tactic suggestions)
+- Judges any concatenation of two balanced strings as balanced and any balanced string with one more closing bracket as unbalanced (parsing / Tactic suggestions)
 - Returns None for a message without a suggestion and for no messages (parsing / Tactic suggestions)
 
 ### E3 When a proof is done, I want the declaration with the sorry replaced by the proof added to the environment
@@ -450,14 +450,14 @@ Not built yet.
 - Restores the file and the declarations when :restart runs after reloading the file was interrupted (engine / Recovering from engine crashes)
 - Reports that the restart failed when the engine fails to start on :restart (engine / When the engine fails to restart)
 - Keeps the declarations pending and replays them on the next :restart when the restart fails (engine / When the engine fails to restart)
-- Keeps the remaining declarations pending and out of the environment when the replay is interrupted (engine / When a replay stops partway)
+- Keeps the remaining declarations pending and out of the environment when the replay of :restart is interrupted (engine / When a replay stops partway)
 - Replays the pending declarations when :restart runs again (engine / When a replay stops partway)
 - Skips the entered line and says so when the replay after a crash is interrupted with Ctrl-C (engine / When a replay stops partway)
 - Shows an internal error and replays the earlier declarations when leani panics while sending a declaration (engine / When an internal error occurs)
 - Says the file could not be loaded and keeps the environment when :l loads a file with an error (engine / Reading and writing files)
 - Reports the failed reload and drops the file's declarations when the loaded file is deleted before :restart (engine / When a file cannot be reloaded after a restart)
-- Keeps init and restores it on the next :restart when the restart is interrupted while sending init (engine / When a file cannot be reloaded after a restart)
 - Keeps the init declarations when :restart runs (engine / Handling init)
+- Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init (engine / Handling init)
 - Keeps the previous environment and declarations when loading a file is interrupted (engine / Interrupting a load)
 - Cancels the load and keeps earlier declarations when reapplying init during :l is interrupted (engine / Interrupting a load)
 - Reports the failed reload and the lost declarations when :restart runs after the loaded file gets an error (engine / What the replay could not run)
@@ -469,7 +469,7 @@ Not built yet.
 - Leaves out the imports of a file that :restart could not reload when :save runs (engine / Imports of a loaded file)
 - Says there is no base environment and keeps the pending declaration when :reset runs (engine / When the base environment is lost)
 - Says the replay failed and keeps the declarations pending when a replay starts (engine / When the base environment is lost)
-- Drops a carried-over sorry when the environment is lost, so :prove does not start proof mode (engine / When the base environment is lost)
+- Drops a carried-over sorry when the environment is lost, so :prove says there is no sorry and does not start proof mode (engine / When the base environment is lost)
 - Returns NoEnvironment for a command on the environment and sends one that starts a new environment (engine / When the base environment is lost)
 - Says the type could not be obtained when :t runs (engine / When the base environment is lost)
 - Says the engine is unusable and records nothing when a declaration is entered without an environment (engine / Checks before sending to the engine)
@@ -498,7 +498,7 @@ Not built yet.
 - Returns the added name instead of the undone one when :undo is followed by a new declaration (completion / Completion candidates)
 - Does not return the undone name when the constant query fails after :undo (completion / Completion candidates)
 - Does not return the name of a declaration when :reset runs after the declaration (completion / Completion candidates)
-- Keeps the remaining declarations pending and out of the environment when the replay is interrupted (engine / When a replay stops partway)
+- Keeps the remaining declarations pending and out of the environment when the replay of :restart is interrupted (engine / When a replay stops partway)
 - Replays the pending declarations when :restart runs again (engine / When a replay stops partway)
 - Removes all entered declarations when :r runs with no file loaded (engine / Reading and writing files)
 - Keeps the init declarations when :reset runs (engine / Handling init)
@@ -514,7 +514,7 @@ Not built yet.
 - Keeps the existing content when an input is recorded in a history file in an unreadable format (engine / Writing history)
 - Loads a multi-line input back as one entry when it is recorded (engine / Writing history)
 - Enables history at startup only if stdin is a terminal (engine / Writing history)
-- Records nothing when line editing tries to add a single line to history (engine / Writing history)
+- Records nothing and leaves the loaded history empty when line editing tries to add a single line to history (engine / Writing history)
 - Returns inputs without the trailing CR from a history file with CRLF (parsing / History file format)
 - Recalls the line of a block discarded with Ctrl-C when Ctrl-P is pressed (terminal / Line editing)
 - Saves a multi-line block as one history entry with its newlines when the block runs (terminal / History)
@@ -546,8 +546,8 @@ Not built yet.
 
 ### G2 I want the helper functions and open lines I always write to be loaded at startup
 
-- Keeps init and restores it on the next :restart when the restart is interrupted while sending init (engine / When a file cannot be reloaded after a restart)
 - Keeps the init declarations when :restart runs (engine / Handling init)
+- Says the restart was interrupted, keeps init, and restores it on the next :restart when it is interrupted before sending init (engine / Handling init)
 - Keeps the init declarations when :reset runs (engine / Handling init)
 - Evaluates short names from a namespace in entered input when init opens the namespace (engine / Handling init)
 - Keeps the open from init when :reset runs (engine / Handling init)
@@ -564,7 +564,7 @@ Not built yet.
 
 - Runs lean without a timeout and returns the version it prints when looking up the local toolchain (kernel / Lean version)
 - Replaces stable with the version that the stable lean reports if the project uses stable (kernel / Lean version)
-- Returns stable as it is without running lean if the config sets the engine (kernel / Lean version)
+- Returns the value in the lean-toolchain of the engine directory as it is without running lean if the config sets the engine (kernel / Lean version)
 - Returns only the version part of a toolchain name (parsing / Engine version)
 - Compares a toolchain that omits the default repository with a full one by version only (parsing / Engine version)
 - Orders an rc before the release of the same version and after older releases (parsing / Engine version)
@@ -664,7 +664,7 @@ Not built yet.
 - Switches to the configured core when :env core runs in a core started with extra imports (engine / Switching environments)
 - Says the environment is already in use when :env names the current one missing from the config (engine / Switching environments)
 - Keeps the :time setting and the declarations of the loaded file when :env switches the environment (engine / Switching environments)
-- Says the name is not in the config and evaluates the next expression when :env gets an unknown name (engine / Switching environments)
+- Says the name is not in the config and shows the value of an expression entered afterwards in the same environment when :env gets an unknown name (engine / Switching environments)
 - Says startup failed and goes back to the original environment when :env picks one that cannot start (engine / Switching environments)
 - Shows the current environment and the list of target environments when :env runs without arguments (engine / Switching environments)
 - Says the environment is already in use and does not restart the engine when :env names the current one (engine / Switching environments)
@@ -689,7 +689,7 @@ Not built yet.
 - Returns Suspend for an interrupted startup of the original environment (parsing / Choosing the next step after a startup result in :env)
 - Returns Lose for a failed startup of the original environment (parsing / Choosing the next step after a startup result in :env)
 - Leads to at most two startups, the target and then the original environment, and returns Install only when one succeeds for any startup results (parsing / Choosing the next step after a startup result in :env)
-- Takes the value of -e or --env as the environment name (parsing / Command-line options)
+- Returns the value of -e or --env as the environment name (parsing / Command-line options)
 - Returns an error naming the option for -e, -i, or -p without a value (parsing / Command-line options)
 - Changes the prompt to the one set for the environment when :env switches environments (terminal / Switching environments)
 
@@ -740,7 +740,7 @@ Not built yet.
 
 - Runs the unfinished declaration when the cell ends (engine / End of a notebook cell)
 - Shows that :} is missing without running the block when the cell ends inside :{ (engine / End of a notebook cell)
-- Shows the value when a cell with an expression runs (kernel / Running cells)
+- Shows the value when a cell with #eval runs (kernel / Running cells)
 - Shows the value when a cell evaluates a function declared in the previous cell (kernel / Running cells)
 - Sets the status to error when a cell with an error runs (kernel / Running cells)
 - Returns ok without showing anything when a silent cell runs (kernel / Running cells)
@@ -749,12 +749,12 @@ Not built yet.
 - Runs a tactic together with the next line when its bracket is not closed in proof mode (kernel / Running cells)
 - Shows the value without changing the string when a cell with a multi-line string runs (kernel / Running cells)
 - Replaces the sorry with the multi-line string unchanged when it is sent with exact in proof mode (kernel / Running cells)
-- Keeps the previous tactic when a command is sent before its continuation is finished in proof mode (kernel / Running cells)
+- Says the unfinished input was discarded and keeps the previous tactic when a command is sent before its continuation is finished in proof mode (kernel / Running cells)
 - Runs every tactic and completes the proof when tactics separated by semicolons are sent in proof mode (kernel / Running cells)
 - Shows a parse error at the position in the input when an unparsable tactic is sent in proof mode (kernel / Running cells)
 - Evaluates a raw string across two lines as one string with a newline when its cell runs (kernel / Running cells)
 - Fails showing :} is missing and runs the next cell when a cell leaves a multi-line block open (kernel / Running cells)
-- Shows stdout and stderr in the cell when a command runs with :! (kernel / Running cells)
+- Shows stdout and stderr in the cell with status ok when a command run with :! exits with a nonzero code (kernel / Running cells)
 - Shows the abbreviations for a symbol in the cell when :abbrev runs with it (kernel / Running cells)
 - Fails showing a pattern is needed when :loogle runs without a pattern (kernel / Running cells)
 - Shows that it does nothing in a notebook and runs the next cell when :q runs (kernel / Running cells)
@@ -762,8 +762,8 @@ Not built yet.
 - Fails the cell with the error and retries startup in the next cell if the config has an error (kernel / Startup and restart failures)
 - Runs lean without a timeout and returns the version it prints when looking up the local toolchain (kernel / Lean version)
 - Replaces stable with the version that the stable lean reports if the project uses stable (kernel / Lean version)
-- Returns stable as it is without running lean if the config sets the engine (kernel / Lean version)
-- Writes a kernel.json that starts leani.kernel with the current Python when install runs (kernel / Registering the kernel)
+- Returns the value in the lean-toolchain of the engine directory as it is without running lean if the config sets the engine (kernel / Lean version)
+- Writes a kernel.json that starts leani.kernel with the current Python and sets FORCE_COLOR to 1 when install runs (kernel / Registering the kernel)
 
 ### J2 In a notebook, I want Tab to complete names and abbreviations
 
@@ -787,10 +787,10 @@ Not built yet.
 ### J3 In a notebook, I do not want to lose declarations when the engine crashes or is interrupted
 
 - Keeps earlier declarations for the next cell when the engine crashes (kernel / Engine crashes and interrupts)
-- Stops the evaluation with an error and keeps earlier declarations when it is interrupted (kernel / Engine crashes and interrupts)
+- Stops the evaluation, fails the cell, restarts the engine and replays earlier declarations when it is interrupted (kernel / Engine crashes and interrupts)
 - Fails the cell with the error and retries startup in the next cell when the engine does not start (kernel / Startup and restart failures)
 - Fails the cell and starts the engine again in the next cell when a restart fails or :env cannot return to the original environment (kernel / Startup and restart failures)
-- Fails the cell with an internal error and keeps the session when an unexpected exception occurs (kernel / Startup and restart failures)
+- Fails the cell with an internal error, discards the unfinished block and keeps the session when an unexpected exception occurs (kernel / Startup and restart failures)
 
 ## X. Maintain leani (not a user story)
 

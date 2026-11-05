@@ -102,11 +102,11 @@ mod line_editing {
         assert!(shows(&out, "2"), "Ctrl-D のあとに入力を読まない: {out}");
     }
 
-    /// ja: 評価中に Ctrl-C を押すと、評価を中断し、そのあとの入力でもそれまでの宣言の値を表示する
-    /// en: Interrupts the evaluation and still shows the values of earlier declarations when Ctrl-C is pressed during it
+    /// ja: 評価中に Ctrl-C を押すと、評価を中断し、エンジンを再起動してそれまでの宣言を再実行する
+    /// en: Interrupts the evaluation, restarts the engine and replays earlier declarations when Ctrl-C is pressed during it
     #[story("A4")]
     #[test]
-    fn interrupts_the_evaluation_and_still_shows_the_values_of_earlier_declarations_when_ctrl_c_is_pressed_during_it()
+    fn interrupts_the_evaluation_restarts_the_engine_and_replays_earlier_declarations_when_ctrl_c_is_pressed_during_it()
      {
         let mut term = Terminal::start();
         term.line("def before := 5");
@@ -123,11 +123,13 @@ mod line_editing {
             term.settle(0.1);
         }
         term.type_keys("\x03");
-        term.wait_prompt(PROMPT, 60);
+        let out = term.wait_prompt(PROMPT, 60);
         assert!(
             t0.elapsed() < Duration::from_secs(30),
             "中断しても止まらず、評価が最後まで実行された"
         );
+        assert!(out.contains("エンジンを再起動する"), "{out}");
+        // 再起動したエンジンに宣言を再実行していなければ、before は無い。
         let out = term.line("before");
         assert!(shows(&out, "5"), "{out}");
     }
@@ -215,12 +217,12 @@ mod history {
         assert_eq!(entries[0].matches('\n').count(), 2, "{:?}", entries[0]);
     }
 
-    /// ja: ブロックのあとに Ctrl-P を 1 回押すと全体を呼び出し、Enter で 1 つの入力として送る
-    /// en: Recalls the whole block when Ctrl-P is pressed once after a block, and sends it as one input
+    /// ja: ブロックのあとに Ctrl-P を 1 回押してから Enter を押すと、ブロック全体を呼び出して 1 つの入力として送る
+    /// en: Recalls the whole block and sends it as one input when Ctrl-P is pressed once after a block and then Enter
     #[story("C3")]
     #[test]
-    fn recalls_the_whole_block_when_ctrl_p_is_pressed_once_after_a_block_and_sends_it_as_one_input()
-    {
+    fn recalls_the_whole_block_and_sends_it_as_one_input_when_ctrl_p_is_pressed_once_after_a_block_and_then_enter()
+     {
         let mut term = Terminal::start();
         term.block(&["def merged : Nat -> Nat", "  | 0 => 1", "  | _ => 2"]);
         term.type_keys("\x10");
