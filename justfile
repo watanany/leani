@@ -6,5 +6,6 @@ check:
     uv run mypy
     cargo clippy --all-targets -- -D warnings
     cargo run -p spec -- --check
+    cargo run -p docs-pair -- --check
     cargo nextest run
     uv run pytest -n auto

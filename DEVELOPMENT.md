@@ -1,50 +1,52 @@
-# 開発メモ
+# Development notes
 
-leani を手元で直すときに気をつけていることのメモ。
+Notes on what to keep in mind when changing leani locally.
 
-leani は Rust で書いてある (`crates/`)。Jupyter のカーネルだけは Python 版 (`src/leani/`)
-で動いている。Python 版はカーネルのためだけに残してあり、カーネルの不具合だけを直す。
+leani is written in Rust (`crates/`). Only the Jupyter kernel runs on the Python version (`src/leani/`).
+The Python version is kept only for the kernel, and only bugs in the kernel are fixed in it.
 
-## インストール
+## Installation
 
-clone したリポジトリからインストールする場合は、リポジトリの中で次のコマンドを実行する。
-Rust の toolchain が必要。
+To install from a cloned repository, run the following command in the repository.
+The Rust toolchain is required.
 
 ```
 cargo install --path crates/leani
 ```
 
-コードを変えたら、このコマンドを再実行する。インストールせずに試すときは
-`cargo run -p leani -- <引数>` を使う。
+After changing the code, run this command again. To try leani without installing it, use
+`cargo run -p leani -- <引数>`.
 
-Jupyter のカーネルは、次のコマンドでインストールする。この方法でインストールすると、
-Python のコードの変更は次の起動から反映される。
+Install the Jupyter kernel with the following commands. When it is installed this way,
+changes to the Python code take effect at the next start.
 
 ```
 uv tool install --editable '.[jupyter]' --force
 leani-kernel install
 ```
 
-## テストと lint
+## Tests and lint
 
-`just check` で、次に挙げるテストと lint をすべて実行する。`just` は `brew install just` で
-インストールする。
+`just check` runs all the tests and lints listed below. Install `just` with
+`brew install just`.
 
-テストには、Rust の toolchain、cargo-nextest、elan、ビルド済みのエンジンが必要。
-エンジンは `cargo run -p leani -- --setup` でビルドする。
+The tests require the Rust toolchain, cargo-nextest, elan, and a built engine.
+Build the engine with `cargo run -p leani -- --setup`.
 
 ```
-cargo nextest run                          # すべてのテストを実行する
-cargo nextest run -E 'binary(parsing)'     # 端末とエンジンを使わないテストだけを実行する
-cargo nextest run history                  # テストを名前で絞り込む
+cargo nextest run                          # run all tests
+cargo nextest run -E 'binary(parsing)'     # run only the tests that use neither the terminal nor the engine
+cargo nextest run history                  # filter tests by name
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
+cargo run -p spec -- --check              # check that SPEC.ja.md and SPEC.en.md match the tests
+cargo run -p docs-pair -- --check         # check that the English and Japanese documents are paired
 ```
 
-テストを動かす正式な方法は `cargo nextest run` である。nextest はテストごとに別の
-プロセスで動かす。`cargo test` でも通るが、同じプロセスの中でテストが並列に動く。
+The official way to run the tests is `cargo nextest run`. nextest runs each test in a separate
+process. The tests also pass with `cargo test`, but then the tests run in parallel in the same process.
 
-Jupyter のカーネルのテストと lint は、次のコマンドで実行する。
+Run the tests and lints of the Jupyter kernel with the following commands.
 
 ```
 uv sync
@@ -53,94 +55,105 @@ uv run ruff format . && uv run ruff check .
 uv run mypy
 ```
 
-テストを足すか消したとき、テストの文 (doc comment と docstring の `ja:` と `en:` の行) か、テストの場所 (ファイルと `mod`) か、ストーリーを変えたときは、`cargo run -p spec` を実行して `SPEC.ja.md` と `SPEC.en.md` を生成し直す。
-カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
-`SPEC.ja.md` か `SPEC.en.md` の内容がテストと一致していないと、`cargo nextest run` の X1 と X2 のテストが失敗する。`uv run pytest` は失敗しない。
+When you add or remove a test, or change the test sentences (the `ja:` and `en:` lines of doc comments and docstrings), the location of tests (the file and the `mod`), or the stories, run `cargo run -p spec` to regenerate `SPEC.ja.md` and `SPEC.en.md`.
+The same applies when you change the kernel tests (`tests/test_kernel.py`).
+If the content of `SPEC.ja.md` or `SPEC.en.md` does not match the tests, the X1 and X2 tests of `cargo nextest run` fail. `uv run pytest` does not fail.
 
-## 作業の流れ
+## Workflow
 
-- 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `stories.toml` に追加し、テストには `#[story("A1")]` でストーリーの ID を付ける (カーネルのテストでは `@story("A1")`)。1 つのストーリーに複数のテストを付けてよい
-- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.ja.md` と `SPEC.en.md` を作るので、crate の中の単体テストはどちらにも載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` と `en:` の後ろに 1 行ずつ書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` と `en:` に書く。テストの関数名と `mod` の名前は `en:` の文から作る。小文字にし、英数字でない文字の並びを `_` にして、両端の `_` を消す (カーネルの describe は前に `describe_` を付ける)。名前が違えば `crates/spec` がエラーにする。作った名前が英字で始まらないとき、Rust か Python のキーワードになるとき、`mod` の名前が crate の名前 (`leani`、`spec` など) になるとき、カーネルのテストの名前が `describe` で始まるときもエラーにするので、`en:` の文を書き直す
-- `crates/spec` は、SPEC に載るのに実行されないことがあるテストと、実行されるのに SPEC に載らないテストをエラーにする。Rust のテストには `#[ignore]`、`#[cfg]`、`#[cfg_attr]` を付けない。カーネルのテストでは、skip と xfail のマーカーと `pytestmark` を使わず、describe とテストを `if`、`for`、`with` の下に書かず、`def` の名前を `del` で消したり別の値を入れたりしない。`@story(...)` は 1 行で書き、番号は `"J1"` のように二重引用符で書く。docstring は `def` の行のすぐ後ろに書き、`"""` だけの行で始めて `"""` だけの行で閉じる。テストのファイルは `crates/leani/tests/` と `tests/` の直下に置く
-- コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
-- 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
-- commit メッセージは Conventional Commits の形で、日本語で書く
+- When adding a feature, write the story, the test, and the implementation, in that order. In this repository, the link between these three matters most. Add the story to `stories.toml`, and give the test the story ID with `#[story("A1")]` (`@story("A1")` for kernel tests). One story may have more than one test
+- Put tests in `crates/leani/tests/`. `crates/spec` reads only this directory and `tests/test_*.py` to make `SPEC.ja.md` and `SPEC.en.md`, so unit tests inside a crate appear in neither. Write the test sentences one line each after `ja:` and `en:` in the doc comment of the test (the docstring for kernel tests). A `mod` is a describe, and the sentences of a `mod` go in `ja:` and `en:` of `//!` inside the `mod`. Make the test function name and the `mod` name from the `en:` sentence. Make it lowercase, replace each run of non-alphanumeric characters with `_`, and remove `_` at both ends (a kernel describe gets `describe_` in front). If the name is different, `crates/spec` reports an error. `crates/spec` also reports an error when the name made does not start with a letter, when it is a Rust or Python keyword, when a `mod` name is a crate name (`leani`, `spec`, etc.), and when a kernel test name starts with `describe`, so rewrite the `en:` sentence in those cases
+- `crates/spec` reports an error for a test that appears in SPEC but may not run, and for a test that runs but does not appear in SPEC. Do not put `#[ignore]`, `#[cfg]`, or `#[cfg_attr]` on Rust tests. In kernel tests, do not use skip and xfail markers or `pytestmark`, do not write describes and tests under `if`, `for`, or `with`, and do not delete the name of a `def` with `del` or assign another value to it. Write `@story(...)` on one line, and write the number in double quotes, as in `"J1"`. Write the docstring right after the `def` line, start it with a line of only `"""`, and close it with a line of only `"""`. Put test files directly under `crates/leani/tests/` and `tests/`
+- After changing code, read again the doc comment of the changed function, the comments in its callers and callees, and the documentation that describes that behavior. `crates/spec` detects differences between the tests and `SPEC.ja.md` and `SPEC.en.md`, but nothing detects differences between comments and documentation, or between `en:` sentences and `ja:` sentences. Of the descriptions of behavior, write the ones that can be checked with input and output in test sentences, not in comments
+- Work on a branch, and when done, merge it into main and delete the branch. Do not create PRs
+- Write commit messages in the Conventional Commits format, in Japanese
 
-## テストの文の書き方
+## Writing test sentences
 
-テストの文は、Given / When / Then (前提、操作、結果) の順に読める形で書く。
+Write test sentences so that they read in the order Given / When / Then (precondition, action, result).
 
-- テスト: 「(前提で) 〜すると 〜になる」と書く。前提は、describe の文が言っているときと、前提が無いときに省く。結果は省かない。例:「証明モードで :help を実行すると、証明モードのヘルプを表示する」
-- `mod` と describe: 名詞句 (前提か、テストする対象) か、「〜したとき」の形で書く。例:「証明モードで送るタクティク」「入力の判定の途中でエンジンが異常終了したとき」
+- Tests: write 「(前提で) 〜すると 〜になる」 ("(given ...,) when ..., the result is ..."). Omit the Given when the describe sentence states it, and when there is no Given. Do not omit the Then. Example: 「証明モードで :help を実行すると、証明モードのヘルプを表示する」 ("shows the proof mode help when :help runs in proof mode")
+- `mod` and describe: write a noun phrase (the Given, or the target of the test) or the form 「〜したとき」 ("when ..."). Examples: 「証明モードで送るタクティク」 ("tactics sent in proof mode") 「入力の判定の途中でエンジンが異常終了したとき」 ("when the engine crashes while judging input")
 
-テストの種類によって、次のことに気をつける。
+Depending on the kind of test, keep the following in mind.
 
-- 1 つの関数を呼んで返り値を確かめるテストでは、入力を前提に書き、返り値を結果に書く。関数を呼ぶ操作は describe の文が言うので、補完や実行のようなユーザーの操作を作らない。例:「解釈できないバージョンには None を返す」
-- `#[proptest]` のテストでは「どの〜でも」と書き、1 つの例のように書かない
-- 「〜しない」と書くときは、テストが確かめているほかの結果も書く。例:「:t を実行すると、型の代わりに取得できなかったと表示する」
-- 「〜できる」と書かずに、テストが確かめている結果を書く
-- ほかのテストを指す「も」を使わない。`SPEC.ja.md` ではテストがストーリーごとに並ぶので、指す先のテストが近くに無い
-- テストが確かめていないことを書かない
-- 主語を省いてよいのは、結果の主語 (leani か、describe の文に書いてある関数) と、ユーザーの操作 (入力する、送る、実行する、押す) の主語だけである。これは「文書の書き方」の「主語と目的語を省かない」の例外である。ほかの操作の主語 (セル、エンジン) と目的語は省かない
-- `\` を書かない。Python の docstring では `\` がエスケープになる。`\to` のような略記は「to の略記」と書く
+- In a test that calls one function and checks the return value, write the input as the Given and the return value as the Then. The describe sentence states the action of calling the function, so do not make up a user action such as completion or running. Example: 「解釈できないバージョンには None を返す」 ("returns None for a version it cannot parse")
+- In a `#[proptest]` test, write 「どの〜でも」 ("for any ...") and do not write it as if it were one example
+- When you write 「〜しない」 ("does not ..."), also write the other results that the test checks. Example: 「:t を実行すると、型の代わりに取得できなかったと表示する」 ("says the type could not be obtained, instead of the type, when :t runs")
+- Do not write 「〜できる」 ("can ..."). Write the result that the test checks
+- Do not use 「も」 ("also") to refer to another test. In `SPEC.ja.md`, tests are listed by story, so the test it refers to is not nearby
+- Do not write what the test does not check
+- The only subjects that may be omitted are the subject of the result (leani, or the function named in the describe sentence) and the subject of user actions (入力する, 送る, 実行する, 押す: enter, send, run, press). This is an exception to "Do not omit subjects and objects" in "Writing documents". Do not omit the subject of other actions (セル, エンジン: cell, engine) or objects
+- Do not write `\`. In Python docstrings, `\` is an escape. Write an abbreviation such as `\to` as 「to の略記」 ("the abbreviation of to")
 
-`en:` の文は `ja:` の文を英語に訳したもので、次のように書く。`en:` の文が `ja:` の文の訳として合っているかは、`crates/spec` では確かめない。
+An `en:` sentence is the English translation of the `ja:` sentence, and is written as follows. `crates/spec` does not check whether the `en:` sentence is a correct translation of the `ja:` sentence.
 
-- テスト: Then の動詞 (3 人称単数) から始め、`when` で When を、`with` `in` `if` `for` などで Given を続ける。例: `Shows the proof mode help when :help runs in proof mode`
-- `mod` と describe: 名詞句か、`When ...` `After ...` の形で書く。例: `Tactics sent in proof mode`
-- ASCII の文字だけで書き、文末に `.` を付けない。`\` を書かない
-- 同じ日本語の語には、同じ英語の語を当てる。語の組は `glossary.toml` に書いてあり、ja の文にその語があるのに en の文に英語の語が無ければ、`crates/spec` がエラーにする
+- Tests: start with the verb of the Then (third person singular), and continue with the When using `when` and the Given using `with`, `in`, `if`, `for`, and so on. Example: `Shows the proof mode help when :help runs in proof mode`
+- `mod` and describe: write a noun phrase or the form `When ...` or `After ...`. Example: `Tactics sent in proof mode`
+- Write only ASCII characters, and do not put `.` at the end. Do not write `\`
+- Use the same English word for the same Japanese word. The word pairs are in `glossary.toml`, and if a ja sentence contains one of the words but the en sentence does not contain the English word, `crates/spec` reports an error
 
-## コードの書き方
+## Writing code
 
-crate は副作用の有無で分けてある。
+The crates are split by whether they have side effects.
 
-| crate        | 中身                                                     |
-|--------------|----------------------------------------------------------|
-| `leani-core` | 純粋な関数と定数。入力だけで出力が決まる                 |
-| `leani-read` | 読み取り。環境変数とファイルを読むが、何も書き換えない   |
-| `leani`      | 副作用。プロセス、端末、ファイル、ネットワークを操作する |
-| `story`      | テストに付ける `#[story]`。何もせずに関数を返す          |
-| `spec`       | `SPEC.ja.md` と `SPEC.en.md` を生成する                  |
+| crate        | Contents                                                                  |
+|--------------|---------------------------------------------------------------------------|
+| `leani-core` | Pure functions and constants. The output depends only on the input        |
+| `leani-read` | Reading. Reads environment variables and files, but changes nothing       |
+| `leani`      | Side effects. Operates on processes, the terminal, files, and the network |
+| `story`      | `#[story]` given to tests. Returns the function without doing anything    |
+| `spec`       | Generates `SPEC.ja.md` and `SPEC.en.md`                                   |
+| `docs-pair`  | Checks that the English `X.md` and the Japanese `X.ja.md` are paired      |
 
-各 crate のモジュールの一覧は、その crate の `lib.rs` の先頭に書いてある。
-コードを追加するときは、次の決まりに従う。
+The list of modules of each crate is at the top of the `lib.rs` of that crate.
+When adding code, follow these rules.
 
-- 原則として、純粋関数型の考え方でコードを書く。基本的な書き方は Haskell を意識する。値を書き換えるより新しい値を返し、小さな関数を組み合わせる
-- 分岐は、書ける箇所では `match` で書く。不自然になるなら `if` を式として書く
-- 純粋関数と読み取りの関数では、`if` の `else` を省略しない。どの分岐でも値を返すことが、コードの形でわかるようにする
-- 副作用のある関数では、`else` を省略してよい。Go のように、条件に合わなければ先に return する
-- 判定と整形は `leani-core` に書く。`leani` には、プロセス、端末、ファイルの操作だけを書く。こうすると、判定と整形のテストを入力と出力だけで書ける
-- 依存の向きは `leani-core` ← `leani-read` ← `leani` だけにする
-- プロセス全体の状態 (環境変数、カレントディレクトリ、SIGINT のハンドラ) に触るのは `main.rs` だけにする。`main.rs` が起動時に 1 回だけ環境変数を読んで `Ctx` を作り、ほかの関数は `Ctx` を引数で受け取る。lib は `std::env::set_var` と `set_current_dir` を呼ばない。子プロセスには `Command::env` と `current_dir` で渡す
-- セッションの状態 (エンジンのプロセス、宣言のログ、入力バッファなど) を持つのは `Engine` と `Repl` だけにする。`Engine` のフィールドは private にして、`Engine` のメソッドだけが書き換える
-- 表示は `print!` で出さず、`Repl` に渡した `Output` (`self.out`) の `write` と `fail` で出す。テストでは、文字列にためるだけの型が表示を受け取る
-- テストがエンジンとのやりとりを差し替えるためのメソッドは、`testing` feature のときだけ作る
-- lint は `clippy` の一般的な設定に従う。ただし、このリポジトリの決まりと合わないときは、このリポジトリの決まりを優先する
+- As a rule, write code in a purely functional style. Keep Haskell in mind as the basic style. Return a new value rather than changing a value, and combine small functions
+- Write branches with `match` where possible. If that is unnatural, write `if` as an expression
+- In pure functions and reading functions, do not omit the `else` of an `if`. Make it clear from the shape of the code that every branch returns a value
+- In functions with side effects, `else` may be omitted. As in Go, return early when a condition is not met
+- Put judging and formatting in `leani-core`. Put only operations on processes, the terminal, and files in `leani`. This way, tests for judging and formatting can be written with only input and output
+- Dependencies go only in the direction `leani-core` ← `leani-read` ← `leani`
+- Only `main.rs` touches the state of the whole process (environment variables, the current directory, the SIGINT handler). `main.rs` reads environment variables only once at startup and makes `Ctx`, and other functions receive `Ctx` as an argument. The lib does not call `std::env::set_var` or `set_current_dir`. Pass these to child processes with `Command::env` and `current_dir`
+- Only `Engine` and `Repl` hold the state of the session (the engine process, the declaration log, the input buffer, and so on). Make the fields of `Engine` private, and only the methods of `Engine` change them
+- Do not print output with `print!`. Print it with `write` and `fail` of the `Output` (`self.out`) given to `Repl`. In tests, a type that only collects the output in a string receives it
+- Create methods that let tests replace the communication with the engine only with the `testing` feature
+- For lint, follow the common `clippy` settings. When they conflict with the rules of this repository, the rules of this repository take priority
 
-Jupyter のカーネル (Python 版) のモジュールの決まりは、`src/leani/__init__.py` の docstring と
-`pyproject.toml` の `ruff` の設定に書いてある。
+The module rules of the Jupyter kernel (Python version) are in the docstring of `src/leani/__init__.py` and
+the `ruff` settings in `pyproject.toml`.
 
-## 文書の書き方
+## Writing documents
 
-- 常体 (だ・である) で書く
-- 英数字の前後には半角の空白を入れる。`` ` `` で囲んだコードの前後も同じにする
-- 主語と目的語を省かない。「入る」のように、何がどうなるか分からない書き方をしない
-- 比喩と珍しい語を使わない。指摘されたら、`rg` で同じ書き方を探してまとめて直す
-- 必要なことだけを書き、細かいことを重要なことと同じ重さで並べない。README は入口なので、経緯と手元の環境のパスを書かない
+- Japanese documents use the plain form (だ/である)
+- In Japanese documents, put a half-width space before and after alphanumeric characters. Do the same before and after code enclosed in `` ` ``
+- Do not omit subjects and objects. Do not write in a way that leaves unclear what does what, as with 「入る」 ("goes in")
+- Do not use metaphors or uncommon words. When one is pointed out, search for the same wording with `rg` and fix all of them together
+- Write only what is needed, and do not list details with the same weight as important points. The README is the entry point, so do not write the history or paths of your local environment in it
 
-## ドキュメント
+## English and Japanese documents
 
-| ファイル                                           | 内容                                                                   |
-|----------------------------------------------------|------------------------------------------------------------------------|
-| [README.md](README.md)                             | インストールと、はじめての起動                                         |
-| [guide/proof.md](guide/proof.md)                   | 証明モード                                                             |
-| [guide/config.md](guide/config.md)                 | 設定、環境変数、ファイルの場所                                         |
-| [guide/jupyter.md](guide/jupyter.md)               | Jupyter のカーネルとして使う方法                                       |
-| [SPEC.ja.md](SPEC.ja.md)                           | leani ができることの一覧。`crates/spec` がテストから生成する           |
-| [SPEC.en.md](SPEC.en.md)                           | `SPEC.ja.md` の英語版。`crates/spec` がテストの `en:` の文から生成する |
-| [DECISIONS.md](DECISIONS.md)                       | 設計の判断。採用しなかった案と、その理由                               |
-| `stories.toml`                                     | ユーザーストーリーの一覧                                               |
-| `glossary.toml`                                    | テストの文と文書で使う、日本語と英語の語の組                           |
-| `crates/`                                          | leani のコード。設計の理由は doc comment とコメントに書いてある        |
-| `src/leani/`                                       | Jupyter のカーネル (Python 版)                                         |
+The README, DEVELOPMENT, DECISIONS, and guide documents each have two files: the English `X.md` and the Japanese `X.ja.md`. Both are originals.
+
+- You may add, change, or delete content starting from the document in either language. In the same commit, make the same change in the other document
+- When translating, use the word pairs in `glossary.toml`
+- When there is a reason to change only one of the documents (such as fixing a typo that exists in only one), write a `Docs-Pair-Skip: <reason>` line in the commit message
+- `cargo run -p docs-pair -- --check` reports an error for a document that has no document in the other language, and for a commit that changes only one of the documents. It does not check uncommitted changes, so a commit that changes only one document is found when you run `just check` after the commit. Fix it before the merge with `git commit --amend` or `git rebase`
+- `CLAUDE.md` is written only in Japanese. `SPEC.ja.md` and `SPEC.en.md` are generated by `crates/spec`
+
+## Documentation
+
+| File                                 | Contents                                                                                          |
+|--------------------------------------|---------------------------------------------------------------------------------------------------|
+| [README.md](README.md)               | Installation and the first start                                                                  |
+| [guide/proof.md](guide/proof.md)     | Proof mode                                                                                        |
+| [guide/config.md](guide/config.md)   | Configuration, environment variables, and file locations                                          |
+| [guide/jupyter.md](guide/jupyter.md) | How to use leani as a Jupyter kernel                                                              |
+| [SPEC.ja.md](SPEC.ja.md)             | List of what leani can do. `crates/spec` generates it from the tests                              |
+| [SPEC.en.md](SPEC.en.md)             | English version of `SPEC.ja.md`. `crates/spec` generates it from the `en:` sentences of the tests |
+| [DECISIONS.md](DECISIONS.md)         | Design decisions. The options that were not adopted, and the reasons                              |
+| `stories.toml`                       | List of user stories                                                                              |
+| `glossary.toml`                      | Pairs of Japanese and English words used in test sentences and documents                          |
+| `crates/`                            | The code of leani. The reasons for the design are in doc comments and comments                    |
+| `src/leani/`                         | Jupyter kernel (Python version)                                                                   |

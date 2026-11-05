@@ -272,3 +272,8 @@ en = "I want the documents to stay in line with the tests"
 id = "X2"
 ja = "日本語を読まない人にも、leani ができることの一覧を読んでもらいたい"
 en = "I want people who do not read Japanese to be able to read the list of what leani can do"
+
+[[story]]
+id = "X3"
+ja = "日本語を読まない人にも、leani の使い方と開発の決まりを読んでもらいたい"
+en = "I want people who do not read Japanese to be able to read how to use and develop leani"

@@ -1161,7 +1161,7 @@ mod choosing_the_environment_to_start {
     //! ja: 起動する環境の決め方
     //! en: Choosing the environment to start
     //!
-    //! guide/config.md の「起動する環境の決まり方」と、エンジンの優先順位。
+    //! guide/config.ja.md の「起動する環境の決まり方」と、エンジンの優先順位。
     use super::*;
 
     const CFG: &str = r#"
@@ -3077,6 +3077,169 @@ mod property_list {
         if let Err(why) = spec::check(&spec::root(), spec::Lang::En) {
             panic!("{why}");
         }
+    }
+}
+
+mod checking_documents_in_two_languages {
+    //! ja: 2 つの言語の文書の確認
+    //! en: Checking documents in two languages
+    //!
+    //! 英語の X.md と日本語の X.ja.md は、どちらも原本で、同じ commit で両方を変える
+    //! (crates/docs-pair)。テストごとに一時的な git のリポジトリを作る。
+    use super::*;
+    use std::process::Command;
+
+    fn git(dir: &Path, args: &[&str]) {
+        let ok = Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args([
+                "-c",
+                "user.name=leani",
+                "-c",
+                "user.email=leani@example.com",
+            ])
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
+            .args(args)
+            .status()
+            .expect("git")
+            .success();
+        assert!(ok, "git {args:?}");
+    }
+
+    /// files を書いて、message で commit する。
+    fn commit(dir: &Path, files: &[(&str, &str)], message: &str) {
+        files.iter().for_each(|(name, text)| {
+            let path = dir.join(name);
+            fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
+            fs::write(path, text).expect("write");
+        });
+        git(dir, &["add", "-A"]);
+        git(dir, &["commit", "-q", "-m", message]);
+    }
+
+    /// README.md と README.ja.md を commit したリポジトリ。
+    fn repo() -> tempfile::TempDir {
+        let dir = tmp();
+        git(dir.path(), &["init", "-q"]);
+        commit(
+            dir.path(),
+            &[("README.md", "leani\n"), ("README.ja.md", "leani\n")],
+            "docs: README",
+        );
+        dir
+    }
+
+    /// ja: 対の文書の片方だけを変えた commit があると、変えなかった文書の名前を含むエラーを返す
+    /// en: Returns an error naming the unchanged document when a commit changes only one document of a pair
+    #[story("X3")]
+    #[test]
+    fn returns_an_error_naming_the_unchanged_document_when_a_commit_changes_only_one_document_of_a_pair()
+     {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[("README.ja.md", "leani です\n")],
+            "docs: 日本語だけ",
+        );
+        let err = docs_pair::check(dir.path()).expect_err("片方だけ");
+        assert!(err.contains("README.md"), "{err}");
+    }
+
+    /// ja: 対の文書の両方を同じ commit で変えると Ok を返す
+    /// en: Returns Ok when a commit changes both documents of a pair
+    #[story("X3")]
+    #[test]
+    fn returns_ok_when_a_commit_changes_both_documents_of_a_pair() {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[
+                ("README.md", "leani is\n"),
+                ("README.ja.md", "leani です\n"),
+            ],
+            "docs: 両方",
+        );
+        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+    }
+
+    /// ja: commit メッセージに Docs-Pair-Skip: で始まる行があると、対の片方だけを変えた commit でも Ok を返す
+    /// en: Returns Ok when a commit whose message has a line starting with Docs-Pair-Skip: changes only one document of a pair
+    #[story("X3")]
+    #[test]
+    fn returns_ok_when_a_commit_whose_message_has_a_line_starting_with_docs_pair_skip_changes_only_one_document_of_a_pair()
+     {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[("README.ja.md", "leani です\n")],
+            "docs: 誤字を直す\n\nDocs-Pair-Skip: 英語の文書には同じ誤字が無い",
+        );
+        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+    }
+
+    /// ja: もう片方の言語の文書が無い文書があると、その文書の名前を含むエラーを返す
+    /// en: Returns an error naming the document when it has no counterpart in the other language
+    #[story("X3")]
+    #[test]
+    fn returns_an_error_naming_the_document_when_it_has_no_counterpart_in_the_other_language() {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[
+                ("guide/proof.md", "proof\n"),
+                ("guide/proof.ja.md", "証明\n"),
+            ],
+            "docs: proof",
+        );
+        git(dir.path(), &["rm", "-q", "guide/proof.ja.md"]);
+        git(
+            dir.path(),
+            &[
+                "commit",
+                "-q",
+                "-m",
+                "docs: 日本語を消す\n\nDocs-Pair-Skip: 確かめる",
+            ],
+        );
+        let err = docs_pair::check(dir.path()).expect_err("対が無い");
+        assert!(err.contains("guide/proof.md"), "{err}");
+    }
+
+    /// ja: 英語の文書しか無かった文書に、日本語の文書を足す commit では Ok を返す
+    /// en: Returns Ok when a commit adds the Japanese document for a document that only had the English one
+    #[story("X3")]
+    #[test]
+    fn returns_ok_when_a_commit_adds_the_japanese_document_for_a_document_that_only_had_the_english_one()
+     {
+        let dir = repo();
+        commit(dir.path(), &[("guide/proof.md", "proof\n")], "docs: proof");
+        commit(dir.path(), &[("guide/proof.ja.md", "証明\n")], "docs: 証明");
+        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+    }
+
+    /// ja: もう片方の言語の文書が無い文書が CLAUDE.md と SPEC.ja.md と SPEC.en.md だけなら Ok を返す
+    /// en: Returns Ok when only CLAUDE.md, SPEC.ja.md and SPEC.en.md have no counterpart in the other language
+    #[story("X3")]
+    #[test]
+    fn returns_ok_when_only_claude_md_spec_ja_md_and_spec_en_md_have_no_counterpart_in_the_other_language()
+     {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[
+                ("CLAUDE.md", "c\n"),
+                ("SPEC.ja.md", "s\n"),
+                ("SPEC.en.md", "s\n"),
+            ],
+            "docs: 対の無い文書",
+        );
+        assert_eq!(docs_pair::check(dir.path()), Ok(()));
     }
 }
 

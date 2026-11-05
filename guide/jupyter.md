@@ -1,22 +1,22 @@
-# Jupyter で使う
+# Using with Jupyter
 
-leani は Jupyter のカーネルとしても使える。
-セルには、端末の leani に入力するのと同じ内容を書く。
+leani can also be used as a Jupyter kernel.
+In a cell, write the same input that you would enter in leani in the terminal.
 
-## インストール
+## Installation
 
-カーネルは Python 版の leani で動く。[uv](https://docs.astral.sh/uv/) が必要。
+The kernel runs on the Python version of leani. [uv](https://docs.astral.sh/uv/) is required.
 
 ```
 uv tool install 'leani[jupyter] @ git+https://github.com/watanany/leani'
 leani-kernel install
 ```
 
-登録した「Lean 4 (leani)」カーネルは、別にインストールした JupyterLab からも使える。
+The registered "Lean 4 (leani)" kernel can also be used from a JupyterLab that you installed separately.
 
-## 端末との違い
+## Differences from the terminal
 
-- **略記は Tab でだけ置き換える**。JupyterLab には space で置き換える仕組みが無いため
-- **最初のセルは時間がかかる**。最初のセルでエンジンを起動するので、それまでは定数名の補完も使えない
-- **証明モードはセルごとに 1 タクティク**。`:prove` のセルを実行したあと、タクティクを 1 つずつ別のセルに書く
-- **`:!` の出力はコマンドが終わってからまとめて表示する**。セルからは入力できないので、`vim` のような対話するコマンドは使えない
+- **Abbreviations are replaced only with Tab**. JupyterLab has no mechanism for replacing them with space
+- **The first cell takes time**. The first cell starts the engine, so completion of constant names is not available until then
+- **In proof mode, each cell holds one tactic**. After running the `:prove` cell, write each tactic in a separate cell
+- **The output of `:!` is shown all at once after the command finishes**. A cell cannot send input to the command, so interactive commands such as `vim` cannot be used

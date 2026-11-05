@@ -2,37 +2,37 @@
 
 # leani
 
-**Lean 4 を、その場で試す REPL**
+**A REPL for trying Lean 4 on the spot**
 
-<img src="guide/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
+<img src="guide/screenshot.png" alt="leani evaluating an expression and showing completion candidates" width="720">
 
-[証明モード](guide/proof.md) · [設定](guide/config.md) · [Jupyter](guide/jupyter.md) · [できること](SPEC.ja.md) · [開発メモ](DEVELOPMENT.md)
+[Proof mode](guide/proof.md) · [Configuration](guide/config.md) · [Jupyter](guide/jupyter.md) · [What leani can do](SPEC.en.md) · [Development notes](DEVELOPMENT.md)
 
-English: [what leani can do](SPEC.en.md)
+[日本語](README.ja.md)
 
 </div>
 
-## インストール
+## Installation
 
-[elan](https://lean-lang.org/install)、git、[Rust の toolchain](https://rustup.rs/) が必要。
+[elan](https://lean-lang.org/install), git, and the [Rust toolchain](https://rustup.rs/) are required.
 
 ```sh
 cargo install --git https://github.com/watanany/leani leani
 ```
 
-## 使い方
+## Usage
 
 ```sh
-leani              # 起動する
-leani -i Mathlib   # Mathlib を import して起動する
-leani file.lean    # file.lean を読み込んで起動する
+leani              # start
+leani -i Mathlib   # start with Mathlib imported
+leani file.lean    # start with file.lean loaded
 ```
 
-REPL の中では `:help` でコマンドの一覧を表示する。
-`:l file.lean` でファイルを読み込む。
-`module` で始まるファイルも読み込めるが、その中の宣言は private が既定なので、`public` を付けていない名前は Tab の候補に出ない。評価はできる。
+In the REPL, `:help` shows the list of commands.
+`:l file.lean` loads a file.
+Files that start with `module` can also be loaded, but declarations in them are private by default, so names without `public` do not appear in the Tab candidates. They can still be evaluated.
 
 > [!NOTE]
-> 初回は leanprover-community/repl をビルドするので、時間がかかる。
-> Lake プロジェクトの中では、先に `lake build` (Mathlib なら `lake exe cache get`) を実行しておく。
-> Lake プロジェクトの中で初めて起動したときは、`lake env` が依存パッケージを取得することがある。
+> The first start takes time because leani builds leanprover-community/repl.
+> In a Lake project, run `lake build` first (for Mathlib, `lake exe cache get`).
+> The first time leani starts in a Lake project, `lake env` may fetch dependency packages.

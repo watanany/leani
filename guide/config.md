@@ -1,11 +1,11 @@
-# 設定
+# Configuration
 
-設定ファイルは `~/.config/leani/config.toml` に置く。
-無くても leani は動く。
+Put the configuration file at `~/.config/leani/config.toml`.
+leani works without it.
 
-## 環境
+## Environments
 
-Lake プロジェクトと import の組み合わせに名前を付けて、**環境** として登録できる。
+You can give a name to a combination of a Lake project and imports and register it as an **environment**.
 
 ```toml
 default = "main"
@@ -20,53 +20,53 @@ imports = ["Mathlib"]
 prompt = "λ∀> "
 ```
 
-| キー                 | 説明                                                                |
-|----------------------|---------------------------------------------------------------------|
-| `default`            | オプションを付けずに起動したときの環境の名前                        |
-| `engine`             | 自分でビルドしたエンジン (leanprover-community/repl) のディレクトリ |
-| `env.<名前>.project` | Lake プロジェクトのディレクトリ                                     |
-| `env.<名前>.imports` | import するモジュールの配列                                         |
-| `env.<名前>.prompt`  | プロンプトの文字列                                                  |
-| `env.<名前>.engine`  | その環境だけで使うエンジンのディレクトリ                            |
+| Key                  | Description                                                           |
+|----------------------|-----------------------------------------------------------------------|
+| `default`            | Name of the environment used when leani starts without options        |
+| `engine`             | Directory of an engine you built yourself (leanprover-community/repl) |
+| `env.<名前>.project` | Directory of the Lake project                                         |
+| `env.<名前>.imports` | Array of modules to import                                            |
+| `env.<名前>.prompt`  | Prompt string                                                         |
+| `env.<名前>.engine`  | Directory of the engine used only in that environment                 |
 
-エンジンを自分で指定すると、`env.<名前>.engine`、`engine`、環境変数 `LEANI_ENGINE` の順に優先される。
-指定しなければ、leani が自動でビルドする。
+When you specify the engine yourself, `env.<名前>.engine`, `engine`, and the environment variable `LEANI_ENGINE` take priority in that order.
+If you do not specify one, leani builds the engine automatically.
 
-## 起動する環境の決まり方
+## How the environment to start in is chosen
 
-`leani -e math` のように名前を指定すると、その環境で起動する。
-`-e` を付けずに `-p` や `-i` を付けると、設定の環境を使わずに、指定したプロジェクトと import で起動する。
-何も付けなければ `default` の環境で起動し、`default` が無ければ、カレントディレクトリを含む Lake プロジェクトで起動する。
-REPL の中では `:env <名前>` で環境を切り替えられる。
+When you specify a name, as in `leani -e math`, leani starts in that environment.
+When you give `-p` or `-i` without `-e`, leani does not use the environments in the configuration and starts with the given project and imports.
+With no options, leani starts in the `default` environment. If there is no `default`, leani starts in the Lake project that contains the current directory.
+In the REPL, `:env <名前>` switches the environment.
 
-## init ファイル
+## init file
 
-`~/.config/leani/init.lean` に書いた宣言は、起動のたびに実行される。
-`:reset` や `:l` のあとも残る。
+Declarations written in `~/.config/leani/init.lean` run every time leani starts.
+They remain after `:reset` and `:l`.
 
-## 環境変数
+## Environment variables
 
-| 環境変数         | 説明                                                          |
-|------------------|---------------------------------------------------------------|
-| `LEANI_CONFIG`   | 設定ファイルのパス                                            |
-| `LEANI_INIT`     | init ファイルのパス                                           |
-| `LEANI_HISTORY`  | 履歴ファイルのパス                                            |
-| `LEANI_ENGINE`   | 自分でビルドしたエンジンのディレクトリ                        |
-| `LEANI_NO_SETUP` | 空でない値にすると、エンジンを自動でビルドしない              |
-| `LEANI_LOOGLE`   | `:loogle` が問い合わせる URL                                  |
-| `MANPAGER`       | `:abbrev` の一覧を表示する pager。無ければ `PAGER` を使う     |
-| `PAGER`          | `MANPAGER` が無いときの pager。どちらも無ければ `less` を使う |
-| `FORCE_COLOR`    | 空でない値にすると、端末でなくても色を付ける。`0` でも付ける  |
+| Environment variable | Description                                                                                    |
+|----------------------|------------------------------------------------------------------------------------------------|
+| `LEANI_CONFIG`       | Path of the configuration file                                                                 |
+| `LEANI_INIT`         | Path of the init file                                                                          |
+| `LEANI_HISTORY`      | Path of the history file                                                                       |
+| `LEANI_ENGINE`       | Directory of an engine you built yourself                                                      |
+| `LEANI_NO_SETUP`     | If set to a non-empty value, leani does not build the engine automatically                     |
+| `LEANI_LOOGLE`       | URL that `:loogle` sends queries to                                                            |
+| `MANPAGER`           | Pager that shows the `:abbrev` list. If it is not set, leani uses `PAGER`                      |
+| `PAGER`              | Pager used when `MANPAGER` is not set. If neither is set, leani uses `less`                    |
+| `FORCE_COLOR`        | If set to a non-empty value, leani uses colors even without a terminal. `0` also turns them on |
 
-## ファイルの場所
+## File locations
 
-| ファイル               | 場所                                       |
-|------------------------|--------------------------------------------|
-| 設定                   | `~/.config/leani/config.toml`              |
-| init                   | `~/.config/leani/init.lean`                |
-| 履歴                   | `~/.local/state/leani/history`             |
-| エンジン               | `~/.local/state/leani/engine/<バージョン>` |
-| `lake env` のキャッシュ | `~/.local/state/leani/lake-env/`           |
+| File             | Location                                   |
+|------------------|--------------------------------------------|
+| Configuration    | `~/.config/leani/config.toml`              |
+| init             | `~/.config/leani/init.lean`                |
+| History          | `~/.local/state/leani/history`             |
+| Engine           | `~/.local/state/leani/engine/<バージョン>` |
+| `lake env` cache | `~/.local/state/leani/lake-env/`           |
 
-`XDG_CONFIG_HOME` と `XDG_STATE_HOME` を設定していれば、leani は `~/.config` と `~/.local/state` の代わりにそのディレクトリを使う。
-実際の場所は `leani -V` で確認できる。
+If `XDG_CONFIG_HOME` and `XDG_STATE_HOME` are set, leani uses those directories instead of `~/.config` and `~/.local/state`.
+`leani -V` shows the actual locations.

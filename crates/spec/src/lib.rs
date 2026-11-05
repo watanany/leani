@@ -410,6 +410,7 @@ const CRATES: &[&str] = &[
     "chrono",
     "core",
     "crossterm",
+    "docs_pair",
     "leani",
     "leani_core",
     "leani_read",

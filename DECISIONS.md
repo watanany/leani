@@ -1,428 +1,430 @@
-# 設計の判断
+# Design decisions
 
-leani で検討して採用しなかった案と、その理由、代わりにどうしたかを書く。
-今の作りの理由は、`crates/` の doc comment と `src/leani/` の docstring に書いてある。
+This file lists the options that were considered for leani and not adopted, the reasons, and what was done instead.
+The reasons for the current design are in the doc comments in `crates/` and the docstrings in `src/leani/`.
 
-## 入力
+## Input
 
-### 不採用: 入力の終わりを正規表現で判定する
+### Rejected: Judging the end of the input with regular expressions
 
-入力が宣言のキーワードで始まるかや、括弧が閉じたかを正規表現で調べれば、入力が終わったかを判定できる。
-しかし、入力に想定していない構文があると、leani は入力を早く確定しすぎるか、次の行まで同じ入力として読んでしまう。
-ユーザーが定義した notation は、正規表現では判定できない。
+Regular expressions that check whether the input starts with a declaration keyword, or whether the brackets are closed, could judge whether the input has ended.
+However, if the input has syntax that was not expected, leani confirms the input too early, or reads the next line as part of the same input.
+Regular expressions cannot judge notation that the user defined.
 
-代わりに、leani は 1 行ごとに Lean のパーサを今の環境で実行し、入力を command、term、タクティクの列のどれかとして読めるかを判定させる。
-パーサは入力を実行しないので、副作用は無い。
-1 行の判定にかかる時間は 60ms 程度である。
+Instead, leani runs the Lean parser in the current environment for each line, and has it judge whether the input can be read as a command, a term, or a sequence of tactics.
+The parser does not run the input, so it has no side effects.
+Judging one line takes about 60ms.
 
-### 不採用: パーサが読めた時点で入力を確定する
+### Rejected: Confirming the input as soon as the parser can read it
 
-パーサが入力を完結した構文として読めたら、その時点で入力を確定する方法もある。
-しかし、`structure P where`、`def f := 1`、`induction n with` は、それだけで完結した構文として読めるのに、次のインデントした行が続きになることがある。
+Another option is to confirm the input as soon as the parser can read it as complete syntax.
+However, `structure P where`, `def f := 1`, and `induction n with` can each be read as complete syntax on their own, but the next indented line can continue them.
 
-代わりに、leani はインデントした行が続くあいだは入力を読み続け、空行かインデントの無い行で確定する。
-`where`、`with`、`do`、`by` で終わる行は、完結していても空行を待つ。
-確定した直後にユーザーがインデントした行を入力したら、leani は直前の入力とその行をつなげて読み直す。
+Instead, leani keeps reading the input while indented lines follow, and confirms it at a blank line or a line without indentation.
+A line that ends with `where`, `with`, `do`, or `by` waits for a blank line even when it is complete.
+If the user enters an indented line right after the input is confirmed, leani joins the previous input and that line and reads them again.
 
-### 不採用: 略記をキーを押すたびに確定する
+### Rejected: Confirming abbreviations at every key press
 
-VS Code の Lean 拡張は、`\` のあとにキーを押すたびに略記を確定して記号に置き換える。
-しかし、略記の表のうち 293 件は、ほかの略記の先頭部分になっている (`\a`、`\all`、`\alpha` はすべて表にある)。
-VS Code の Lean 拡張は、それ以上伸ばせない文字が入力されたら確定するという先読みで対処している。
-leani で同じことをすると、キーを押すたびに状態が変わる処理になり、端末のテストも重くなる。
+The Lean extension for VS Code confirms an abbreviation and replaces it with a symbol at every key press after `\`.
+However, 293 abbreviations in the abbreviation table are the beginning of another abbreviation (`\a`, `\all`, and `\alpha` are all in the table).
+The Lean extension for VS Code handles this by looking ahead: it confirms the abbreviation when a character is entered that cannot make it any longer.
+If leani did the same, the processing would change state at every key press, and the terminal tests would also become heavier.
 
-代わりに、leani は space か Tab が押されるまで略記を確定しない。
-その時点で、どの略記を入力したかは 1 つに決まるので、変換は純粋関数 1 つで済む。
+Instead, leani does not confirm an abbreviation until space or Tab is pressed.
+At that point, there is only one abbreviation the user can have entered, so a single pure function does the conversion.
 
-### 不採用: 略記の変換を space か Tab のどちらかだけにする
+### Rejected: Converting abbreviations with only one of space or Tab
 
-space だけで変換すると、記号のあとに空白が残る。
-`(·.succ)` や `(\to)` のように記号のすぐあとに文字を続けるときは、ユーザーが毎回その空白を消すことになる。
-Tab だけで変換し、space では変換しないと、`a \to b` のようなよくある形で、記号ごとに Tab と space の 2 つのキーを押すことになる。
+Converting with space only leaves a space after the symbol.
+When a character follows a symbol directly, as in `(·.succ)` or `(\to)`, the user has to delete that space every time.
+If only Tab converts and space does not, a common form such as `a \to b` needs two keys, Tab and space, for each symbol.
 
-代わりに、両方で変換する。space は変換したあとに空白も入れ、Tab は空白を入れない。
-Tab で変換するのは、カーソルの手前が表にある `\name` のときだけで、それ以外の Tab は補完になる。
-Lean の名前には `\` が入らないので、Tab が変換になるか補完になるかは、ユーザーが入力した文字で決まる。
-lean.nvim も、略記の途中では Tab で空白を入れずに変換する。
+Instead, both keys convert. Space inserts a space after the conversion, and Tab does not.
+Tab converts only when the text before the cursor is a `\name` in the table. Any other Tab does completion.
+Lean names do not contain `\`, so the characters the user entered decide whether Tab converts or does completion.
+lean.nvim also converts with Tab without inserting a space while an abbreviation is being entered.
 
-### 不採用: 行の編集を readline で済ませる
+### Rejected: Using readline for line editing
 
-行の編集と履歴には、readline を使うこともできる。
-しかし、macOS の readline の中身は libedit で、同じ API の別の実装である。
-leani はプロンプトの色コードの幅、複数行の入力が履歴の複数件になること、履歴ファイルの書き直し、Ctrl-C がすぐに反映されないことを、すべて自分で扱うことになる。
+readline can also be used for line editing and history.
+However, readline on macOS is actually libedit, a different implementation of the same API.
+leani would have to handle all of the following itself: the width of color codes in the prompt, a multi-line input becoming several history entries, rewriting the history file, and Ctrl-C not taking effect right away.
 
-代わりに、leani は reedline を使う (Python 版は prompt_toolkit を使っていた)。
-reedline はプロンプトの幅を自分で数え、Ctrl-C をすぐに反映する。
-複数行の入力は、leani が自分の履歴の型で 1 件にまとめて追記する。
+Instead, leani uses reedline (the Python version used prompt_toolkit).
+reedline counts the width of the prompt itself, and makes Ctrl-C take effect right away.
+leani joins a multi-line input into one entry with its own history type and appends it.
 
-### 不採用: 行の編集に rustyline を使う
+### Rejected: Using rustyline for line editing
 
-行の編集には、rustyline も使える。
-しかし、rustyline は 1 回目の Tab で候補の共通部分まで補完し、2 回目の Tab で候補の一覧を表示する。
-Python 版が使っていた prompt_toolkit のように、1 回の Tab で入力の下に候補のメニューを出すことはできない。
+rustyline can also be used for line editing.
+However, rustyline completes up to the common part of the candidates on the first Tab, and shows the list of candidates on the second Tab.
+It cannot show a menu of candidates below the input on one Tab, as prompt_toolkit, which the Python version used, does.
 
-代わりに、leani は reedline を使う。
-reedline のキーには決まった編集操作しか割り当てられないが、メニューを開く操作は割り当てられるので、space と Tab の略記の変換をメニューとして作れる。
-作り方は `crates/leani/src/term.rs` の doc comment に、確かめた spike は `crates/leani/examples/spike.rs` にある。
+Instead, leani uses reedline.
+reedline keys can only be bound to a fixed set of editing operations, but opening a menu is one of them, so the abbreviation conversion with space and Tab can be built as a menu.
+How it is built is in the doc comment of `crates/leani/src/term.rs`, and the spike that checked it is in `crates/leani/examples/spike.rs`.
 
-### 不採用: 複数行の入力を 1 つの編集バッファで扱う
+### Rejected: Handling a multi-line input in one editing buffer
 
-reedline の `Validator` を使うと、複数の行を 1 つの編集バッファで扱い、確定する前の行に戻って直せる。
-しかし、入力が終わったかを判定するには、1 行ごとにエンジンへ問い合わせる。
-`Validator` を使うと、この問い合わせが reedline の行の編集の中で起きる。
-端末は raw モードのままなので、そのあいだに押した Ctrl-C は SIGINT にならず、問い合わせが終わるまで反映されない。
-Python 版で prompt_toolkit の `multiline=True` を使った場合も同じになる。
-また、leani は 1 回の入力から複数回送ることがあり、確定した入力を直前の入力とつなげて読み直すこともある。
-「1 つのバッファを 1 回送る」形には合わない。
+With reedline's `Validator`, several lines are handled in one editing buffer, and the user can go back to a line and fix it before the input is confirmed.
+However, to judge whether the input has ended, leani queries the engine for each line.
+With `Validator`, this query happens inside reedline's line editing.
+The terminal stays in raw mode, so Ctrl-C pressed during that time does not become SIGINT, and does not take effect until the query ends.
+The same happens with prompt_toolkit's `multiline=True` in the Python version.
+Also, leani sometimes sends several times from one input, and sometimes joins a confirmed input with the previous input and reads them again.
+This does not fit the form "send one buffer once".
 
-代わりに、leani は 1 行ずつ確定する。
-前の行を直したいときは、Ctrl-C で入力を捨て、Ctrl-P で履歴から入力全体を呼び出して直す。
+Instead, leani confirms one line at a time.
+To fix an earlier line, the user discards the input with Ctrl-C, recalls the whole input from history with Ctrl-P, and fixes it.
 
-### 不採用: `x ← e` で実行した結果を変数に残す
+### Rejected: Keeping the result of `x ← e` in a variable
 
-GHCi のように、`x ← e` で IO の結果を変数に残し、次の入力で使えるようにする方法もある。
-しかし、leani は式を `#eval` で送るので、式を評価しても環境は変わらない。
-結果を環境に残すには unsafe な方法か `initialize` が必要になり、`:save` で書き出すファイルとの関係も複雑になる。
+Like GHCi, leani could keep the result of an IO action in a variable with `x ← e`, so that the next input can use it.
+However, leani sends expressions with `#eval`, so evaluating an expression does not change the environment.
+Keeping the result in the environment would need an unsafe method or `initialize`, and the relation to the file that `:save` writes would also become complicated.
 
-代わりに、`(← e)` を含む式は `do` で包み直して送る。
-1 つの入力の中では `(← e)` の結果を使える。
+Instead, leani wraps an expression that contains `(← e)` in `do` and sends it.
+Within one input, the result of `(← e)` can be used.
 
-### 不採用: 問題が起きたら leani を終了する
+### Rejected: Exiting leani when a problem occurs
 
-想定していないエラーや入力を受け取ったら、leani を終了する方法もある。
-しかし、leani を終了すると、それまでに実行した宣言がすべて消える。
-これがユーザーにとって一番大きな損失になる。
+Another option is to exit leani when it receives an error or input that was not expected.
+However, when leani exits, all the declarations run so far are lost.
+This is the biggest loss for the user.
 
-代わりに、leani はどの場合も、失う入力を 1 行分にとどめる。
-例えば `:!` で実行したコマンドを Ctrl-C で止めても、leani は `^C` を表示して動作を続ける。
-パイプで渡した入力に UTF-8 で読めないバイトがあっても、leani はそのバイトを置き換えて Lean に渡し、構文エラーとして報告させる。
+Instead, leani limits the lost input to one line in every case.
+For example, when a command run with `:!` is stopped with Ctrl-C, leani shows `^C` and keeps running.
+When piped input has bytes that cannot be read as UTF-8, leani replaces those bytes, passes the input to Lean, and has Lean report a syntax error.
 
-### 不採用: 入力の終わりで入力途中のブロックを捨てる
+### Rejected: Discarding the unfinished block at the end of input
 
-パイプの入力が終わったときや、端末で Ctrl-D を押したときに、入力途中のブロックを捨てて終了する方法もある。
-しかし、ファイルの最後に空行が無いと、最後のブロックが実行されない。
-端末でも、ブロックの続きを入力している途中で Ctrl-D を押すと、そのブロックが消える。
+Another option is to discard the unfinished block and exit when piped input ends, or when Ctrl-D is pressed in the terminal.
+However, if a file does not end with a blank line, the last block is not run.
+In the terminal too, pressing Ctrl-D while entering the rest of a block loses that block.
 
-代わりに、leani は入力途中のブロックを確定して実行し、そのあと入力を待つ。
-端末では、もう一度 Ctrl-D を押すと終了する。
-`:{` で始めて `:}` で閉じていないブロックは、終わりが分からないので実行せずに知らせる。
+Instead, leani confirms and runs the unfinished block, and then waits for input.
+In the terminal, pressing Ctrl-D again exits.
+A block that starts with `:{` and is not closed with `:}` has no known end, so leani does not run it and reports it.
 
-### 不採用: SIGPIPE を既定の動作に戻す
+### Rejected: Restoring the default action for SIGPIPE
 
-Rust のプログラムは SIGPIPE を無視するので、`leani | head` のように出力先が先に閉じると、書き込みが失敗して panic する。
-SIGPIPE を既定の動作に戻せば、多くのコマンドと同じく、何も表示せずに終了する。
-しかし、SIGPIPE はエンジンへの書き込みでも起きる。
-エンジンが異常終了したあとに書き込むと、leani も終了し、それまでの宣言が消える。
+Rust programs ignore SIGPIPE, so when the output is closed first, as in `leani | head`, a write fails and the program panics.
+If SIGPIPE is restored to its default action, leani exits without printing anything, like many commands.
+However, SIGPIPE also happens on writes to the engine.
+If leani writes to the engine after the engine crashed, leani also exits, and the declarations so far are lost.
 
-代わりに、leani は出力先に書けなくなったことを覚えておき、次の入力を読む前に終了コード 0 で終わる。
+Instead, leani remembers that it can no longer write to the output, and exits with exit code 0 before it reads the next input.
 
-### 不採用: `:undo` と `:reset` で補完のキャッシュを捨てる
+### Rejected: Discarding the completion cache on `:undo` and `:reset`
 
-取り消した宣言の名前が Tab の候補に残らないように、`:undo` と `:reset` のときにキャッシュを捨てる方法もある。
-しかし、環境を戻す操作はほかにもある (入力途中のブロックを捨てたとき、証明モードの書き直し、再起動など)。
-操作ごとに捨てる処理を足すと、次に追加する操作で同じ間違いが起きる。
-「環境が無いときの扱いを、repl に送る関数ごとに直す」を採らなかったのと同じ理由である。
+To keep the names of undone declarations out of the Tab candidates, leani could discard the cache on `:undo` and `:reset`.
+However, other operations also revert the environment (discarding an unfinished block, rewriting in proof mode, restart, and so on).
+If a discard step is added for each operation, the same mistake happens in the next operation that is added.
+This is the same reason why "Fixing the handling of a missing environment in each function that sends to the repl" was not adopted.
 
-代わりに、leani はキャッシュの各項目に、取得したときの環境を記録する。
-その環境が今の環境の元になっているときだけ、キャッシュを使う。
+Instead, leani records, for each cache entry, the environment at the time the entry was fetched.
+leani uses the cache only when that environment is a base of the current environment.
 
-## エンジン
+## Engine
 
-### 不採用: エンジンをユーザーに clone してビルドしてもらう
+### Rejected: Having the user clone and build the engine
 
-leani のインストールとは別に、ユーザーに leanprover-community/repl を clone してビルドしてもらう方法もある。
-しかし、ユーザーから見ると、インストールの手順が 2 つに増えるだけである。
+Another option is to have the user clone and build leanprover-community/repl, separately from installing leani.
+However, for the user, this only adds a second installation step.
 
-代わりに、leani がエンジンを `~/.local/state/leani/engine/<バージョン>` に用意する。
-初回は clone とビルドの時間がかかる。
+Instead, leani prepares the engine in `~/.local/state/leani/engine/<バージョン>`.
+The first time, cloning and building take time.
 
-### 不採用: エンジンを 1 か所に置く
+### Rejected: Keeping the engine in one place
 
-エンジンを 1 つのディレクトリに置き、すべての Lake プロジェクトで使う方法もある。
-しかし、エンジンが `.olean` を読めるかは、エンジンのビルドに使った Lean のバージョンで決まる。
-Lean のバージョンが違う Lake プロジェクトを行き来するたびに、エンジンをビルドし直すことになる。
+Another option is to keep the engine in one directory and use it for all Lake projects.
+However, whether the engine can read `.olean` files depends on the Lean version that was used to build the engine.
+The engine would be built again every time the user moves between Lake projects with different Lean versions.
 
-代わりに、leani は Lean のバージョンごとにディレクトリを分ける。
-2 回目からは、ビルドし直す必要が無い。
+Instead, leani uses a separate directory for each Lean version.
+From the second time on, the engine does not need to be built again.
 
-### 不採用: セッションを pickle で保存する
+### Rejected: Saving the session with pickle
 
-repl の `pickleTo` と `unpickleEnvFrom` でセッションを保存すれば、次の起動が速くなりそうに見える。
-しかし、pickle は import からの差分しか持たないので、unpickle しても `.olean` の読み込み時間は変わらない。
-測ったところ、import は 1.3 秒、unpickle は 1.2 秒で、Mathlib ではどちらも 5.3 秒前後だった。
-さらに、unpickle した環境で `#eval` を実行すると、Lean のコンパイラが PANIC する。
+Saving the session with the repl's `pickleTo` and `unpickleEnvFrom` looks like it would make the next start faster.
+However, a pickle holds only the difference from the imports, so unpickling does not change the time to load `.olean` files.
+In measurements, import took 1.3 seconds and unpickle took 1.2 seconds, and with Mathlib both took about 5.3 seconds.
+Also, running `#eval` in an unpickled environment makes the Lean compiler PANIC.
 
-代わりに、leani は `:save` でセッションを Lean のファイルとして書き出す。
-書き出したファイルは、編集することも `lean` で実行することもできる。
+Instead, leani writes the session to a Lean file with `:save`.
+The written file can be edited, and can be run with `lean`.
 
-### 不採用: import が成功したかを repl の応答で判定する
+### Rejected: Judging whether the import succeeded from the repl's response
 
-起動時の import が成功したかは、repl の応答で判定できそうに見える。
-しかし、repl は解決できない import があると、エラーも stderr も出さずにヘッダを丸ごと捨てて、新しい環境を返す。
-このとき `import Lean` も捨てられるので、入力の判定も補完も使えない環境で leani が起動してしまう。
-`leani -i Leen.Meta` のような書き間違いで、この状態になる。
+It looks as if the repl's response can tell whether the import at startup succeeded.
+However, when an import cannot be resolved, the repl discards the whole header without an error or any stderr output, and returns a new environment.
+`import Lean` is discarded too, so leani starts in an environment where neither input judging nor completion works.
+A typo such as `leani -i Leen.Meta` leads to this state.
 
-代わりに、leani はヘッダと同じリクエストで `#check @Lean.Parser.runParserCategory` を実行し、それが成功するかで判定する。
-起動時は、この方法でリクエストの回数は増えない。
-`:l` でファイルを読み込んだときも、leani は読み込んだあとに同じ確認を実行する。
+Instead, leani runs `#check @Lean.Parser.runParserCategory` in the same request as the header, and judges by whether it succeeds.
+At startup, this method does not add requests.
+When a file is loaded with `:l`, leani runs the same check after loading it.
 
-## 設定と環境の切り替え
+## Settings and switching environments
 
-### 不採用: 設定の型の間違いを、値を使う箇所に任せる
+### Rejected: Leaving type mistakes in the settings to the code that uses the values
 
-設定ファイルの値の型は確認せず、値を使う箇所で間違いに気付く方法もある。
-しかし、TOML には何でも書けるので、`imports = "Mathlib"` もエラーにならない。
-Python 版でこの値をそのまま受け取ると、文字列の 1 文字ずつを import しようとした。
-値を使う箇所でエラーを表示しても、ユーザーには設定のどこが間違っているのか分からない。
+Another option is to not check the types of the values in the settings file, and to notice mistakes where the values are used.
+However, TOML accepts anything, so `imports = "Mathlib"` is not an error either.
+When the Python version took this value as it was, it tried to import each character of the string.
+Even if an error is shown where the value is used, the user cannot tell which part of the settings is wrong.
 
-代わりに、leani は起動する前に設定の型を確認し、間違っているキーの場所をエラーに表示する。
+Instead, leani checks the types of the settings before it starts, and shows the location of the wrong key in the error.
 
-### 不採用: `:env` で準備を済ませる前に今のエンジンを終了する
+### Rejected: Stopping the current engine before `:env` finishes preparing
 
-`:env <name>` を実行したら、まず今のエンジンを終了してから、切り替え先の準備 (Lean のバージョンの決定、エンジンの用意、`lake env` の実行) をする方法もある。
-しかし、準備に失敗すると、ユーザーはセッションを丸ごと失う。
+When `:env <name>` runs, leani could first stop the current engine, and then prepare the target (decide the Lean version, prepare the engine, run `lake env`).
+However, if the preparation fails, the user loses the whole session.
 
-代わりに、leani は今のエンジンを終了する前に準備を済ませる。準備に失敗したら、今のエンジンを終了しない。
-準備が済んだら、今のエンジンを終了してから、切り替え先のエンジンを起動する。
-それでも import が成功するかは、エンジンを起動するまで分からない。
-起動に失敗したら、leani は元の環境でエンジンを起動し直し、入力済みの宣言を再実行する。
-元の環境の起動も失敗したら、環境を失う (端末の leani は終了する)。
+Instead, leani finishes the preparation before it stops the current engine. If the preparation fails, leani does not stop the current engine.
+After the preparation, leani stops the current engine, and then starts the engine for the target.
+Even so, whether the import succeeds is not known until the engine starts.
+If the start fails, leani starts the engine again in the original environment and replays the declarations entered so far.
+If the start in the original environment also fails, the environment is lost (leani in the terminal exits).
 
-### 不採用: 環境が無いときの扱いを、repl に送る関数ごとに直す
+### Rejected: Fixing the handling of a missing environment in each function that sends to the repl
 
-エンジンの起動に失敗すると、leani には宣言を実行する環境が無くなる。
-この状態で型の問い合わせや宣言を repl に送ると、repl はエラーにせず、`import Lean` も無い環境を新しく作って答える。
-返ってくる型は間違っていて、宣言は成功したと答えたあとで消える。
-repl に送る関数を 1 つずつ直す方法もあるが、この種類の間違いは 3 回の点検で 4 件見つかり、そのうち 2 件は前の回で追加したコードの中にあった。
-1 つずつ確認するやり方では、次に追加するコードで同じ間違いが起きる。
+When the engine fails to start, leani has no environment to run declarations in.
+If a type query or a declaration is sent to the repl in this state, the repl does not return an error, and answers by creating a new environment that does not even have `import Lean`.
+The returned type is wrong, and a declaration disappears after the repl answers that it succeeded.
+Each function that sends to the repl could be fixed one by one, but 3 reviews found 4 mistakes of this kind, and 2 of them were in code added in the previous review.
+If each function is checked one by one, the same mistake happens in the next code that is added.
 
-代わりに、leani は repl にコマンドを送る関数 1 か所で確認する。
-環境が無ければ、この関数は `EngineFault::NoEnvironment` を返し、どうするかは呼び出し側が決める。
-決めていない呼び出し側は 1 行分の「内部エラー」で止まるので、間違った型が返ったり宣言が消えたりするより原因を見つけやすい。
+Instead, leani checks in one place: the function that sends commands to the repl.
+If there is no environment, this function returns `EngineFault::NoEnvironment`, and the caller decides what to do.
+A caller that has not decided stops with a one-line "internal error", which makes the cause easier to find than a wrong type or a lost declaration.
 
-## 定理の検索
+## Theorem search
 
-### 不採用: 定理の検索を Lean の `#loogle` で済ませる
+### Rejected: Using Lean's `#loogle` for theorem search
 
-エンジンで `import LeanSearchClient` すれば、`#loogle` を Lean のコマンドとして使えるので、leani 側は何も書かなくてよい。
-しかし、検索がエンジンとのやりとりの中で実行されるので、検索を Ctrl-C で止めると、leani はエンジンを作り直して宣言を再実行することになる。
-結果は Lean のメッセージとして返るので、leani は結果を画面の幅で切ったり、モジュール名を添えたりできない。
-また、LeanSearchClient は依存に追加するパッケージなので、Mathlib を使わない環境では検索できない。
+With `import LeanSearchClient` in the engine, `#loogle` can be used as a Lean command, so leani does not need any code for it.
+However, the search runs inside the exchange with the engine, so when a search is stopped with Ctrl-C, leani has to create the engine again and replay the declarations.
+The results come back as Lean messages, so leani cannot cut the results to the screen width or add module names.
+Also, LeanSearchClient is a package that is added as a dependency, so search does not work in environments that do not use Mathlib.
 
-代わりに、leani は自分で loogle に HTTP リクエストを送る。
-検索はエンジンとは関係なく実行されるので、検索しても環境は変わらない。
+Instead, leani sends HTTP requests to loogle itself.
+The search runs separately from the engine, so searching does not change the environment.
 
 ## Jupyter
 
-### 不採用: Jupyter のカーネルに lean4_jupyter を使う
+### Rejected: Using lean4_jupyter for the Jupyter kernel
 
-Lean 4 の Jupyter カーネルには、すでに lean4_jupyter (https://github.com/utensil/lean4_jupyter) がある。
-2026 年 9 月に Lean v4.34.1 と組み合わせて試したところ、セルは実行できたが、次の機能が無かった。
+There is already a Jupyter kernel for Lean 4: lean4_jupyter (https://github.com/utensil/lean4_jupyter).
+When it was tried with Lean v4.34.1 in September 2026, cells ran, but the following features were missing.
 
-- 補完 (候補が 1 件も返らない)
-- エンジンが異常終了したあとの復帰 (以後のセルがすべてエラーになる)
-- 証明が完了したときに `sorry` を置き換える機能
+- Completion (no candidates are returned)
+- Recovery after the engine crashes (all later cells fail with errors)
+- Replacing `sorry` when a proof is complete
 
-leani にはどれもすでにある。
-代わりに、leani の `Repl` (Python 版) をそのまま使うカーネルを作り、セルの各行を端末で入力したときと同じ順に `Repl` に渡す。
+leani already has all of these.
+Instead, a kernel was made that uses leani's `Repl` (the Python version) as it is, and passes each line of a cell to `Repl` in the same order as when the lines are entered in the terminal.
 
-### 不採用: 端末の REPL と一緒に Jupyter のカーネルも Rust に移す
+### Rejected: Moving the Jupyter kernel to Rust together with the terminal REPL
 
-leani を Rust に移すときに、Jupyter のカーネルも同時に移す方法もある。
-しかし、Rust でカーネルを作るには、Jupyter とのメッセージのやりとり (ZeroMQ) を扱う crate を選んで試すことになり、端末の REPL の移植とは別の作業になる。
-同時に移すと、移植が終わるまで端末の REPL も切り替えられない。
+When leani was moved to Rust, the Jupyter kernel could have been moved at the same time.
+However, building a kernel in Rust means choosing and trying a crate that handles the message exchange with Jupyter (ZeroMQ), which is separate work from porting the terminal REPL.
+If both were moved at the same time, the terminal REPL could not be switched until the port was finished.
 
-代わりに、カーネルは Python 版のまま残し、`leani-kernel` コマンドで起動する。
-Python 版はカーネルのためだけに残し、カーネルの不具合だけを直す。
-端末の REPL に足した機能は、カーネルを Rust に移すまでカーネルでは使えない。
+Instead, the kernel stays in the Python version, and starts with the `leani-kernel` command.
+The Python version is kept only for the kernel, and only kernel bugs are fixed in it.
+Features added to the terminal REPL are not available in the kernel until the kernel is moved to Rust.
 
-## 開発
+## Development
 
-### 不採用: できることの一覧を、コードとは別の文書に書く
+### Rejected: Writing the list of what leani can do in a document separate from the code
 
-leani ができることの一覧を、コードとは別の文書として管理する方法もある。
-しかし、コードから機械的に導けない文書は、いずれコードの変更に追いつかなくなる。
+Another option is to maintain the list of what leani can do as a document separate from the code.
+However, a document that cannot be derived mechanically from the code will sooner or later fall behind changes to the code.
 
-代わりに、テストの doc comment (Python 版は docstring) の `ja:` と `en:` の行を仕様の文にして、`SPEC.ja.md` と `SPEC.en.md` を生成する。
-手で書き足す場所は作らない。
-生成し忘れたときは、`spec::check` を呼ぶテスト (parsing.rs の X1 と X2) が失敗する。
+Instead, the `ja:` and `en:` lines in the doc comments of the tests (docstrings in the Python version) become the spec sentences, and `SPEC.ja.md` and `SPEC.en.md` are generated from them.
+There is no place to add text by hand.
+If someone forgets to generate them, the tests that call `spec::check` (X1 and X2 in parsing.rs) fail.
 
-この仕組みが保証するのは、仕様の文がテストのすぐ隣にあることと、文を変えれば `SPEC.ja.md` と `SPEC.en.md` も変わることまでである。
-文がテストの中身と合っているかと、`en:` の文が `ja:` の文と合っているかは保証しない。
-それは、テストと文を読んで確かめるしかない。
+This mechanism guarantees only that each spec sentence is right next to its test, and that changing a sentence also changes `SPEC.ja.md` and `SPEC.en.md`.
+It does not guarantee that a sentence matches what the test does, or that an `en:` sentence matches its `ja:` sentence.
+That can only be checked by reading the tests and the sentences.
 
-### 不採用: ユーザーストーリーとテストを 1 対 1 にする
+### Rejected: Matching user stories and tests one to one
 
-ユーザーストーリーごとに `describe_` を 1 つ作る方法もある。
-しかし、それではテストの分け方を、ストーリーの分け方に合わせることになる。
-テストは、失敗する理由が 1 つになるように、できるだけ速い層に置くように分けたい。
+Another option is to make one `describe_` for each user story.
+However, that would make the division of the tests follow the division of the stories.
+The tests should be divided so that each test fails for only one reason, and is placed in the fastest layer possible.
 
-代わりに、各テストに `#[story(...)]` で対応するストーリーを書き、`crates/spec` が突き合わせる。
-ストーリーはテストが足りているかを数えるための表なので、テストとの対応は多対多でよい。
+Instead, each test names its stories with `#[story(...)]`, and `crates/spec` matches them.
+Stories are a table for counting whether there are enough tests, so stories and tests can be many-to-many.
 
-### 不採用: テストの文を文字列で書くマクロ
+### Rejected: A macro that takes the test sentence as a string
 
-Rust 版で、テストの文を `it!("単独の式は評価されて値が表示される", story = ["A1"], { ... })` のように文字列で書く proc-macro を試作した。
-しかし、試作で次のことが分かった。
-rust-analyzer のアウトラインに `it!` のテストが出ない。
-rustfmt は `it!(...)` を関数の呼び出しとして整形するので、文が長いと呼び出しが複数行に分かれる。
-describe にあたる `mod` の名前は識別子のままなので、文の書き方が 2 通りになる。
-Python 版ではマクロを使えないので、Rust と Python で文の書き方が分かれる。
+In the Rust version, a proc-macro was prototyped that takes the test sentence as a string, as in `it!("単独の式は評価されて値が表示される", story = ["A1"], { ... })`.
+However, the prototype showed the following.
+Tests written with `it!` do not appear in the rust-analyzer outline.
+rustfmt formats `it!(...)` as a function call, so a long sentence splits the call into several lines.
+The name of the `mod` that serves as the describe stays an identifier, so there would be two ways of writing sentences.
+The Python version cannot use macros, so Rust and Python would write sentences in different ways.
 
-代わりに、文は doc comment の `ja:` と `en:` の行に書く (次の節)。
-関数名には `it_` のような接頭辞を付けない。
-Rust では `#[test]` と `#[proptest]` が、Python 版では describe の中の `@story` が、テストの目印になる。
-pytest-describe は describe の中の `_` で始まらない関数をすべてテストとして集めるので、Python 版でも接頭辞は要らない。
-describe の側の `describe_` は、pytest-describe が describe を見つけるために必要なので付ける。
+Instead, sentences are written on the `ja:` and `en:` lines of the doc comment (next section).
+Function names do not get a prefix such as `it_`.
+In Rust, `#[test]` and `#[proptest]` mark a test. In the Python version, `@story` inside a describe marks a test.
+pytest-describe collects every function inside a describe whose name does not start with `_` as a test, so the Python version does not need a prefix either.
+The `describe_` on the describe side is added because pytest-describe needs it to find describes.
 
-### 不採用: テストの文を日本語の関数名に書く
+### Rejected: Writing the test sentence as a Japanese function name
 
-テストの関数名を日本語の文にし、`crates/spec` が関数名を文に戻して仕様の文にする方法もある。
-以前はこの形だった。
-しかし、関数名には記号を書けないので、`:` を `colon_` と書くような、関数名を文に戻す規則が要る。
-また、1 つのテストに文を 1 つしか置けないので、英語の文を置く場所が無い。
-日本語を読まない人にも一覧を読んでもらうこと (X2) を決めたので、この形をやめた。
+Another option is to make the test function name a Japanese sentence, and have `crates/spec` turn the function name back into the spec sentence.
+This was the earlier form.
+However, function names cannot contain symbols, so rules are needed to turn a function name back into a sentence, such as writing `:` as `colon_`.
+Also, a test can hold only one sentence, so there is no place for an English sentence.
+After it was decided that people who do not read Japanese should also be able to read the list (X2), this form was dropped.
 
-代わりに、文はテストの doc comment (Python 版は docstring) の `ja:` と `en:` の行に書き、関数名は `en:` の文から機械的に作る。
-名前を別に考えなくてよいので、テストを 1 件書くたびに考えるのは、日本語と英語の 2 つの文だけで済む。
-その代わり、関数名は長くなる。rustfmt は名前を折り返さないので、100 列を超える `fn` の行がある。
-文が Given / When / Then の形になっているかと、`en:` の文が `ja:` の文の訳として合っているかは、`crates/spec` では確かめない。
-テストを書く人が、DEVELOPMENT.md の「テストの文の書き方」に従って確かめる。
+Instead, sentences are written on the `ja:` and `en:` lines of the test's doc comment (docstring in the Python version), and the function name is made mechanically from the `en:` sentence.
+There is no need to think of a separate name, so for each test, the writer only has to think of two sentences, one in Japanese and one in English.
+In exchange, function names are long. rustfmt does not wrap names, so some `fn` lines are longer than 100 columns.
+`crates/spec` does not check whether a sentence has the Given / When / Then form, or whether an `en:` sentence is a correct translation of the `ja:` sentence.
+The person who writes the test checks them by following "Writing test sentences" in DEVELOPMENT.md.
 
-### 不採用: テストの文をテストとは別のファイルに置く
+### Rejected: Keeping test sentences in a file separate from the tests
 
-テストの文を `stories.toml` のような別のファイルに置き、テストとは ID で結びつける方法もある。
-文を複数の言語で書きやすくなる。
-しかし、それは、できることの一覧をコードとは別の文書に書くことと同じになる。
-文がテストから離れると、テストを直したときに文を直し忘れても、何も失敗しない。
+Another option is to keep test sentences in a separate file such as `stories.toml`, and link them to the tests by ID.
+This makes it easier to write the sentences in several languages.
+However, that is the same as writing the list of what leani can do in a document separate from the code.
+When the sentences are away from the tests, nothing fails if someone fixes a test and forgets to fix its sentence.
 
-代わりに、文はテストの doc comment の `ja:` と `en:` の行に書く。
-`ja:` の文だけをテストの隣に置き、訳文を別のファイルに置く形も採らない。
-訳文をテストと結びつけるキーが要り、テストの名前を変えるたびにキーも直すことになる。
-訳文がテストから離れると、`ja:` の文を直したときに訳文を直し忘れやすい。
+Instead, sentences are written on the `ja:` and `en:` lines of the test's doc comment.
+leani also does not adopt the form that keeps only the `ja:` sentence next to the test and puts the translations in a separate file.
+The translations would need a key to link them to the tests, and the key would have to be fixed every time a test is renamed.
+When a translation is away from its test, it is easy to forget to fix the translation after fixing the `ja:` sentence.
 
-3 つ目の言語を足すことになったら、`ja:` と `en:` はテストの隣に残し、3 つ目からの言語の文を言語ごとのファイルに置く。
-そのときは、訳文に元にした文のハッシュを持たせる。元の文を変えると、訳文が古いことを `crates/spec` が検出できる。
-今は言語が 2 つなので、この仕組みは作らない。
+If a third language is added, `ja:` and `en:` stay next to the tests, and the sentences in the third and later languages go in a file for each language.
+In that case, each translation holds a hash of the sentence it was made from. When the original sentence changes, `crates/spec` can detect that the translation is out of date.
+There are two languages now, so this mechanism is not built.
 
-### 不採用: 開発用のスキルの手順をすべて AI に任せる
+### Rejected: Leaving every step of the development skills to AI
 
-`.claude/skills/` の開発用のスキル (レビュー、テストの文の確認、訳の反映など) で、対象を集めることから結果をまとめることまでを、すべて AI に任せる方法もある。
-しかし、AI は実行するたびに、集める範囲と確かめる観点が変わる。
-同じ変更に同じスキルを 2 回実行しても、同じ結果になるとは限らない。
+For the development skills in `.claude/skills/` (review, checking test sentences, applying translations, and so on), another option is to leave every step, from collecting the targets to summarizing the results, to AI.
+However, each time AI runs, the range it collects and the points it checks change.
+Running the same skill twice on the same change does not always give the same result.
 
-代わりに、スキルを 3 つの段に分ける。
-対象を集める段と、結果を確かめてまとめる段は、リポジトリの中のスクリプトにして、`just` から実行し、テストを書く。
-AI には、集めた対象について判断する段だけを任せ、答えの形を JSON の schema で決めておく。
-スクリプトの入力と出力はファイルに残し、あとから同じ入力で確かめ直せるようにする。
+Instead, a skill is split into three stages.
+The stage that collects the targets and the stage that checks and summarizes the results are scripts in the repository, run from `just`, with tests.
+AI handles only the stage that makes judgments about the collected targets, and the form of its answer is fixed in advance with a JSON schema.
+The input and output of the scripts are kept in files, so they can be checked again later with the same input.
 
-### 不採用: コードを 1 つの crate にまとめる
+### Rejected: Putting the code in one crate
 
-コードを 1 つの crate にまとめ、副作用の有無でモジュールを分ける方法もある。
-しかし、Python 版のコードを 1 ファイルにまとめた案で参照を数えたところ、副作用の無いセクションが副作用のあるセクションを参照している箇所が 4 種類あった。
-1 つの crate の中では、どのモジュールも `crate::` でほかのモジュールを参照できるので、参照の向きが逆になってもそのままコンパイルでき、コードを読んで気付くしかない。
+Another option is to put the code in one crate, and divide the modules by whether they have side effects.
+However, when references were counted in a plan that put the Python code in one file, there were 4 kinds of places where a section without side effects referred to a section with side effects.
+Inside one crate, any module can refer to other modules through `crate::`, so a reference in the wrong direction still compiles, and the only way to notice it is to read the code.
 
-代わりに、副作用の有無ごとに crate を分ける (`leani-core` ← `leani-read` ← `leani`)。
-参照の向きが crate の依存の向きになるので、逆向きの参照はコンパイルエラーになる。
-std の関数で副作用を起こすことは crate の依存では防げないので、`leani-core` と `leani-read` の `clippy.toml` で禁じる。
-Python 版は、副作用の有無ごとにモジュールを分け、import の向きを `ruff` で確かめている。
+Instead, the crates are divided by whether they have side effects (`leani-core` ← `leani-read` ← `leani`).
+The direction of references becomes the direction of crate dependencies, so a reference in the wrong direction is a compile error.
+Crate dependencies cannot prevent side effects through std functions, so `clippy.toml` in `leani-core` and `leani-read` forbids them.
+The Python version divides modules by whether they have side effects, and checks the direction of imports with `ruff`.
 
-### 不採用: 依存の向きをテストで確認する
+### Rejected: Checking the direction of dependencies with tests
 
-このリポジトリは約束をテストに書くので、依存の向きと禁じた関数も、crate のソースを syn で読むテストで確認する方法がある。
-しかし、構文木をたどる処理を自分で保守することになる。
-`use` の別名やマクロの中の呼び出しのような書き方をすべて防げたかが分からないまま、「テストがあるから守られている」ことになる。
+This repository writes its rules as tests, so the direction of dependencies and the forbidden functions could also be checked by tests that read the crate sources with syn.
+However, that means maintaining our own code that walks the syntax tree.
+Without knowing whether it catches every way of writing, such as aliases in `use` or calls inside macros, the rules would be treated as "kept because there is a test".
 
-代わりに、crate の依存と、clippy の `disallowed-methods` と `disallowed-types` を使う。
-新しいコマンドは増えず、`cargo clippy` が違反した行を示して失敗する。
-その代わり、この約束は `SPEC.ja.md` と `SPEC.en.md` に出ないので、各 crate の `lib.rs` の doc comment に書いた。
+Instead, leani uses crate dependencies and clippy's `disallowed-methods` and `disallowed-types`.
+No new command is added, and `cargo clippy` fails and shows the line that breaks a rule.
+In exchange, these rules do not appear in `SPEC.ja.md` and `SPEC.en.md`, so they are written in the doc comment of each crate's `lib.rs`.
 
-### 不採用: repl の応答を struct で検証する
+### Rejected: Validating repl responses with structs
 
-repl の応答を serde で struct に読めば、キーの名前の間違いをコンパイラが見つけられる。
-しかし、repl のバージョンが変わって型が変わったり、キーが無くなったりすると、使っていないキーのせいで応答全体がエラーになる。
-leani は応答の一部しか使わないので、使わないキーの変化は無視できたほうがよい。
+If repl responses are read into structs with serde, the compiler can find mistakes in key names.
+However, when the repl version changes and a type changes or a key disappears, the whole response becomes an error because of a key that leani does not use.
+leani uses only part of each response, so it is better if changes in keys that leani does not use can be ignored.
 
-代わりに、応答は `serde_json::Value` のまま受け取り、使うキーだけを読む箇所で取り出す。
-キーが無いときや型が違うときは、読む箇所で既定値に置き換える。
-キーの名前の間違いをその場で見つけられないことは承知している。
-Python 版も同じ理由で pydantic を使わず、`TypedDict(total=False)` を使っている。
+Instead, leani receives a response as a `serde_json::Value`, and takes out only the keys it uses, at the place that reads them.
+When a key is missing or has a different type, the place that reads it replaces it with a default value.
+A mistake in a key name is not found at that place. This is known and accepted.
+The Python version does not use pydantic for the same reason, and uses `TypedDict(total=False)`.
 
-### 不採用: property test をエンジンと端末のテストにも使う
+### Rejected: Using property tests for engine and terminal tests too
 
-property test を、純粋関数だけでなく、エンジンと端末のテストにも使う方法もある。
-しかし、エンジンのテストは 1 件ごとに repl とのやりとりを含むので、100 個の例を生成すると 1 件に何分もかかる。
-また、エンジンの層の反例からは「この操作の並びでおかしくなった」ことしか分からず、原因を読み取りにくい。
+Another option is to use property tests not only for pure functions but also for engine and terminal tests.
+However, each engine test includes exchanges with the repl, so generating 100 examples makes one test take several minutes.
+Also, a counterexample at the engine layer only tells that "this sequence of operations went wrong", and the cause is hard to read from it.
 
-代わりに、property test (proptest) は純粋関数のテストだけに使う。
-エンジンの層では、`crates/leani/tests/common/mod.rs` の `INVARIANTS` (1 行ごとに確認する不変条件) を使う。
-不変条件のほうが、原因に近いところで失敗する。
+Instead, property tests (proptest) are used only for tests of pure functions.
+At the engine layer, leani uses `INVARIANTS` in `crates/leani/tests/common/mod.rs` (invariants checked after each line).
+Invariants fail closer to the cause.
 
-### 不採用: 不変条件を守るメソッドの一覧を doc comment と INVARIANTS に書く
+### Rejected: Listing the methods that keep each invariant in doc comments and INVARIANTS
 
-`INVARIANTS` の項目ごとに、その条件を守るメソッドの名前を doc comment とコメントに書く方法もある。
-しかし、メソッドの名前を変えたり、状態を変えるメソッドを足したりすると、一覧が実装とずれる。
-一覧が正しいかどうかは、テストで確かめられない。
+Another option is to write, for each item in `INVARIANTS`, the names of the methods that keep that condition in doc comments and comments.
+However, when a method is renamed, or a method that changes state is added, the list stops matching the implementation.
+Tests cannot check whether the list is correct.
 
-代わりに、`Engine` のフィールドを private にし、`Engine` のメソッドだけが書き換えられるようにする。
-この決まりはコンパイラが守る (Python 版では `rg` で確かめていた)。
-`Repl` が持つ `held` と `proof` の扱いは、証明モードを別のモジュールに分けるときに、そのモジュールの中で決める。
+Instead, the fields of `Engine` are private, so that only methods of `Engine` can change them.
+The compiler enforces this rule (in the Python version it was checked with `rg`).
+How `held` and `proof` in `Repl` are handled will be decided inside the proof mode module, when proof mode is moved to a separate module.
 
-### 不採用: 状態遷移を、エンジンを操作する手続きの中に書く
+### Rejected: Writing state transitions inside the procedures that operate the engine
 
-`:env` で環境を切り替える手順は、以前は `Repl::cmd_env` の中に、エンジンの起動と終了、表示と一緒に書いてあった。
-しかし、それでは、どの状態でどの結果が来たら何をするかを、一覧で読める場所が無い。
-テストの文を書き直したとき、切り替え先の起動に失敗したら元の環境でエンジンを起動し直すことを読み落とし、「元の環境のエンジンは動いたままにする」という誤った文を書いた。
+The steps for switching environments with `:env` used to be written inside `Repl::cmd_env`, together with starting and stopping the engine and the output.
+However, that left no place where one could read, as a list, what to do when a given result comes in a given state.
+When the test sentences were rewritten, the writer missed that leani starts the engine again in the original environment when the target fails to start, and wrote the wrong sentence 「元の環境のエンジンは動いたままにする」 ("keeps the engine of the original environment running").
 
-代わりに、起動の結果を受けたあとの遷移を `leani-core` の純粋な関数 (`switch::on_boot`) にし、`Repl::cmd_env` はその関数が返した「次にすること」を実行するだけにする。
-`on_boot` の `match` では、切り替え先の起動に失敗したら元の環境で起動する (`GoBack`) ことが 1 行で読める。
-エンジンを起動せずに、起動の結果のすべての組み合わせ (9 通り) をテストで確かめられる。組み合わせが少ないので、property test ではなく、すべてを並べたテストにした。
-今のエンジンを終了させる手順と、最初に切り替え先を起動することは、`cmd_env` に残っている。`switch` のモジュールの doc に書いてある。
+Instead, the transition after the start result is received is a pure function in `leani-core` (`switch::on_boot`), and `Repl::cmd_env` only does the "next step" that this function returns.
+In the `match` in `on_boot`, one line shows that when the target fails to start, leani starts in the original environment (`GoBack`).
+Tests check all combinations of start results (9 cases) without starting the engine. There are few combinations, so the test lists all of them instead of using a property test.
+The steps that stop the current engine, and the first start of the target, remain in `cmd_env`. This is written in the doc of the `switch` module.
 
-今この形にしたのは `:env` だけである。
-`:restart` とエンジンの異常終了からの回復も同じ形にするかは、`:env` で効果を見てから決める。
+Only `:env` has this form now.
+Whether `:restart` and recovery from engine crashes get the same form will be decided after seeing the effect on `:env`.
 
-### 不採用: Python 版のまま、約束を lint で守り続ける
+### Rejected: Staying with the Python version and keeping the rules with lint
 
-leani の約束 (純粋なモジュールは副作用のモジュールを import しない、`Engine` の属性は `Engine` のメソッドだけが書き換える、など) は、Python 版では `ruff` と `rg` で確かめていた。
-しかし、`import leani` のように `ruff` では検出できない書き方があり、`rg` の確認は実行し忘れると何も確かめない。
+leani's rules (pure modules do not import modules with side effects, only methods of `Engine` change the attributes of `Engine`, and so on) were checked with `ruff` and `rg` in the Python version.
+However, some ways of writing, such as `import leani`, cannot be detected by `ruff`, and the `rg` check checks nothing if someone forgets to run it.
 
-代わりに、leani を Rust に移した。
-crate の依存の向き、private のフィールド、clippy で禁じた関数と型で、約束をコンパイラと lint が守る。
-性能と配布の手軽さは、移した主な理由ではない。
+Instead, leani was moved to Rust.
+The compiler and lint keep the rules through the direction of crate dependencies, private fields, and the functions and types forbidden in clippy.
+Performance and ease of distribution were not the main reasons for the move.
 
-### 不採用: テストごとにプロセス全体の状態を書き換える
+### Rejected: Changing the state of the whole process in each test
 
-Python 版のテストは、環境変数、PATH、カレントディレクトリを monkeypatch で書き換えていた。
-pytest-xdist はテストを別のプロセスに分けるので、書き換えてもほかのテストには影響しなかった。
-しかし、`cargo test` は 1 つのテストバイナリの中のテストを、同じプロセスのスレッドで並列に動かす。
-環境変数やカレントディレクトリを書き換えると、同時に動いているほかのテストの結果が変わる。
+The tests of the Python version changed environment variables, PATH, and the current directory with monkeypatch.
+pytest-xdist runs tests in separate processes, so these changes did not affect other tests.
+However, `cargo test` runs the tests in one test binary in parallel, on threads of the same process.
+Changing environment variables or the current directory changes the results of other tests running at the same time.
 
-代わりに、`main.rs` が起動時に 1 回だけ環境変数を読んで `Ctx` を作り、ほかの関数は `Ctx` を引数で受け取る。
-lib は環境変数とカレントディレクトリを書き換えず、子プロセスには `Command::env` と `current_dir` で渡す。
-テストは `Ctx` をテストごとに作る。
-テストを動かす正式な方法は、テストごとに別のプロセスで動かす `cargo nextest run` にした。
+Instead, `main.rs` reads environment variables once at startup and makes a `Ctx`, and other functions receive `Ctx` as an argument.
+The lib does not change environment variables or the current directory, and passes them to child processes with `Command::env` and `current_dir`.
+Each test makes its own `Ctx`.
+The official way to run the tests is now `cargo nextest run`, which runs each test in a separate process.
 
-## 文書
+## Documents
 
-### 不採用: 日本語の文書を原本にして、英語の文書を訳にする
+### Rejected: Making the Japanese documents the originals and the English documents translations
 
-README、DEVELOPMENT、DECISIONS、guide の文書を、日本語を原本にして英語に訳す方法もある。
-しかし、そうすると、英語を読む人は文書を直せない。
-英語の文書だけを直しても、次に日本語から訳し直したときに、その直しが消えるからである。
+Another option is to make Japanese the original for the README, DEVELOPMENT, DECISIONS, and guide documents, and translate them into English.
+However, then people who read English cannot fix the documents.
+This is because a fix made only to an English document is lost the next time the Japanese is translated again.
 
-代わりに、英語の `X.md` と日本語の `X.ja.md` のどちらも原本として扱う。
-どちらの言語から追加、変更、削除してもよく、同じ commit でもう片方の文書にも同じ変更を入れる。
-片方の文書だけを変えた commit があると、`just check` が失敗する。
-英語の文書を `X.md` にするのは、GitHub がリポジトリの最初の画面に README.md を表示するからである。
-確かめるのは 2 つの文書が同じ commit で変わったことだけなので、訳の中身が合っているかは、読んで確かめるしかない。
+Instead, both the English `X.md` and the Japanese `X.ja.md` are treated as originals.
+Content may be added, changed, or removed from either language, and the same commit makes the same change in the other document.
+If a commit changes only one of the two documents, `just check` fails (`crates/docs-pair`).
+When there is a reason to change only one document, such as fixing a typo that exists in only one of them, write a `Docs-Pair-Skip:` line in the commit message.
+Only commits are checked, not uncommitted changes. This is so that `just check` can run while one document is being edited.
+The English document is `X.md` because GitHub shows README.md on the first page of the repository.
+The check only confirms that the two documents changed in the same commit, so whether the translation matches can only be checked by reading it.
 
-### 不採用: 1 つのソースから日本語と英語の文書を生成する
+### Rejected: Generating the Japanese and English documents from one source
 
-段落ごとに `ja:` と `en:` を並べた 1 つのファイルを書き、そこから `X.md` と `X.ja.md` を生成する方法もある。
-テストの文から `SPEC.ja.md` と `SPEC.en.md` を作るのと同じ仕組みで、片方の言語の段落が無ければエラーにできる。
-しかし、見出しや表まで 1 行ずつ `ja:` と `en:` に分けて書くことになり、普通の Markdown として書けない。
-エディタのプレビューも使えない。
-生成した `X.md` を直接直すと、次に生成したときにその直しが消える。
+Another option is to write one file with `ja:` and `en:` side by side for each paragraph, and generate `X.md` and `X.ja.md` from it.
+This is the same mechanism that makes `SPEC.ja.md` and `SPEC.en.md` from the test sentences, and it can report an error when a paragraph in one language is missing.
+However, even headings and tables would have to be split line by line into `ja:` and `en:`, so the file could not be written as normal Markdown.
+Editor previews would not work either.
+If someone fixes a generated `X.md` directly, the fix is lost the next time it is generated.
 
-代わりに、普通の Markdown の文書を言語ごとに持つ (前の節)。
+Instead, leani keeps a normal Markdown document for each language (previous section).

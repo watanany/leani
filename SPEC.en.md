@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-44 stories, 474 tests. In parentheses: where the test is
+45 stories, 481 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -505,6 +505,7 @@ Not built yet.
 - Keeps the open from init when :reset runs (engine / Handling init)
 - Undoes the last n declarations when :undo n runs (engine / Undoing declarations)
 - Discards pending declarations with a notice when :reset runs and does not replay them on :restart (engine / Declarations missing from the environment)
+- Shows the restored env without a count of discarded declarations when :reset runs with no pending declarations (engine / Declarations missing from the environment)
 - Says there is no base environment and keeps the pending declaration when :reset runs (engine / When the base environment is lost)
 - Undoes one declaration when :undo runs with an argument that is not a number (engine / Argument parsing)
 - Keeps the earlier declaration when :prove runs after :undo of a declaration with a sorry (engine / Proof mode)
@@ -803,3 +804,12 @@ Not built yet.
 ### X2 I want people who do not read Japanese to be able to read the list of what leani can do
 
 - Generates the same content as SPEC.en.md from the en lines of the tests and stories (parsing / Property list)
+
+### X3 I want people who do not read Japanese to be able to read how to use and develop leani
+
+- Returns an error naming the unchanged document when a commit changes only one document of a pair (parsing / Checking documents in two languages)
+- Returns Ok when a commit changes both documents of a pair (parsing / Checking documents in two languages)
+- Returns Ok when a commit whose message has a line starting with Docs-Pair-Skip: changes only one document of a pair (parsing / Checking documents in two languages)
+- Returns an error naming the document when it has no counterpart in the other language (parsing / Checking documents in two languages)
+- Returns Ok when a commit adds the Japanese document for a document that only had the English one (parsing / Checking documents in two languages)
+- Returns Ok when only CLAUDE.md, SPEC.ja.md and SPEC.en.md have no counterpart in the other language (parsing / Checking documents in two languages)

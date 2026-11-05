@@ -1,13 +1,13 @@
-# 証明モード
+# Proof mode
 
-エディタで Lean を書くときのように、ゴールを見ながらタクティクを 1 つずつ入力するモード。
+A mode for entering tactics one at a time while looking at the goals, as you do when you write Lean in an editor.
 
-REPL では書きかけの証明を入力できないので、埋めたい位置に `sorry` を書いて定理を入力する。
-leani は `sorry` の位置のゴールを表示する。続けて `:prove` を実行すると、
-その `sorry` をタクティクで 1 つずつ埋めていける。
-証明が終わると、leani は `sorry` を証明に置き換えた定理を実行し直す。
+The REPL does not accept an unfinished proof, so write `sorry` where you want to fill in the proof and enter the theorem.
+leani shows the goal at the position of `sorry`. Then run `:prove`,
+and you can fill that `sorry` with tactics one at a time.
+When the proof is finished, leani runs the theorem again with `sorry` replaced by the proof.
 
-## 例
+## Example
 
 ```
 λ> theorem tt (n : Nat) : n + 0 = n := by sorry
@@ -39,10 +39,10 @@ goal
       | succ k ih => simp
 ```
 
-## sorry を書く位置
+## Where to write sorry
 
-`sorry` は証明の途中に書いてもよい。表示されるゴールは、その位置までのタクティクを
-実行したあとのもの。置き換えるのは `sorry` だけで、前後のタクティクはそのまま残る。
+`sorry` may be written in the middle of a proof. The goal shown is the goal after running the tactics
+up to that position. Only `sorry` is replaced, and the tactics before and after it stay as they are.
 
 ```lean
 theorem foo (hp : p) (hq : q) : p ∧ q := by
@@ -51,38 +51,38 @@ theorem foo (hp : p) (hq : q) : p ∧ q := by
   · sorry
 ```
 
-`sorry` が 2 つ以上あるときは、`:prove 2` のように何番目の `sorry` かを指定する。
-1 つ証明し終わったら、残りの `sorry` も `:prove <n>` で続けて証明できる。
-`:= sorry` のように項の位置に書いた `sorry` は置き換えられない (宣言は `sorry` のまま残る)。
+When there are two or more `sorry`, specify which `sorry` by its number, as in `:prove 2`.
+After you finish proving one, you can prove the remaining `sorry` with `:prove <n>` in turn.
+A `sorry` written in term position, as in `:= sorry`, cannot be replaced (the declaration stays as `sorry`).
 
-## 入力
+## Input
 
-- 1 回の入力が 1 タクティクになる。
-- `induction n with` のように続きが必要な行を入力すると、` | ` で続きを待つ。空行で確定する。
-- ゴールが 2 つ以上あるときは、`goal 1/2` のように番号を付けて全部表示する。
-- エラーになったタクティクは記録しない。状態はそのままなので、別のタクティクを入力し直せる。
+- One input is one tactic.
+- When you enter a line that needs a continuation, such as `induction n with`, leani waits for the continuation with ` | `. An empty line finishes the input.
+- When there are two or more goals, leani shows all of them with numbers, as in `goal 1/2`.
+- A tactic that results in an error is not recorded. The state does not change, so you can enter a different tactic.
 
-## コマンド
+## Commands
 
-| コマンド       | 動作                                        |
-|----------------|---------------------------------------------|
-| `:goals`, `:g` | 今のゴールを表示する                        |
-| `:script`      | ここまでに入力したタクティクを表示する      |
-| `:undo`        | 直前のタクティクを 1 つ取り消す             |
-| `:done`, `:q`  | 証明を途中でやめる (宣言は `sorry` のまま)  |
-| `:help`        | 証明モードのコマンドを表示する              |
+| Command        | Action                                                  |
+|----------------|---------------------------------------------------------|
+| `:goals`, `:g` | Shows the current goals                                 |
+| `:script`      | Shows the tactics entered so far                        |
+| `:undo`        | Undoes the last tactic                                  |
+| `:done`, `:q`  | Stops the proof partway (the declaration stays `sorry`) |
+| `:help`        | Shows the proof mode commands                           |
 
-`:t` や `:i` などのほかのコマンドも、証明モードのまま使える。
-証明モードの `:q` は leani を終了しない。証明モードを終えるだけ。
+Other commands such as `:t` and `:i` can be used while in proof mode.
+In proof mode, `:q` does not quit leani. It only ends proof mode.
 
-証明モードの外で `:goals` を実行すると、残っている `sorry` とそれぞれのゴールを表示する。
+When you run `:goals` outside proof mode, leani shows the remaining `sorry` and the goal of each.
 
-## 提案されたタクティク
+## Suggested tactics
 
-`exact?` や `simp?` を入力すると、Lean が提案したタクティク (`exact Nat.add_zero n` など) をスクリプトに記録する。
-完成した宣言には `exact?` ではなく、提案されたタクティクが入る。
+When you enter `exact?` or `simp?`, leani records the tactic that Lean suggests (such as `exact Nat.add_zero n`) in the script.
+The finished declaration contains the suggested tactic, not `exact?`.
 
-## 注意
+## Notes
 
-- `:prove` で証明できるのは、**直前に入力した宣言**の `sorry` だけ。あとから別の宣言を入力すると、`:prove` は使えなくなる。
-- 証明の途中でエンジンが再起動すると、証明モードは終わる。入力したタクティクは反映されない。
+- `:prove` can only prove the `sorry` in **the declaration entered last**. If you enter another declaration after it, `:prove` can no longer be used.
+- If the engine restarts during a proof, proof mode ends. The tactics you entered are not applied.

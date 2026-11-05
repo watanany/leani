@@ -1990,6 +1990,20 @@ mod declarations_missing_from_the_environment {
         assert!(repl.feed(&["#check libD"]).contains("libD : Nat"));
         assert!(!repl.feed(&["#check @usesD"]).contains("usesD : Nat"));
     }
+
+    /// ja: 保留した宣言が無いときに :reset すると、戻した env を表示し、捨てた宣言の件数を表示しない
+    /// en: Shows the restored env without a count of discarded declarations when :reset runs with no pending declarations
+    #[story("F2")]
+    #[test]
+    fn shows_the_restored_env_without_a_count_of_discarded_declarations_when_reset_runs_with_no_pending_declarations()
+     {
+        let mut repl = Driver::new();
+        repl.feed(&["def x := 1"]);
+
+        let out = repl.feed(&[":reset"]);
+        assert!(out.contains("に戻した"), "{out}");
+        assert!(!out.contains("捨てた"), "{out}");
+    }
 }
 
 mod imports_of_a_loaded_file {
