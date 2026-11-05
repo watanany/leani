@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-44 stories, 467 tests. In parentheses: where the test is
+44 stories, 473 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -635,6 +635,11 @@ Not built yet.
 - Returns an error asking for a table when env or env.m is not a table (parsing / Types of config values)
 - Returns an error naming default when default is not a string (parsing / Types of config values)
 - Returns the name, imports and prompt unchanged from a correctly written config (parsing / Types of config values)
+- Discards the failed engine and starts the original environment when the target environment fails or is interrupted (parsing / Steps to switch environments with env)
+- Installs the started engine when the original environment starts again (parsing / Steps to switch environments with env)
+- Goes on without an engine when starting the original environment again is interrupted (parsing / Steps to switch environments with env)
+- Loses the environment when starting the original environment again fails (parsing / Steps to switch environments with env)
+- Starts only the target and then the original environment and installs an engine only when one starts for any startup results (parsing / Steps to switch environments with env)
 - Returns the version mismatch and the lake build repl step when engine and project versions differ (parsing / Reasons to abort startup)
 - Returns no reason when engine and project toolchains differ only in how they are written (parsing / Reasons to abort startup)
 - Returns a reason saying there is no Lake project when the project directory does not exist (parsing / Reasons to abort startup)
@@ -678,6 +683,12 @@ Not built yet.
 - Chooses the plain environment with the given imports when only imports are given (parsing / Choosing the environment to start)
 - Uses the engine of the environment if it has one and the top-level engine otherwise (parsing / Choosing the environment to start)
 - Uses the top-level engine when only imports are given without a name (parsing / Choosing the environment to start)
+- Installs the started engine when the target environment starts (parsing / Steps to switch environments with env)
+- Discards the failed engine and starts the original environment when the target environment fails or is interrupted (parsing / Steps to switch environments with env)
+- Installs the started engine when the original environment starts again (parsing / Steps to switch environments with env)
+- Goes on without an engine when starting the original environment again is interrupted (parsing / Steps to switch environments with env)
+- Loses the environment when starting the original environment again fails (parsing / Steps to switch environments with env)
+- Starts only the target and then the original environment and installs an engine only when one starts for any startup results (parsing / Steps to switch environments with env)
 - Takes the value of -e or --env as the environment name (parsing / Command-line options)
 - Returns an error naming the option for -e, -i, or -p without a value (parsing / Command-line options)
 - Changes the prompt to the one set for the environment when :env switches environments (terminal / Switching environments)

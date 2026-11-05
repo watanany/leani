@@ -11,6 +11,7 @@
 //! width     端末で表示したときの文字の幅の表 (定数)
 //! history   履歴ファイルの形式の読み書き (純粋)
 //! pure      判定と整形 (純粋)
+//! switch    :env で環境を切り替える手順 (純粋)
 //! ```
 //!
 //! 位置は byte で扱う。Lean の `column` (コードポイント単位) との変換は `pure::offset`
@@ -21,5 +22,6 @@ pub mod abbrev;
 pub mod history;
 pub mod pure;
 pub mod queries;
+pub mod switch;
 pub mod types;
 mod width;

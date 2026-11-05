@@ -29,6 +29,7 @@ use leani_core::pure::{
     splice_sorry, strip_imports, tactic_parse_error, tactic_step, tactic_undo, text, try_this,
 };
 use leani_core::queries::{COMPLETE_QUERY, DOC_QUERY, META_LINE, PARSE_PROBE, SCOPE_QUERY, fill};
+use leani_core::switch::{self, Booted, Next, Switch};
 use leani_core::types::{Candidate, EngineFault, Json, Kind, Output, Proof, Scope, State};
 use leani_read::complete::candidates;
 use leani_read::config::{EnvConfig, config_envs, env_names, load_config, problem, resolve};
@@ -1863,41 +1864,60 @@ impl Repl {
         let mut hook = self.eng.take_hook();
         self.eng.kill();
 
-        let eng = match boot_engine(&self.ctx, target, &mut hook, self.out.as_mut(), self.style) {
-            Ok(eng) => eng,
-            Err((e, dead)) => {
-                // import が成功するかは boot するまで分からない。元の環境に戻す。
-                self.keep_failed(dead);
-                self.out.fail(
-                    &self
-                        .style
-                        .red(&format!("{arg} で起動できなかった: {}", reason(&e))),
-                );
-                self.out
-                    .write(&self.style.dim(&format!("  {} に戻る", back.name)));
-                let name = back.name.clone();
-                match boot_engine(&self.ctx, back, &mut hook, self.out.as_mut(), self.style) {
-                    Ok(eng) => eng,
-                    Err((EngineFault::Interrupted, dead)) => {
-                        // 戻るのを Ctrl-C で中断した。環境は無いが理由も無いので、
-                        // :restart の中断と同じく、宣言を保留にしてセッションを続ける。
-                        // 古いエンジンを残す。:l したファイルと init を持っているのは
-                        // 古いエンジンなので、:restart がそれを読み込み直せる。
-                        self.out.write(&self.style.yellow(&format!(
-                            "^C {name} に戻るのを中断した。:restart でやり直せる"
-                        )));
-                        self.keep_failed(dead);
-                        self.lose_engine(None, hook);
-                        self.eng.carry(log);
-                        return;
-                    }
-                    Err((e, dead)) => {
-                        // 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
-                        // 終了し、カーネルは次のセルでエンジンを起動し直す。
-                        self.lost = Some(format!("{name} にも戻れなくなった: {e}"));
-                        self.lose_engine(dead, hook);
-                        return;
-                    }
+        // どの順に起動し、起動の結果ごとに次に何をするかは switch::on_boot が決める。
+        // ここでは、決まったことを実行して表示するだけにする。
+        let mut now = Switch::Target { to: target, back };
+        let eng = loop {
+            let name = now.booting().name.clone();
+            let got = match boot_engine(
+                &self.ctx,
+                now.booting().clone(),
+                &mut hook,
+                self.out.as_mut(),
+                self.style,
+            ) {
+                Ok(eng) => Booted::Ok(eng),
+                Err((EngineFault::Interrupted, dead)) => {
+                    Booted::Interrupted((EngineFault::Interrupted, dead))
+                }
+                Err(failed) => Booted::Failed(failed),
+            };
+            match switch::on_boot(now, got) {
+                Next::Install(eng) => break eng,
+                Next::GoBack {
+                    failed: (e, dead),
+                    next,
+                } => {
+                    // import が成功するかは boot するまで分からない。元の環境に戻す。
+                    self.keep_failed(dead);
+                    self.out.fail(
+                        &self
+                            .style
+                            .red(&format!("{arg} で起動できなかった: {}", reason(&e))),
+                    );
+                    self.out
+                        .write(&self.style.dim(&format!("  {} に戻る", next.booting().name)));
+                    now = next;
+                }
+                Next::Suspend((_, dead)) => {
+                    // 戻るのを Ctrl-C で中断した。環境は無いが理由も無いので、
+                    // :restart の中断と同じく、宣言を保留にしてセッションを続ける。
+                    // 古いエンジンを残す。:l したファイルと init を持っているのは
+                    // 古いエンジンなので、:restart がそれを読み込み直せる。
+                    self.out.write(&self.style.yellow(&format!(
+                        "^C {name} に戻るのを中断した。:restart でやり直せる"
+                    )));
+                    self.keep_failed(dead);
+                    self.lose_engine(None, hook);
+                    self.eng.carry(log);
+                    return;
+                }
+                Next::Lose((e, dead)) => {
+                    // 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
+                    // 終了し、カーネルは次のセルでエンジンを起動し直す。
+                    self.lost = Some(format!("{name} にも戻れなくなった: {e}"));
+                    self.lose_engine(dead, hook);
+                    return;
                 }
             }
         };

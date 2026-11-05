@@ -7,6 +7,7 @@ use leani_core::abbrev::{
 };
 use leani_core::pure::{self, PAIRS, Style};
 use leani_core::queries::{BLOCK_OPEN, DECL_NAME, INCOMPLETE};
+use leani_core::switch::{self, Booted, Next, Switch};
 use leani_core::types::{EngineFault, Json, Kind, Proof, SearchError, State, Target};
 use leani_read::args::{Args, parse_args};
 use leani_read::config::{self, EnvConfig};
@@ -1250,6 +1251,122 @@ engine = "/m/engine"
         let dir = tmp();
         let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
         assert_eq!(got.engine.as_deref(), Some("/top/engine"));
+    }
+}
+
+mod steps_to_switch_environments_with_env {
+    //! ja: :env で環境を切り替える手順
+    //! en: Steps to switch environments with env
+    //!
+    //! 環境は名前で表す。切り替え先は wide、元の環境は core にする。起動したエンジンと、
+    //! 起動に失敗したエンジンは `()` で表す。
+    use super::*;
+
+    type Step = Next<&'static str, (), ()>;
+
+    fn target() -> Switch<&'static str> {
+        Switch::Target {
+            to: "wide",
+            back: "core",
+        }
+    }
+
+    fn back() -> Switch<&'static str> {
+        Switch::Back { back: "core" }
+    }
+
+    /// 切り替えを、`results` の順に起動の結果を受けながら最後まで進める。起動した環境の
+    /// 順と、最後に決まったことを返す。結果が足りなくなったら失敗する。
+    fn run(results: Vec<Booted<(), ()>>) -> (Vec<&'static str>, Step) {
+        let mut now = target();
+        let mut started = Vec::new();
+        for got in results {
+            started.push(*now.booting());
+            match switch::on_boot(now, got) {
+                Next::GoBack { next, .. } => now = next,
+                end => return (started, end),
+            }
+        }
+        panic!("起動の結果が足りない: {started:?}")
+    }
+
+    /// ja: 切り替え先の起動に成功すると、起動したエンジンを今のエンジンにする
+    /// en: Installs the started engine when the target environment starts
+    #[story("G5")]
+    #[test]
+    fn installs_the_started_engine_when_the_target_environment_starts() {
+        assert_eq!(switch::on_boot(target(), Booted::Ok(())), Step::Install(()));
+    }
+
+    /// ja: 切り替え先の起動が失敗しても中断しても、起動に失敗したエンジンを捨てて、元の環境でエンジンを起動する
+    /// en: Discards the failed engine and starts the original environment when the target environment fails or is interrupted
+    #[story("G4", "G5")]
+    #[test]
+    fn discards_the_failed_engine_and_starts_the_original_environment_when_the_target_environment_fails_or_is_interrupted()
+     {
+        for got in [Booted::Failed(()), Booted::Interrupted(())] {
+            let next = switch::on_boot(target(), got);
+            assert_eq!(
+                next,
+                Step::GoBack {
+                    failed: (),
+                    next: back()
+                }
+            );
+        }
+        assert_eq!(*back().booting(), "core");
+    }
+
+    /// ja: 元の環境に戻る起動に成功すると、起動したエンジンを今のエンジンにする
+    /// en: Installs the started engine when the original environment starts again
+    #[story("G4", "G5")]
+    #[test]
+    fn installs_the_started_engine_when_the_original_environment_starts_again() {
+        assert_eq!(switch::on_boot(back(), Booted::Ok(())), Step::Install(()));
+    }
+
+    /// ja: 元の環境に戻る起動を中断すると、エンジンが無いまま続ける
+    /// en: Goes on without an engine when starting the original environment again is interrupted
+    #[story("G4", "G5")]
+    #[test]
+    fn goes_on_without_an_engine_when_starting_the_original_environment_again_is_interrupted() {
+        assert_eq!(
+            switch::on_boot(back(), Booted::Interrupted(())),
+            Step::Suspend(())
+        );
+    }
+
+    /// ja: 元の環境に戻る起動に失敗すると、環境を失う
+    /// en: Loses the environment when starting the original environment again fails
+    #[story("G4", "G5")]
+    #[test]
+    fn loses_the_environment_when_starting_the_original_environment_again_fails() {
+        assert_eq!(switch::on_boot(back(), Booted::Failed(())), Step::Lose(()));
+    }
+
+    /// ja: どの起動の結果の組み合わせでも、切り替え先、元の環境の順に 2 回までしか起動せず、どちらかの起動に成功したときだけエンジンを今のエンジンにする
+    /// en: Starts only the target and then the original environment and installs an engine only when one starts for any startup results
+    #[story("G4", "G5")]
+    #[test]
+    fn starts_only_the_target_and_then_the_original_environment_and_installs_an_engine_only_when_one_starts_for_any_startup_results()
+     {
+        let all = || [Booted::Ok(()), Booted::Interrupted(()), Booted::Failed(())];
+        for first in all() {
+            for second in all() {
+                let ok = first == Booted::Ok(()) || second == Booted::Ok(());
+                let want: &[&str] = match first {
+                    Booted::Ok(()) => &["wide"],
+                    _ => &["wide", "core"],
+                };
+                let (started, end) = run(vec![first.clone(), second.clone()]);
+                assert_eq!(started, want, "{first:?} {second:?}");
+                assert_eq!(
+                    end == Step::Install(()),
+                    ok,
+                    "{first:?} {second:?}: {end:?}"
+                );
+            }
+        }
     }
 }
 
