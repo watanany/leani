@@ -4,6 +4,9 @@ leani: Lean 4 の対話 REPL の Python 版。
 端末の REPL (`leani` コマンド) は Rust 版 (`crates/`) に移した。Python 版は Jupyter の
 カーネル (`leani.kernel`) のためだけに残してあり、カーネルの不具合だけを直す。
 
+関数とクラスの多くは、Rust 版に同じ名前のものがある。設計の理由は Rust 版の doc comment
+に書いてあるので、Python 版の docstring とコメントには、Python 版だけの理由を書く。
+
 エンジンは leanprover-community/repl。repl は JSON を受け取って JSON を返す
 プログラム向けのプロトコルなので、leani が人間向けの層を担当する。
 

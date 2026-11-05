@@ -116,8 +116,6 @@ class Proof:
     goals: tuple[str, ...]
     gen: int  # この proofState を作ったエンジンの世代
     script: tuple[str, ...] = ()
-    # :undo 用。タクティクを実行する前の proofState とゴール。ゴールも戻さないと、
-    # :undo のあとの :goals が取り消したタクティクのあとのゴールを表示する。
     stack: tuple[tuple[int, tuple[str, ...]], ...] = ()
 
 

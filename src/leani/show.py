@@ -36,8 +36,6 @@ class Console:
         print(text, flush=True)
 
     def shell(self, cmd: str) -> None:
-        # 出力を受け取らず、端末につないだまま実行する。vim のような対話するコマンドも
-        # 使えるように。
         subprocess.run(cmd, shell=True, check=False)
 
     def page(self, text: str) -> None:
@@ -58,10 +56,6 @@ def die(msg: str) -> NoReturn:
 def panic_check(out: Output, resp: Response) -> bool:
     """
     エンジンが PANIC を出力したら、普通の結果として扱わずに警告を表示する。
-
-    利用者が入力したもの (式、do の読み直し、宣言、タクティク) の応答だけを調べる。
-    :l、init、replay の応答は調べない。利用者が意図して panic! を書いたファイルも
-    あるので、そのファイルの読み込みを失敗にしないため。
     """
     line = panic_line(resp)
     if line is None:
@@ -83,7 +77,6 @@ def render(
         paint = PAINT.get(sev, plain)
         data = (m.get("data") or "").rstrip()
         at = span(m, lines, line_off, col_off) if sev in PAINT else None
-        # error のメッセージは fail に出す。位置の行とキャレットも含めて 1 回で出す。
         emit = out.fail if sev == "error" else out.write
         if at is None:
             emit(paint(data))
@@ -102,16 +95,12 @@ def render(
 
     note = resp.get("message")
     if isinstance(note, str) and note.strip():
-        # repl がリクエスト全体を拒否した (env や proofState が無い)。messages は
-        # 空なので、ここで表示しないと画面に何も表示されない。
         out.fail(red(note.strip()))
         out.write(
             dim("  leani が持っている環境がエンジンに無い。:restart で再起動できる")
         )
 
     if has_error(resp):
-        # エラーになった宣言は環境に追加されていない。その sorry のゴールを表示しても
-        # 証明を書けないので、エラーの後ろに役に立たないゴールが並ぶだけになる。
         return
 
     for i, sy in enumerate(sorries(resp)):

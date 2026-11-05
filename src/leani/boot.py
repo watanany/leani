@@ -57,19 +57,6 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
     """
     使う Lean のバージョン。プロジェクト、ユーザーが指定したエンジン、elan の
     デフォルトの順に探す。
-
-    2 番目はユーザーが自分で指定したエンジン用。leani はそれをビルドし直さないので、
-    合わせるべきバージョンは「そのエンジンをビルドしたバージョン」しかない。leani が
-    用意したエンジンなら engine が None なので、2 番目は飛ばして elan のデフォルトの
-    バージョンを使う。
-
-    `stable` のようなチャンネルは、今のバージョンに置き換える。エンジンのディレクトリは
-    toolchain の名前で決まるので、チャンネルの名前のままだと、チャンネルが新しい
-    バージョンに進んでも、前のバージョンでビルドしたエンジンを使い続ける。今の
-    バージョンを取得できなければ、チャンネルの名前のまま使う。自分で指定した
-    エンジンのディレクトリは toolchain で決まらないので置き換えない。置き換えると、
-    エンジンの lean-toolchain と名前が違うことになり、起動のたびに toolchain が違う
-    という警告が出る。
     """
     tc = read_toolchain(cfg.project) or read_toolchain(cfg.engine)
     if tc is None:
@@ -83,11 +70,6 @@ def guess_toolchain(cfg: EnvConfig) -> str | None:
 def toolchain(cfg: EnvConfig) -> str:
     """
     使うバージョンを決める。分からなければ leani は起動を中止する。
-
-    lean はカレントディレクトリの lean-toolchain を見てバージョンを決めるので、
-    プロジェクトの外から実行するとデフォルトのバージョンが選ばれて .olean を読めなく
-    なる。ここで決めたバージョンを elan run で固定し、エンジンもそのバージョンで
-    ビルドする。
     """
     tc = guess_toolchain(cfg)
     if tc is None:
@@ -102,10 +84,6 @@ def toolchain(cfg: EnvConfig) -> str:
 def manual_setup(path: str, tc: str, tag: str | None) -> str:
     """
     自動で用意できなかったときに表示する手順。
-
-    タグを省くと HEAD を clone することになりバージョンが合わないので、必ずタグを
-    指定する。使うバージョンでビルドし直すところまで含めて、ensure_engine と同じ
-    ことを手動で行う手順にする。
     """
     branch = tag or f"<{toolchain_version(tc)} 以下で一番新しいタグ>"
     return (
@@ -140,7 +118,6 @@ def fetch_tags() -> list[str]:
     if r.returncode != 0:
         raise EngineError(f"repl のタグを取得できなかった:\n{r.stderr.strip()}")
 
-    # 各行は "<sha>\trefs/tags/v4.33.0" の形。タグ名だけを取り出す。
     return [
         ref.rpartition("/")[2]
         for ref in r.stdout.split()
@@ -166,10 +143,6 @@ def run_setup(cmd: Sequence[str], cwd: str | None = None) -> None:
 def build_engine(path: str, tc: str, tag: str) -> None:
     """
     タグのソースを、使うバージョンでビルドして配置する。
-
-    .olean を読めるかどうかはビルドに使った Lean のバージョンで決まるので、clone
-    した lean-toolchain を書き換えてからビルドする。ビルドに成功してから os.replace
-    で配置するので、途中で中断しても不完全なディレクトリが残らない。
     """
     version = toolchain_version(tc)
     note = "" if tag == version else f" (タグ {tag} を {version} でビルドする)"
@@ -188,8 +161,6 @@ def build_engine(path: str, tc: str, tag: str) -> None:
         if not os.path.isfile(f"{tmp}/.lake/build/bin/repl"):
             raise EngineError(f"ビルドしたのに repl が無い: {tmp}")
 
-        # ビルドしているあいだに別の leani がエンジンを配置していたら、そのエンジンは
-        # 使用中かもしれないので、消さずに使う。
         if os.path.isfile(f"{path}/.lake/build/bin/repl"):
             print(dim(f"別の leani がエンジンを用意していた: {path}"), flush=True)
             return
@@ -227,8 +198,6 @@ def ensure_engine(engine: str | None, tc: str, asked: bool = False) -> str:
         version = toolchain_version(tc)
         tag = pick_tag(version, fetch_tags())
         if tag is None and version_key(version) is None:
-            # nightly や stable。バージョンとして解釈できないので比較できない。repl の
-            # master は最新の Lean に追従しているので、master で試す。
             tag = "master"
             print(dim(f"{version} に対応するタグは無い。master で試す"), flush=True)
         elif tag is None:
@@ -266,9 +235,6 @@ def lake_env(project: str | None, tc: str = "") -> dict[str, str]:
     return parse_env_lines(read_text(cache) or "")
 
 
-# これらのファイルがキャッシュより新しければ取得し直す。manifest は依存パッケージの
-# バージョン、lean-toolchain は core のバージョンを決める。どちらが変わっても
-# LEAN_PATH は変わる。
 LAKE_ENV_INPUTS = ("lake-manifest.json", "lean-toolchain")
 
 
@@ -330,10 +296,6 @@ def write_lake_env(cache: str, project: str) -> None:
 def prepare(cfg: EnvConfig) -> None:
     """
     その環境で leani を起動できるようにする。エンジンが無ければここで用意する。
-
-    Engine を作る前に呼べる。:env の切り替えでは今のエンジンを終了させる前に
-    実行するので、ここでエラーになった場合は何も変えずに済む。lake env の結果も
-    先に取得してキャッシュしておく (Engine の中で失敗させない)。
     """
     tc = toolchain(cfg)
     ensure_engine(cfg.engine, tc)

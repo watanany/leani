@@ -1,7 +1,4 @@
-"""設定 (読み取り)。
-
-どの Lake プロジェクトの上で何を import して起動するか。ファイルと環境変数を
-見るが、何も書き換えない。"""
+"""設定 (読み取り)。"""
 
 from __future__ import annotations
 
@@ -21,11 +18,6 @@ from leani.types import ConfigError, Json
 class EnvConfig:
     """
     どの Lake プロジェクトの上で何を import して起動するか。
-
-    ghci の ~/.ghci、ipython の profile と同じ位置づけ。特定のプロジェクト名を
-    コードに書かないため、名前は設定ファイル (config.toml) と CLI 引数だけに書く。
-    設定が無くても、leani はカレントディレクトリの Lake プロジェクトから推測して
-    起動する。
 
     作ったあとは変えないので frozen にする。作るときは値を整える make を使う。
     """
@@ -84,9 +76,6 @@ def as_str(value: Any, where: str) -> str | None:
 def as_imports(value: Any, where: str) -> Sequence[str]:
     """
     import のリスト。
-
-    文字列 1 つをエラーにせずに受け取ると 1 文字ずつの import になる。どれも解決
-    できないので、repl はヘッダ全体を捨てる (import Lean も消える)。なのでエラーにする。
     """
     match value:
         case None:
@@ -167,10 +156,6 @@ def lean_libs(path: str) -> list[str]:
 def problem(cfg: EnvConfig) -> str | None:
     """
     この環境で起動できない理由。無ければ None。
-
-    起動時と :env の切り替え時の両方で使う。切り替えでは今のエンジンを
-    終了させる前に呼ぶので、問題があれば今のセッションを残したままエラーにできる。
-    この関数は状態を見るだけで、何も変えない。
     """
     # Lean のバージョンが違うエンジンは `.olean` を読めず、repl は起動直後に
     # 異常終了する。
@@ -184,19 +169,14 @@ def problem(cfg: EnvConfig) -> str | None:
         ),
         (not shutil.which("elan"), "elan が PATH に無い"),
         (not shutil.which("lake"), "lake が PATH に無い"),
-        # leani がエンジンを用意する場合に必要なもの。取得する前に確認する。
         (
             cfg.engine is None and not shutil.which("git"),
             f"git が PATH に無い。エンジン ({ENGINE_REPO}) の取得に使う",
         ),
-        # 指定されたエンジンは leani が管理しないので、必要なファイルがあるかだけ
-        # 確認する。
         (
             cfg.engine is not None and not os.path.isdir(cfg.engine),
             f"指定されたエンジンが無い: {cfg.engine}",
         ),
-        # エンジンの Lean のバージョンを決めるのはこのファイルだけ。無いと elan の
-        # デフォルトの toolchain が使われ、エラーが出ないまま正しく実行できなくなる。
         (
             cfg.engine is not None
             and os.path.isdir(cfg.engine)
@@ -273,14 +253,11 @@ def resolve(
 ) -> EnvConfig:
     """
     CLI 引数と設定ファイルから、起動する環境を 1 つ決める。
-
-    優先順は 引数 > 名前付き環境 > default > カレントディレクトリの Lake プロジェクト。
     """
     conf = load_config() if cfg is None else cfg
     table = as_table(conf.get("env"), "env")
     engine = as_str(conf.get("engine"), "engine")
     mods = tuple(imports or ())
-    # 名前も -i も -p も無いときだけ default を使う。
     chosen = (
         as_str(conf.get("default"), "default")
         if name is None and not mods and not project

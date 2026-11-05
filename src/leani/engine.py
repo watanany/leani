@@ -1,7 +1,4 @@
-"""エンジン (副作用)。
-
-repl のプロセスを 1 つ管理し、JSON のリクエストとレスポンスをやりとりする。
-プロセスが異常終了したら再起動して replay する。"""
+"""エンジン (副作用)。"""
 
 from __future__ import annotations
 
@@ -49,16 +46,12 @@ class Loaded(NamedTuple):
     resp: Response
     bad: bool
     src: str
-    # probe_env が失敗した理由か、init を再適用できなかったときの理由
     note: str | None = None
 
 
 class Replay(NamedTuple):
     """
     replay の結果。環境に戻せなかったものもすべて含めて返す。
-
-    件数だけを返すと、失敗した宣言も読み込み直せなかったファイルも、何も表示されずに
-    消える。環境から無くなったものは必ず報告する。
     """
 
     done: list[str]  # 成功した宣言
@@ -163,13 +156,6 @@ class Engine:
     def _died(self) -> EngineDied:
         """
         プロセスがどう終了したかをエラーメッセージに含める。
-
-        バージョンの合わない .olean や使えなくなったエンジンを読み込むと、repl は何も
-        出力せずにシグナルで終了する。終了の仕方を記録しないと呼び出し側は理由を示せず、
-        「import に失敗した」という推測だけが表示される。ユーザーは正しく書いた
-        import を疑うところから調べることになる。
-
-        EOF を読んだ直後は、まだ終了ステータスを取得できないことがあるので、少し待つ。
         """
         code = None
         if self.proc is not None:
@@ -233,14 +219,6 @@ class Engine:
     def send_cmd(self, src: str, fresh: bool = False) -> Response:
         """
         コマンドを 1 つ送る。`fresh` は「新しい環境を作る」ことを明示する引数。
-
-        env があるかどうかは、このメソッドだけで確認する (probe_env は env を明示して
-        send を直接呼ぶ)。
-        `env` キーを付けずに送ると、repl はエラーにせず、Init だけの環境を新しく
-        作ってその環境で答えてしまう。そのため「環境が無いときにどうするか」は
-        必ず呼び出し側が決めることにして、決めていない呼び出しは送る前にエラーに
-        する。boot が失敗した状態の扱いを書き忘れても、間違った結果を返すのでは
-        なく `NoEnvironment` を raise する。
         """
         if fresh:
             return self.send({"cmd": src})
@@ -282,11 +260,6 @@ class Engine:
     def push_decl(self, saved: Undone) -> bool:
         """
         pop_decl で取り消したものを元に戻す。戻せなければ False を返す。
-
-        世代が変わっていたら戻さない。保存した env id は終了したプロセスのもので、
-        新しいエンジンには存在しない。それを今の env に設定すると、以後の cmd は
-        存在しない環境に送られ (repl は "Unknown environment." を返すだけ)、
-        何を入力しても何も起きなくなる。宣言は呼び出し側が再実行する。
         """
         if saved.gen != self.gen:
             return False
@@ -302,9 +275,6 @@ class Engine:
     def reset(self) -> int:
         """
         宣言をすべて捨てて base の環境に戻る。保留中の宣言も捨て、その件数を返す。
-
-        base が無い (boot に失敗した) ときは `NoEnvironment` を raise する。env に
-        None を設定し直しても、どの入力も送れない状態のまま保留だけが消える。
         """
         if self.base is None:
             raise NoEnvironment("元になる環境が無いのに :reset しようとした")
@@ -328,13 +298,6 @@ class Engine:
     def sources(self) -> list[str]:
         """
         今の環境を構成しているソース。:save はこれを書き出す。
-
-        log だけでは足りない。init と :l したファイルの内容は base の環境に含まれて
-        いるので、それも並べないと、書き出したファイルを :l で読み込み直せない。
-
-        並べる順は実際に実行した順にする。:l は環境を作り直すので、init はその
-        あとに実行される (load_file が再適用する)。逆の順に並べると、init が :l
-        したファイルの名前を使っているときに、書き出したファイルがエラーになる。
         """
         parts = [self.loaded_src, self.init_src, *self.log]
         return [src.strip() for src in parts if src and src.strip()]
@@ -355,13 +318,6 @@ class Engine:
         self.env, self.stack = None, []
         resp = self.send_cmd(self.cfg.boot_header + BOOT_PROBE, fresh=True)
         if has_error(resp):
-            # ヘッダにエラーがあるか、import が 1 つでも解決できずにヘッダ全体が
-            # 無視されたか。後者の場合 repl はエラーを出さずに env を返すので、
-            # BOOT_PROBE が失敗することでしか検出できない。そのまま起動すると
-            # import Lean も無い環境になり、完結判定も補完も宣言もすべて失敗する。
-            # repl のメッセージもそのまま表示する。toolchain を変更して .olean の
-            # バージョンが一致しなくなったときは、このメッセージにしか情報が無い
-            # (import 自体は正しく書かれている)。
             why = error_text(resp)
             head = f"import に失敗した: {' '.join(['Lean', *self.cfg.imports])}"
             raise EngineDied(f"{head}\n{textwrap.indent(why, '  ')}" if why else head)
@@ -381,12 +337,6 @@ class Engine:
         try:
             self.boot()
         except (EngineDied, Interrupted, OSError, KeyboardInterrupt):
-            # boot が失敗した。プロセスは再起動したので前の env id は無効になって
-            # いて、宣言はどの環境にも含まれていない。log に残すと len(stack) と
-            # 一致しなくなり、:save が環境に無い宣言を本体に書き出す。保留にすれば
-            # コメントとして書き出され、ユーザーは直してから :restart で再実行できる。
-            # base も捨てる。:reset が無効な id を設定し直すと、submit は env が
-            # None かどうかしか見ないので検出できず、何を入力してもエラーになる。
             self.env = self.base = None
             self.stack, self.log, self.unplayed = [], [], log
             raise
@@ -440,9 +390,6 @@ class Engine:
         """
         init のソースを今の環境で実行する。エラーが無ければ、その環境を base にし、
         再起動したときに再実行できるよう src を init_src に保存する。
-
-        エラーのときは状態を変えずに応答を返す。表示と init_src の扱いは呼び出し側が
-        決める。
         """
         resp = self.send_cmd(src)
         if has_error(resp):
@@ -481,11 +428,6 @@ class Engine:
     def probe_env(self, env: int) -> str | None:
         """
         その環境で import が有効になっているかを確認する。有効でなければ理由を返す。
-
-        import が 1 つでも解決できないと、repl はヘッダ全体を無視して (エラーも
-        出さずに) 環境を返す。boot と同じく :l でも BOOT_PROBE で検査しないと、
-        「読み込んだ」と報告したあと、完結判定も補完も宣言もすべて失敗する環境で
-        作業を続けることになる。:save も同じ import を書き出す。
         """
         resp = self.send({"cmd": BOOT_PROBE, "env": env})
         if not has_error(resp):
@@ -501,9 +443,6 @@ class Engine:
     def replay(self, log: Sequence[str]) -> Replay:
         """
         宣言を今の環境でもう一度実行する。失敗したものは飛ばして続ける。
-
-        :restart と、:env で環境を切り替えたあとに宣言を再実行する処理の両方が
-        これを使う。失敗した宣言を何も表示せずに消さないよう、結果は Replay で返す。
         """
         done: list[str] = []
         failed: list[str] = []
@@ -520,27 +459,16 @@ class Engine:
             try:
                 resp = self.send_cmd(src)
             except (EngineDied, Interrupted):
-                # まだ実行していない宣言は unplayed に保留する。エンジンを直せば
-                # :restart でやり直せる。ここで捨てると、入力した宣言が失われる。
-                #
-                # log に加えてはいけない。log は env に含まれている宣言の並びで、
-                # stack と 1 対 1 に対応している。env に無い宣言を加えると、
-                # :undo と sorry の置き換えが別の宣言を消してしまう。
                 rest = list(log[n:])
                 self.unplayed = failed + rest + self.unplayed
                 return Replay(done, failed, rest, [], found)
 
             if has_error(resp):
-                # 宣言のテキストは保留にする。失敗の原因はユーザーの操作ではない
-                # ので、「再実行に失敗した」と報告するだけで、入力された宣言を消しては
-                # いけない。読み込むファイルを直せば、次の :restart で成功する。
                 failed.append(src)
                 continue
 
             self.accept(resp, src)
             done.append(src)
-            # 最後に成功した宣言の sorry だけを保存する。証明中だった宣言は
-            # log の末尾にあるので、これで :prove を再開できる。
             found = sorries(resp)
 
         self.unplayed = failed + self.unplayed
@@ -574,13 +502,8 @@ class Engine:
             self.env = self.base = resp["env"]
             self.loaded, self.loaded_src = path, strip_imports(raw)
             self.loaded_imports = import_lines(raw)
-            # fresh で環境を作り直したので、init の内容は環境から消えている。
-            # 再適用しないと、sources() が env に無い宣言を返し続ける。
             note = self.reapply_init()
         else:
-            # 読み込みに失敗しても、今の環境は失わないようにする。env が None の
-            # ままだと、以後の入力が import の無い環境に送られ、何を書いても
-            # エラーになる。
             self.env, self.stack, self.log, self.unplayed = keep
 
         return Loaded(resp, bad, src, note)

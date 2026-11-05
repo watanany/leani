@@ -1,7 +1,4 @@
-"""判定と整形 (純粋)。
-
-色付け、応答の読み取り、エンジンのバージョン、完結判定、表示の組み立てを扱う。
-入力だけで出力が決まるので、テストは入力と出力だけで書ける。"""
+"""判定と整形 (純粋)。"""
 
 from __future__ import annotations
 
@@ -98,11 +95,6 @@ def lean_strs(xs: Sequence[str]) -> str:
 def name_start(text: str) -> int:
     """
     text の末尾にある名前が始まる位置。補完でカーソルの前の名前を切り出すため。
-
-    末尾から、名前に使える文字が続く範囲を名前にする。区切り文字を並べる方法では、
-    一覧に無い記号 (`@`、`¬`、`⟨` など) を名前に含めてしまう。Lean の名前は `.` を
-    含むので、`.` では区切らない。`«` で囲んだ部分は空白や記号を含んでも名前の一部で、
-    閉じていない `«` からカーソルまでも名前に含める。
     """
     open_ = text.rfind("«")
     unclosed = open_ >= 0 and "»" not in text[open_:]
@@ -154,9 +146,6 @@ def is_name_char(ch: str) -> bool:
 def meta_names(help_text: str) -> tuple[str, ...]:
     """
     ヘルプに書いてある `:` コマンドの名前 (`:` は付けない)。補完の候補にする。
-
-    ヘルプから取り出すので、ヘルプに載せたコマンドだけが候補になる。`:{` と `:!` は
-    名前ではないので含めない。
     """
     return tuple(sorted(set(re.findall(r"(?<![\w:]):(\w+)", help_text))))
 
@@ -165,9 +154,6 @@ def name_chunk(prefix: str) -> str:
     """
     定数名をまとめて取得する単位。名前空間があれば最後の `.` まで、無ければ
     先頭 2 文字。
-
-    Mathlib では 1 文字にすると `C` だけで 7.5 万件 (3.4MB) になるので、単位を
-    大きくしすぎない。`Nat.` なら 5684 件、`MeasureTheory.` でも 1 万件に収まる。
     """
     return prefix[: prefix.rfind(".") + 1] if "." in prefix else prefix[:2]
 
@@ -178,11 +164,6 @@ def cache_usable(
     """
     補完のキャッシュを今の環境で使えるか。`at` はキャッシュを取得したときの
     (世代, env)、`stack` は今の env の元になった環境。
-
-    取得したときの env が今の env か `stack` にあれば、キャッシュの名前は今の環境にも
-    ある。そのあとに実行した宣言の名前は、呼び出し側が log から足す。`:undo` や
-    `:reset` で取り消した環境で取得したキャッシュは、取り消した宣言の名前を含むので
-    使わない。
     """
     made, cached = at
     return made == gen and (cached == env or (cached is not None and cached in stack))
@@ -193,11 +174,6 @@ def shorten(
 ) -> list[str]:
     """
     `ns` を open したとき (`ns` が空なら root) に使える、prefix で始まる短い名前。
-
-    chunk は COMPLETE_QUERY の結果のチャンクの 1 つで、protected な名前は先頭に ! が
-    付いている。
-    Lean と同じく protected な名前は最後の 1 語だけでは書けないので出さない
-    (`open Nat` しても `add_comm` は `Nat.add_comm` にならない)。
     """
     head = f"{ns}." if ns else ""
     found = [
@@ -254,8 +230,6 @@ def comment_depth(line: str, depth: int) -> int:
 def code_of(line: str) -> str | None:
     """
     行からコメントを取り除いた残り。行の中で閉じないブロックコメントがあれば None。
-
-    `import X /- c -/` や `/- c -/ import X` も import の行として読むため。
     """
     i, depth, code = 0, 0, []
     while i < len(line):
@@ -361,10 +335,6 @@ def offset(src: str, pos: Pos | None) -> int | None:
 def splice_sorry(src: str, sy: Sorry, script: str) -> str | None:
     """
     sorry 1 つをタクティクのスクリプトに置き換える。位置が取得できなければ None。
-
-    repl は sorry ごとに pos / endPos を返す。テキストを検索して sorry を探すと、
-    コメントや識別子の中の "sorry" にも一致するので、必ず位置で切り出す。
-    位置で切り出せば、sorry が 2 つ以上あっても 1 つだけを置き換えられる。
     """
     a, b = offset(src, sy.get("pos")), offset(src, sy.get("endPos"))
     if a is None or b is None or src[a:b] != "sorry":
@@ -377,15 +347,10 @@ def put_script(src: str, a: int, b: int, script: str) -> str:
     """src[a:b] の sorry をスクリプトに置き換える。"""
     pad = src[src.rfind("\n", 0, a) + 1 : a]  # sorry の行の、sorry までの部分
     if "\n" not in script:
-        # 1 行なら sorry のあった桁にそのまま置く。前後の空白は変えない。
-        # 変えると ⟨sorry, …⟩ が ⟨ rfl, …⟩ になり、行頭にある sorry は
-        # インデントが 1 桁になって by ブロックの外に出てしまう。
         return src[:a] + script + src[b:]
     elif not pad.strip():
-        # sorry だけの行。sorry の桁にスクリプトをそろえる。
         return src[:a] + hang(script, pad) + src[b:]
     else:
-        # 行の途中 (:= by sorry)。次の行に、その行より 2 桁深くインデントして置く。
         deeper = pad[: len(pad) - len(pad.lstrip(" \t"))] + "  "
         return src[:a].rstrip(" \t") + "\n" + deeper + hang(script, deeper) + src[b:]
 
@@ -402,9 +367,6 @@ def indent_code(text: str, pad: str) -> str:
     """
     Lean のコードの、空白だけの行と文字列の中で始まる行を除くすべての行の先頭に
     pad を付ける。
-
-    複数行の文字列の 2 行目以降に空白を足すと、文字列の値が変わる。コードを
-    `#eval` などに包むときと、sorry をスクリプトに置き換えるときに使う。
 
     行は `\\n` だけで区切る。`textwrap.indent` は `\\f` なども行の区切りと見なすので、
     文字列リテラルの中の `\\f` の後ろに pad を入れてしまう。
@@ -432,10 +394,6 @@ Open = tuple[str, bool] | tuple[str, int] | str
 def outside_strings(text: str) -> list[bool]:
     """
     Lean のコードの各行 (`\\n` で区切る) が、文字列の外で始まるか。
-
-    文字列の外で始まる行なら、先頭に空白を足してもコードの意味は変わらない。
-    ブロックコメントの中で始まる行も、空白を足してよいので True にする。
-    コメントの中と `'"'` の引用符、`«»` の中の引用符では文字列は始まらない。
     """
     i, out = 0, [True]
     stack: list[Open] = []
@@ -468,8 +426,6 @@ def _lex_step(s: str, i: int, stack: list[Open]) -> int:
 
 def _str_step(s: str, i: int, stack: list[Open], interp: bool) -> int:
     match s[i]:
-        # `\` は次の 1 文字と一緒に読む。行末の `\` の次の行は、
-        # 文字列の中で始まる行にする
         case "\\" if s[i + 1 : i + 2] not in ("", "\n"):
             return i + 2
         case '"':
@@ -581,9 +537,6 @@ def has_import(src: str) -> bool:
 def first_response(buf: str) -> Response | None:
     """
     受信バッファから最初の完全なレスポンスを取り出す。まだすべて届いていなければ None。
-
-    レスポンスは空行で終わる。JSON の中に空行が含まれることもあるので、空行の位置を
-    順に試して、最初にパースできたものを使う。
     """
     heads = (buf[: m.start()] for m in re.finditer(r"\n[ \t]*\n", buf))
     return next((r for head in heads if (r := as_response(head)) is not None), None)
@@ -592,9 +545,6 @@ def first_response(buf: str) -> Response | None:
 def as_response(text: str) -> Response | None:
     """
     text をレスポンスとしてパースする。パースできなければ None。
-
-    repl の応答は必ずオブジェクト。配列や数値ならパースできなかったものとして扱い、
-    次の区切りを試す (呼び出し側は添字でキーを取り出す)。
     """
     try:
         got = json.loads(text)
@@ -649,11 +599,6 @@ LEAN_VERSION = re.compile(r"version (\d+\.\d+\.\d+)(-[^,\s]+)?")
 def toolchain_of_version(out: str) -> str | None:
     """
     `lean --version` の出力から toolchain を作る。
-
-    リリースと rc は `leanprover/lean4:v4.24.0-rc1`、nightly は
-    `leanprover/lean4:nightly-2025-10-01` にする。nightly の `4.24.0-nightly-…` を
-    `v4.24.0` と読むと、別のバージョンのエンジンをビルドする。ほかの接尾辞は
-    どの toolchain か分からないので None を返す。
     """
     m = LEAN_VERSION.search(out)
     if m is None:
@@ -679,11 +624,6 @@ def toolchain_warning(
 ) -> str | None:
     """
     自分でビルドしたエンジンの toolchain が、使うバージョンと違うときの警告の文。
-
-    leani が用意したエンジン (own が False) は使うバージョンでビルドしてあるので、
-    バージョンは必ず一致する。自分でビルドしたエンジンだけ、バージョンが違って
-    いたら警告する (leani がビルドし直すことはしない)。engine_tc が空なら、
-    エンジンの lean-toolchain が読めなかったので比べない。
     """
     if own and engine_tc and engine_tc != tc:
         return (
@@ -697,8 +637,6 @@ def toolchain_warning(
 def version_key(tag: str) -> tuple[int, int, int, int] | None:
     """
     バージョンを比較するためのキー。rc は同じバージョンの正式リリースより前になる。
-
-    解釈できない形なら None。
     """
     m = VERSION.match(tag)
     if m is None:
@@ -712,10 +650,6 @@ def pick_tag(version: str, tags: Sequence[str]) -> str | None:
     """
     そのバージョンに使う repl のタグ。同名のタグがあればそれ、無ければそのバージョン
     以下で一番新しいもの。
-
-    repl のタグは Lean のバージョンと同名だが、patch リリースには付かないことがある
-    (v4.33.0 はあるが v4.33.1 は無い)。patch で API は変わらないので、1 つ前の
-    タグのソースを目的のバージョンでビルドすれば、ビルドに成功する。
     """
     want = version_key(version)
     if want is None:
@@ -778,9 +712,6 @@ def block_continues(buf: Sequence[str], src: str) -> bool:
 def classify(probe: Probe | None) -> tuple[State, Kind]:
     """
     パーサの応答を (入力の状態, 送り方) に変換する。
-
-    判定できなければ err にし、入力をそのまま送って Lean に本当のエラーを出させる
-    (leani の推測でエラーを作らない)。
     """
     match probe:
         case None:
@@ -811,14 +742,8 @@ def classify_tac(probe: Probe | None) -> tuple[State, Kind]:
             return ERR, TAC
 
 
-# `exact?` や `simp?` は結果を "Try this:" として info で返す。スクリプトには
-# この提案の中身を使う。`exact?` のままだと、:save したファイルを読み込むたびに
-# 検索が実行され、結果も環境によって変わる。提案の先頭には `[apply]` のような
-# ラベルが付く。
 SUGGESTION_TAG = re.compile(r"^\[[^\]]*\]\s*")
 
-# 提案を最後まで読み取れたかの目安。折り返した行を読み損ねると、必ず括弧の対応が
-# 合わなくなる。
 PAIRS = {"(": ")", "[": "]", "{": "}", "⟨": "⟩"}
 
 PAINT: dict[str, Callable[[str], str]] = {"error": red, "warning": yellow}
@@ -877,9 +802,6 @@ def plain(s: str) -> str:
 def panic_line(resp: Response) -> str | None:
     """
     エンジンが PANIC を出力していたら、PANIC の行。無ければ None。
-
-    同じメッセージの中で、PANIC の前に #eval の出力が、後にバックトレースが続く
-    ことがあるので、メッセージの 1 行目ではなく PANIC の行を探す。
     """
     lines = (ln for m in messages(resp) for ln in (m.get("data") or "").splitlines())
     return next((ln for ln in lines if "PANIC at" in ln), None)
@@ -900,12 +822,6 @@ def balanced(src: str) -> bool:
 def try_this(messages_: Sequence[Message] | None) -> str | None:
     """
     "Try this:" の提案を返す。無ければ None。
-
-    提案は pretty printer が 100 桁前後で折り返すので、`simp?` の結果は
-    普通に複数行になる。1 行目だけを取ると `simp only [a, b,` のような括弧の
-    閉じていないスクリプトになり、しかもそれが「完成した証明」として表示される
-    ので、ユーザーは気付けない。改行を含めて返す (Lean のタクティクは複数行でも
-    問題ない)。
     """
     datas = ((m.get("data") or "").strip() for m in messages_ or [])
     data = next((d for d in datas if d.startswith("Try this:")), None)
@@ -921,10 +837,6 @@ def span(
 ) -> tuple[int, int, int] | None:
     """
     メッセージの位置を (行, 桁, 幅) にする。ソースの範囲外なら None。
-
-    位置は送ったソース上の座標なので、#eval や括弧で包んだ分のずれ (line_off /
-    col_off) を引いてから、その行の長さに収める。col_off は `indent_code` が空白を
-    足した行 (文字列の中で始まらない行) だけから引く。
     """
     pos = m.get("pos") or {}
     ln = pos.get("line", 0) - line_off
@@ -943,8 +855,6 @@ def span(
         return ln, col, min(width, max(1, len(src_line) - col))
 
 
-# loogle の応答を読む。エラーも検索結果も同じステータス 200 で返るので、`error`
-# キーがあるかどうかだけで区別する。
 def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
     """loogle の応答を表示する形にする。1 件 2 行 (名前と型 / どの module か)。"""
     match got:
@@ -961,9 +871,6 @@ def loogle_text(got: Loogle, keep: int = 10, width: int = 100) -> str:
 def loogle_hits(hits: Sequence[Hit], total: int, keep: int, width: int) -> str:
     """
     検索結果の先頭 keep 件を表示する形にする。
-
-    total は見つかった総数で、hits は loogle が 200 件までに切り詰めたもの。
-    表示するのはさらにその先頭だけなので、全体の件数には total をそのまま使う。
     """
     shown = hits[:keep]
     head = f"{total} 件" + (f" (先頭 {len(shown)} 件)" if len(shown) < total else "")

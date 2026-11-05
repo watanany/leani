@@ -202,15 +202,10 @@ META_NAMES = meta_names(HELP)
 class Held:
     """
     :prove を待っている sorry と、その sorry を含む宣言。
-
-    保留するのは直前の宣言の sorry だけである。環境を変える操作は、保留を捨てるか、
-    今の環境の宣言の sorry で作り直す。
     """
 
     sorries: tuple[Sorry, ...]
     src: str  # sorry を含む宣言のソース
-    # その宣言が作った env id。:undo などで環境が変わっていたら、sorry を置き換える
-    # ときに宣言を取り消さない (二重に pop して手前の宣言が消えるため)。
     env: int | None
     at: Sorry | None = None  # :prove で選んだ sorry (位置つき)
 
@@ -368,7 +363,6 @@ class Repl:
         """エンジンを起動して起点の環境を作る。:env の切り替えでも呼ぶ。"""
         self.cfg = cfg
 
-        # 入力バッファ
         self.buf: list[str] = []
         self.ready: Kind | None = None  # 構文的に完結しているときの送り方
         self.last: Last | None = None
@@ -378,7 +372,6 @@ class Repl:
         self.undone: tuple[Undone, Held | None] | Proof | None = None
         self.show_time = False
 
-        # 証明モード
         self.proof: Proof | None = None
         self.held: Held | None = None
 
@@ -411,9 +404,6 @@ class Repl:
     def apply_init(self) -> None:
         """
         init ファイルを起動直後の環境で実行する。
-
-        :l と違って環境を作り直さない。ここで実行した宣言は base に含めるので
-        :reset しても消えない (GHCi の .ghci と同じ扱い)。
         """
         try:
             with open(INIT) as f:
@@ -480,10 +470,6 @@ class Repl:
     def complete_names(self, prefix: str) -> list[str]:
         """
         今の環境で短い名前で書ける定数のうち、prefix で始まるものを返す。
-
-        `open Lean` のあとの `Json.pa` は `Lean.Json.pa` として探し、`Lean.` を
-        取り除いて返す。namespace の中なら、その名前空間と親の名前空間からも同じ
-        ように探す。
         """
         if len(prefix) < 2:
             return []
@@ -506,12 +492,6 @@ class Repl:
         """
         名前空間ごとの定数名の一覧を返す。キャッシュに無いものは、定数を 1 回
         走査してまとめて取得する。
-
-        キャッシュは、取得したときの環境が今の環境の元になっている間だけ使う
-        (`cache_usable`)。宣言を 1 つ実行するたびにキャッシュを捨てると Mathlib では
-        毎回 1.1 秒かかるので、REPL で実行した宣言の名前だけを Python 側で追加する。
-        open する名前空間が増えても、定数の走査は 1 回で済ませる。問い合わせ直しに
-        失敗したときも、使えないキャッシュは返さない。
         """
         now = (self.eng.gen, self.eng.env)
 
@@ -539,11 +519,6 @@ class Repl:
     def _scope_now(self) -> Scope:
         """
         今の namespace と open を返す。環境が変わったときだけ問い合わせ直す。
-
-        open は宣言と同じく環境ごとに repl が保存しているので、入力した文字列から
-        解析するより正確に取得できる (`open X in` は含まれず、`hiding` や
-        `renaming` も反映される)。この問い合わせは定数を走査しないので、Mathlib
-        でも数十ミリ秒で終わる。
         """
         key = (self.eng.gen, self.eng.env)
         if self._scope[0] != key:
@@ -601,17 +576,10 @@ class Repl:
     def fold_proof(self) -> None:
         """
         再起動に失敗したときの後始末。環境が無いので、直前の入力に戻ることもできない。
-
-        再起動に失敗したときも証明モードを終了する。終了しないと、無効になった
-        proofState を保持したままになり、leani はどの行にも赤い
-        "Unknown proof state." だけを返す証明モードのままになる。
         """
         self.last = None
         if self.proof is not None:
             self.drop_proof()
-        # 保留している proofState も終了したプロセスのもの。残すと :goals が
-        # 環境に無い宣言のゴールを表示し、:prove がその無効な proofState で証明モードを
-        # 始める。
         self.clear_pending()
 
     def report_replay(self, out: Replay) -> None:
@@ -630,15 +598,6 @@ class Repl:
     def reattach(self, out: Replay) -> None:
         """
         replay で戻した宣言に sorry が残っていたら、:prove を使えるようにする。
-
-        タクティクの実行中にエンジンが異常終了したときや Ctrl-C を押したとき、証明
-        していた宣言は replay で環境に戻っている。新しい proofState を取得し直さないと、
-        宣言はあるのに :prove が「sorry が無い」と表示するだけになり、ユーザーは
-        :undo するしかなくなる。
-
-        戻した最後の宣言に sorry が無ければ、保留も捨てる。submit_cmd と同じく、
-        保留するのは直前の宣言の sorry だけである。残すと、前の宣言の proofState で
-        :prove が証明モードを始める。
         """
         self.held = None
         if not out.sorries or not out.done:
@@ -658,10 +617,6 @@ class Repl:
             return
 
         if self.eng.env is None:
-            # ここはユーザーに案内を表示する層。Engine のチェックで出る例外を
-            # そのまま「内部エラー」として表示すると、テキストが残っていることも、
-            # 次に何をすればよいかもユーザーに伝わらない。宣言を保留にするのは
-            # Engine.replay に任せ、案内だけをここで表示する。
             self.eng.replay(log)
             self.out.write(
                 yellow(f"環境が無いので、宣言 {len(log)} 件を再実行できなかった")
@@ -684,10 +639,6 @@ class Repl:
 
         異常終了した場合は、再起動したうえで fn を 1 回だけ再実行する。ユーザーが
         Ctrl-C で止めた場合は再実行しない (ユーザーは止めたいので)。
-
-        再実行でもエンジンが終了したら、もう一度だけ再起動して、再実行はしない。
-        同じ入力でエンジンが毎回異常終了する場合がある。再起動しないと、終了した
-        プロセスが残り、次の入力もすべて失敗する。
         """
         retry = False
         try:
@@ -797,23 +748,16 @@ class Repl:
                 # cli が終了する。
                 raise
             except Exception as e:
-                # 想定外の例外でも、その 1 行のエラーとして扱う。セッションを終了すると
-                # それまでの宣言をすべて失うので、それが一番大きな損失になる。
                 self.out.fail(red(f"内部エラー: {type(e).__name__}: {e}"))
                 self.discard()
 
     def feed_line(self, line: str) -> Step | None:
         """端末から受け取った 1 件を処理する。履歴から呼び出した入力は改行を含む。"""
-        # 1 件にまとめた履歴を呼び出すと改行を含む 1 行として返ってくるので、
-        # 行に分けて、入力したときと同じ順に feed へ渡す。
         lines = line.split("\n")
         for one in lines:
             if self.feed(one) == "quit":
                 return "quit"
 
-        # 呼び出した複数行は全体で 1 件なので、末尾に空行を渡して確定させる。
-        # ブロックが途中なら確定させず、続きの行を待つ。Ctrl-C で捨てた入力は
-        # 途中のまま履歴に残るので、呼び出して続きを書けるようにする。
         if len(lines) > 1 and self.ready is not None:
             return self.feed("")
         else:
@@ -821,8 +765,6 @@ class Repl:
 
     def discard(self) -> None:
         """入力中のブロックを捨てる。Ctrl-C / Ctrl-D で呼ぶ。"""
-        # 入力した内容は履歴に残す。捨てるのは入力バッファであって、入力の記録
-        # ではない。長い宣言の入力を間違えたときに、ユーザーは Ctrl-P で呼び出せる。
         self.remember("\n".join(self.buf))
         self.buf, self.ready, self.explicit = [], None, False
         self.restore_undone()
@@ -852,17 +794,6 @@ class Repl:
     def feed(self, line: str) -> Step | None:
         """
         1 行受け取る。"quit" を返したらループを抜ける。
-
-        完結したかはパーサに問い合わせるが、それだけでは足りない。Lean では
-        `structure P where` や `def f := 1` はそれ自体で完結した command なので、
-        パーサは「完結した」と返す。それでも次のインデント行は続きになりうる。
-        そこで次のように判定する:
-
-        * パーサが「途中」と返したら継続行を読む (ブロックを始める)。
-        * ブロックの中では、インデント行が続く限り読む。空行を受け取ったら確定する。
-          パーサが「完結」と返したあとなら、インデントの無い行を受け取っても確定する。
-        * 確定した直後にインデント行を受け取ったら、直前の入力の続きとして読み直す
-          (環境も 1 つ戻す)。
         """
         if self.explicit:
             step = self.feed_explicit(line)
@@ -924,7 +855,6 @@ class Repl:
             self.remember(s)
             return "quit" if self.meta(s) == "quit" else "done"
         elif continues(line) and self.last is not None:
-            # 確定した入力の続きだった。直前の入力を取り消して、続きとして読み直す。
             self.rewind()
             self.buf = [*self.last.src.splitlines(), line]
             self.last = None
@@ -953,8 +883,6 @@ class Repl:
                 self.last = None
             return "quit" if self.feed(line) == "quit" else "done"
         elif self.ready is not None and not continues(line):
-            # 確定済みのブロックのあとにインデントの無い行を受け取った。
-            # ブロックを送ってから、その行を読み直す
             src, kind = "\n".join(self.buf), self.ready
             self.buf, self.ready = [], None
             self.submit(src, kind)
@@ -969,8 +897,6 @@ class Repl:
         if last is None or not last.advanced:
             return
         elif last.proof:
-            # 証明モードのタクティクは環境を進めていない。証明モードが終了していても、
-            # ここで宣言を pop してはいけない (直前の実際の宣言が消える)。
             if self.proof is None:
                 return
             self.undone = self.proof
@@ -989,9 +915,6 @@ class Repl:
         if saved is None:
             return
         if isinstance(saved, Proof):
-            # 保存しているあいだにエンジンが再起動されたら、保存した proofState は
-            # 前のプロセスのものなので戻さない。証明モードが終了していたら、
-            # 終了した証明モードを戻すことになるので、これも戻さない。
             if saved.gen == self.eng.gen and self.proof is not None:
                 self.proof = saved
             return
@@ -1001,22 +924,15 @@ class Repl:
             self.held = held
             return
         if undone.src is not None:
-            # 保存しているあいだにエンジンが再起動された。保存した env id は無効に
-            # なっているので設定できない。テキストから再実行する。
             self.replay_into([undone.src])
 
     # -- 送信 -------------------------------------------------------------
 
     def submit(self, src: str, kind: Kind | None = None) -> None:
         """完結した入力を送って結果を出す。"""
-        # 送れるかを確認する前に履歴に追加する。エンジンが異常終了しているときこそ、
-        # ユーザーが入力を呼び出せる必要がある。
         self.remember(src)
 
         if self.eng.env is None:
-            # boot に失敗したエンジン。送れば send_cmd のチェックで止まるが、
-            # ユーザーに必要なのは例外の名前ではなく次に何をすればよいかなので、
-            # ここで案内を表示する。
             self.out.fail(red("エンジンが使えない。:restart で再起動できる"))
             return
 
@@ -1044,9 +960,6 @@ class Repl:
         errs = errors(resp)
         blob = "\n".join(m.get("data", "") for m in errs)
 
-        # `(← e)` は do の中でしか書けないので、do の外では必ずエラーになる。
-        # このエラーのときだけ do で包み直すので、ほかの入力の意味は変わらない。
-        # 元の行の相対的なインデントを保つため、`do` は前の行に置く。
         if errs and not is_do and nested_action(blob):
             is_do, head, col = True, " do", 4
             resp = self.guard(
@@ -1059,8 +972,6 @@ class Repl:
             errs = errors(resp)
             blob = "\n".join(m.get("data", "") for m in errs)
 
-        # `do` を単体で書くと、Lean は最初の action からモナドを決めてしまう
-        # (IO.getEnv なら BaseIO)。GHCi と同じく IO として読み直す。
         if errs and is_do and "BaseIO" in blob:
             retry = f"#eval show IO _ from{head}\n" + indent_code(src, " " * col)
             again = self.guard(lambda: self.eng.send_cmd(retry))
@@ -1071,7 +982,6 @@ class Repl:
                 self.last = Last(src, advanced=False)
                 return True
 
-        # 評価できない式でも、型だけは表示したほうが親切。
         reason = not_evaluable_reason(blob) if errs else None
         if reason is not None:
             out = self.guard(
@@ -1102,9 +1012,6 @@ class Repl:
         found = sorries(resp)
         self.clear_pending()
         if found and advanced:
-            # エラーになった宣言の sorry は保留しない。sorry を証明で置き換えても
-            # 同じエラーで失敗するだけで、置き換えに失敗した直後に「sorry 1 個」
-            # と表示してから「sorry 2 個」と表示し直すことになる。
             self.held = Held(tuple(found), src, self.eng.env)
             self.out.write(
                 dim(f"-- :prove で証明モードを始められる (sorry {len(found)} 個)")
@@ -1132,10 +1039,6 @@ class Repl:
         state = proof.state
         resp = self.guard(lambda: self.eng.send_tactic(grouped_tactic(src), state))
         if self.proof is not proof or proof.gen != self.eng.gen:
-            # guard がエンジンを再起動した。leani が持つ proofState は前のプロセスの
-            # ものなので、応答があっても別の状態を指している。新しいエンジンは番号を
-            # 0 から振り直すので、別の証明の状態と番号が一致して「証明完了」と
-            # 表示されることもある (宣言は sorry のまま残る)。
             self.drop_proof()
             return
         elif resp is None or panic_check(self.out, resp):
@@ -1160,9 +1063,6 @@ class Repl:
 
         found = try_this(messages(resp))
         if found and not balanced(found):
-            # 提案を最後まで解析できていない (メッセージの形式が変わった場合など)。
-            # 正しくないスクリプトを完成した証明として表示するより、入力したタクティクを
-            # そのまま残す。
             self.out.write(
                 dim(
                     "-- 提案を読み取れなかったので、"
@@ -1202,12 +1102,9 @@ class Repl:
             dim("  入力したタクティクは証明に反映されていない (宣言は sorry のまま)")
         )
         if self.held is not None and self.eng.env is not None:
-            # revive が replay で sorry を取得し直していれば、そのまま証明モードを
-            # 再開できる。
             left = len(self.held.sorries)
             self.out.write(dim(f"  :prove で再開できる (sorry {left} 個)"))
         else:
-            # 再起動に失敗したときの proofState は前のプロセスのもの。
             self.clear_pending()
             self.out.write(dim("  :restart で再起動してから入力し直す"))
 
@@ -1220,20 +1117,15 @@ class Repl:
 
         new_src = splice_sorry(src, at, script)
         if new_src is None:
-            # sorry の位置が分からなかった。証明自体は成功しているので、スクリプトは
-            # すでに表示してある。何も表示せずに戻ると「証明完了」という表示だけが残る。
             self.out.write(
                 dim("-- sorry の位置を読み取れなかったので、宣言は sorry のままにする")
             )
             return
 
-        # sorry を含む宣言と名前が同じになるので、先にそれを取り消してから再実行する。
         undone = None
         if held.env is not None and self.eng.env == held.env:
             undone = self.eng.pop_decl()
 
-        # 再実行に失敗したときに戻せるよう保存しておく。sorry が 2 個以上あるときに
-        # 保留中の状態を捨てると、残りの sorry を :prove で続けられなくなる。
         self.held = None
 
         self.out.write(dim("-- sorry をスクリプトで置き換えて実行する:"))
@@ -1243,21 +1135,12 @@ class Repl:
         self.submit(new_src, CMD)
         landed = bool(self.eng.log) and self.eng.log[-1] == new_src
         if undone is None or landed:
-            # 宣言が環境に追加されたかは log の末尾で判断する。世代だけを見ると、
-            # 異常終了したエンジンを guard が再起動して再送し、**成功した**ときにも
-            # 「sorry のまま」と誤って表示し、sorry を含むテキストを再実行して、
-            # 重複エラーになった宣言がずっと保留に残る。
             return
         elif self.eng.gen != gen:
-            # エンジンが再起動され、さらに再実行も失敗した。保存した env id は無効に
-            # なっているので設定せず、sorry を含むテキストを再実行する。保留中の状態は
-            # 戻さない (replay_into が設定し直した値を無効な proofState で上書きすると、
-            # 次の :prove が今の環境に無い状態を指す)。
             self.out.write(dim("-- エンジンを再起動したので、sorry のままにしておく"))
             if undone.src is not None:
                 self.replay_into([undone.src])
         else:
-            # 再実行が失敗した。項の位置にある sorry にはタクティクを差し込めない。
             self.eng.push_decl(undone)
             self.held = held
             self.out.write(dim("-- エラーになったので、sorry のままにしておく"))
@@ -1325,8 +1208,6 @@ class Repl:
         cmd = parts[0][1:]
         arg = parts[1].strip() if len(parts) > 1 else ""
 
-        # 証明モード専用のコマンドを先に確認する。該当しなければ通常のコマンドとして
-        # 処理する (:t などは証明中でも使える)。
         if self.proof is not None and self.proof_meta(self.proof, cmd):
             return None
 
@@ -1469,9 +1350,6 @@ class Repl:
     def ask_loogle(self, query: str) -> Loogle:
         """
         loogle に問い合わせているあいだ、メッセージを 1 行表示する。
-
-        重いパターンだと loogle の処理に 20 秒近くかかる。何も表示しないと leani が
-        止まったように見える。成功しても失敗しても、次の出力を表示する前にこの行を消す。
         """
         if not TTY:
             return loogle(query)
@@ -1519,18 +1397,11 @@ class Repl:
             return
 
         keep, prev, back = self.show_time, self.eng.loaded, self.cfg
-        # 入力した宣言も新しいエンジンに引き継ぐ。:l したファイルの内容は preload で
-        # 戻るが、対話で入力した宣言は新しい Engine には含まれていない。起動後に
-        # 再実行する。
-        # 保留中の宣言も引き継ぐ。捨てると、直前に「保留にした」と表示した宣言が
-        # :env で何も表示されずに消える。新しい環境ならエラーなく実行
-        # できることもある (import が増える方向の切り替え)。失敗したらまた保留に戻る。
         log = list(self.eng.log) + list(self.eng.unplayed)
         self.eng.kill()
         try:
             self._start(target, preload=prev)
         except START_FAILED as e:
-            # import が成功するかは boot するまで分からない。元の環境に戻す。
             self.out.fail(
                 red(f"{arg} で起動できなかった: {str(e) or '理由は分からない'}")
             )
@@ -1538,12 +1409,8 @@ class Repl:
             try:
                 self._start(back, preload=prev)
             except START_FAILED as back_e:
-                # 環境が無いまま続けても、どの入力もエラーになるだけ。端末は
-                # 終了し、カーネルは次のセルでエンジンを起動し直す。
                 raise EnvLost(f"{back.name} にも戻れなくなった: {back_e}") from back_e
 
-        # 切り替えが成功しても元の環境に戻っても、対話で入力した宣言は新しい
-        # エンジンには無い。どちらの場合も、ここで 1 回だけ再実行する。
         self.replay_into(log)
         self.show_time = keep
 
@@ -1569,10 +1436,6 @@ class Repl:
     def cmd_save(self, arg: str) -> None:
         """
         実行した宣言を .lean ファイルとして書き出す。
-
-        repl には環境を pickle する機能もあるが、unpickle した環境で #eval すると
-        Lean のコンパイラが PANIC する (コンパイラの状態が pickle に含まれない)。
-        ソースで保存しておけば編集もできるし、lean でそのまま実行できる。
         """
         if not arg:
             self.out.fail(red(":save にはファイル名が必要"))
@@ -1603,10 +1466,6 @@ class Repl:
         body = "\n\n".join(parts)
         try:
             with open(path, "w") as f:
-                # 起動時と同じヘッダを書く。設定の import だけだと lean で直接
-                # 実行したときにエラーになる (leani は起動時と :l のときに
-                # import Lean を自分で追加する)。:l したファイルの import も
-                # 追加する (save_header)。
                 f.write(f"{self.eng.save_header()}\n{body}\n")
         except OSError as e:
             self.out.fail(red(f"書き出せなかった: {e}"))
@@ -1644,26 +1503,20 @@ class Repl:
         if out.bad:
             self.out.fail(red(f"読み込めなかった: {path}"))
         else:
-            # 環境がすべて置き換わるので、前の環境の proofState は使えない。
             self.proof, self.last, self.undone = None, None, None
             self.clear_pending()
             if announce:
                 self.out.write(dim(f"読み込んだ: {path} (env {self.eng.env})"))
             if left:
-                # :reset と同じく、何も表示せずに捨てるとユーザーが気付けない。
                 self.out.write(dim(f"  保留中の宣言 {left} 件も捨てた"))
 
         self._comp_cache.clear()
 
     def reset(self) -> None:
         if self.eng.base is None:
-            # 起点の環境が無い (boot に失敗した)。env を設定し直しても、どの入力にも
-            # "Unknown environment." しか返さない状態になり、保留中の宣言だけが消える。
             self.out.fail(red("元になる環境が無い。:restart で再起動できる"))
             return
 
-        # 保留も捨てる。残すと、:reset で消したはずの宣言が次の :restart で
-        # 戻ってくる。
         left = self.eng.reset()
         self.proof, self.last = None, None
         self.clear_pending()
