@@ -1880,10 +1880,13 @@ impl Repl {
                     Err((EngineFault::Interrupted, dead)) => {
                         // 戻るのを Ctrl-C で中断した。環境は無いが理由も無いので、
                         // :restart の中断と同じく、宣言を保留にしてセッションを続ける。
+                        // 古いエンジンを残す。:l したファイルと init を持っているのは
+                        // 古いエンジンなので、:restart がそれを読み込み直せる。
                         self.out.write(&self.style.yellow(&format!(
                             "^C {name} に戻るのを中断した。:restart でやり直せる"
                         )));
-                        self.lose_engine(dead, hook);
+                        self.keep_failed(dead);
+                        self.lose_engine(None, hook);
                         self.eng.carry(log);
                         return;
                     }
@@ -1907,8 +1910,9 @@ impl Repl {
 
     /// `:env` で元の環境にも戻れなかったあとの後始末。
     ///
-    /// 終了させた古いエンジンは宣言の記録を持ったままなので、環境の無いエンジンに
-    /// 入れ替えて、状態のつじつまを合わせる。差し込み口も入れ替えたエンジンに戻す。
+    /// `dead` があれば、終了させた古いエンジンを、環境の無い `dead` に入れ替える。
+    /// 古いエンジンは宣言の記録を持ったままなので、入れ替えて状態のつじつまを合わせる。
+    /// `dead` が無ければ古いエンジンを残す。差し込み口は残ったエンジンに戻す。
     fn lose_engine(&mut self, dead: Option<Box<Engine>>, hook: Option<ExchangeHook>) {
         if let Some(dead) = dead {
             self.eng = *dead;

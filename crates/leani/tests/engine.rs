@@ -3129,6 +3129,33 @@ mod 切り替えに失敗したとき {
         assert!(repl.feed(&["typedHere"]).contains("42"));
     }
 
+    #[story("A4", "G5")]
+    #[test]
+    fn 元の環境に戻るのを中断しても_colon_l_したファイルを_colon_restart_で読み込み直す() {
+        let mut repl = Driver::new();
+        let path = file(&repl, "lib.lean", "def libA := 10\n");
+        repl.feed(&[&format!(":l {path}")]);
+        let mut boots = 0;
+        repl.hook(move |stage| match stage {
+            Stage::Before(obj) if fresh(obj) => {
+                boots += 1;
+                match boots {
+                    1 => Hooked::Kill,
+                    _ => Hooked::Interrupt,
+                }
+            }
+            _ => Hooked::Pass,
+        });
+        let out = repl.feed_with("env", |r| {
+            assert!(!r.feed(":env wide"), "ループを抜けた");
+        });
+        assert!(out.contains("中断した"), "{out}");
+
+        repl.unhook();
+        let out = repl.feed(&[":restart"]);
+        assert!(repl.feed(&["libA"]).contains("10"), "{out}");
+    }
+
     #[story("F1", "G5")]
     #[test]
     fn 元の環境のエンジンを用意するのを中断したら宣言を保留だけに残す() {
