@@ -123,14 +123,14 @@ def engine_pids(km):
     return [int(p) for p in got.stdout.split()]
 
 
-def describe_セルの実行():
+def describe_running_cells():
     """
     ja: セルの実行
     en: Running cells
     """
 
     @story("J1")
-    def 式のセルを実行すると値を表示する(kernel):
+    def shows_the_value_when_a_cell_with_an_expression_runs(kernel):
         """
         ja: 式のセルを実行すると値を表示する
         en: Shows the value when a cell with an expression runs
@@ -140,7 +140,9 @@ def describe_セルの実行():
         assert "2" in out, out
 
     @story("J1")
-    def 前のセルで宣言すると次のセルでその名前を使える(kernel):
+    def shows_the_value_when_a_cell_evaluates_a_function_declared_in_the_previous_cell(
+        kernel,
+    ):
         """
         ja: 前のセルで宣言した関数を次のセルで評価すると値を表示する
         en: Shows the value when a cell evaluates a function declared in the previous cell
@@ -156,7 +158,7 @@ def fib : Nat → Nat
         assert "55" in out, out
 
     @story("J1")
-    def エラーになるセルを実行すると_status_が_error_になる(kernel):
+    def sets_the_status_to_error_when_a_cell_with_an_error_runs(kernel):
         """
         ja: エラーになるセルを実行すると status が error になる
         en: Sets the status to error when a cell with an error runs
@@ -167,7 +169,7 @@ def fib : Nat → Nat
         assert "error" in err.lower() or "failed" in err.lower(), err
 
     @story("J1")
-    def silent_のセルを実行すると何も表示しない(kernel):
+    def returns_ok_without_showing_anything_when_a_silent_cell_runs(kernel):
         """
         ja: silent のセルを実行すると、何も表示せずに ok を返す
         en: Returns ok without showing anything when a silent cell runs
@@ -177,7 +179,9 @@ def fib : Nat → Nat
         assert streams == []
 
     @story("J1")
-    def 前のセルで起動したプロセスが出力しても_silent_のセルには表示しない(kernel):
+    def returns_ok_without_showing_anything_when_a_process_from_an_earlier_cell_writes_during_a_silent_cell(
+        kernel,
+    ):
         """
         ja: 前のセルで起動したプロセスが silent のセルの実行中に出力すると、何も表示せずに ok を返す
         en: Returns ok without showing anything when a process from an earlier cell writes during a silent cell
@@ -195,7 +199,9 @@ def fib : Nat → Nat
         assert streams == []
 
     @story("J1", "E3")
-    def 証明モードで証明を完了すると_sorry_を置き換える(kernel):
+    def replaces_the_sorry_in_the_theorem_when_the_proof_is_finished_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードで証明を完了すると、定理の sorry を置き換える
         en: Replaces the sorry in the theorem when the proof is finished in proof mode
@@ -208,7 +214,9 @@ def fib : Nat → Nat
         assert "sorryAx" not in out, out
 
     @story("J1", "E1")
-    def 証明モードで閉じていないタクティクを入力すると次の行に続ける(kernel):
+    def runs_a_tactic_together_with_the_next_line_when_its_bracket_is_not_closed_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードで括弧を閉じていないタクティクを送ると、次の行と合わせて実行する
         en: Runs a tactic together with the next line when its bracket is not closed in proof mode
@@ -224,7 +232,9 @@ def fib : Nat → Nat
         assert "sorryAx" not in out, out
 
     @story("J1")
-    def 複数行の文字列を評価しても値は変わらない(kernel):
+    def shows_the_value_without_changing_the_string_when_a_cell_with_a_multi_line_string_runs(
+        kernel,
+    ):
         """
         ja: 複数行の文字列を含む式のセルを実行すると、文字列を変えずに値を表示する
         en: Shows the value without changing the string when a cell with a multi-line string runs
@@ -235,7 +245,9 @@ def fib : Nat → Nat
         assert "11" in out, out
 
     @story("J1", "E3")
-    def 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない(kernel):
+    def replaces_the_sorry_with_the_multi_line_string_unchanged_when_it_is_sent_with_exact_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードで複数行の文字列を exact で送ると、その文字列のまま sorry を置き換える
         en: Replaces the sorry with the multi-line string unchanged when it is sent with exact in proof mode
@@ -248,7 +260,9 @@ def fib : Nat → Nat
         assert "11" in out, out
 
     @story("J1", "E1")
-    def タクティクの続きを書きかけてやめたらタクティクを戻す(kernel):
+    def keeps_the_previous_tactic_when_a_command_is_sent_before_its_continuation_is_finished_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードでタクティクの続きを書きかけたままコマンドを送ると、直前のタクティクを残す
         en: Keeps the previous tactic when a command is sent before its continuation is finished in proof mode
@@ -265,7 +279,9 @@ def fib : Nat → Nat
         assert status == "ok", err
 
     @story("J1", "E1")
-    def セミコロンでタクティクを並べると_1_行で実行する(kernel):
+    def runs_every_tactic_and_completes_the_proof_when_tactics_separated_by_semicolons_are_sent_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードでセミコロンで区切ったタクティクを送ると、すべて実行して証明を完了する
         en: Runs every tactic and completes the proof when tactics separated by semicolons are sent in proof mode
@@ -276,7 +292,9 @@ def fib : Nat → Nat
         assert "証明完了" in out, out + err
 
     @story("J1", "E1")
-    def 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する(kernel):
+    def shows_a_parse_error_at_the_position_in_the_input_when_an_unparsable_tactic_is_sent_in_proof_mode(
+        kernel,
+    ):
         """
         ja: 証明モードで読めないタクティクを送ると、入力の中の位置でパースエラーを表示する
         en: Shows a parse error at the position in the input when an unparsable tactic is sent in proof mode
@@ -289,7 +307,9 @@ def fib : Nat → Nat
         assert "<input>:1:12" in out + err, out + err
 
     @story("J1")
-    def 閉じていない_raw_文字列を入力すると次の行に続ける(kernel):
+    def evaluates_a_raw_string_across_two_lines_as_one_string_with_a_newline_when_its_cell_runs(
+        kernel,
+    ):
         """
         ja: 2 行にわたる raw 文字列を含むセルを実行すると、改行を含む 1 つの文字列として評価する
         en: Evaluates a raw string across two lines as one string with a newline when its cell runs
@@ -299,7 +319,7 @@ def fib : Nat → Nat
         assert "3" in out, out
 
     @story("J1")
-    def 複数行ブロックを閉じずにセルを実行するとエラーになり次のセルは実行できる(
+    def fails_showing_is_missing_and_runs_the_next_cell_when_a_cell_leaves_a_multi_line_block_open(
         kernel,
     ):
         """
@@ -314,7 +334,7 @@ def fib : Nat → Nat
         assert "5" in out, out
 
     @story("J1")
-    def colon_shell_を実行すると出力をセルに表示する(kernel):
+    def shows_stdout_and_stderr_in_the_cell_when_a_command_runs_with(kernel):
         """
         ja: :! でコマンドを実行すると、その stdout と stderr をセルに表示する
         en: Shows stdout and stderr in the cell when a command runs with :!
@@ -325,7 +345,9 @@ def fib : Nat → Nat
         assert err == "to-err\n", err
 
     @story("J1", "C7")
-    def colon_abbrev_を実行すると一覧をセルに表示する(kernel):
+    def shows_the_abbreviations_for_a_symbol_in_the_cell_when_abbrev_runs_with_it(
+        kernel,
+    ):
         """
         ja: :abbrev に記号を付けて実行すると、その記号の略記をセルに表示する
         en: Shows the abbreviations for a symbol in the cell when :abbrev runs with it
@@ -335,7 +357,7 @@ def fib : Nat → Nat
         assert "\\to" in out, out
 
     @story("J1", "D4")
-    def パターンを付けずに_colon_loogle_を実行すると_status_が_error_になる(kernel):
+    def fails_showing_a_pattern_is_needed_when_loogle_runs_without_a_pattern(kernel):
         """
         ja: パターンを付けずに :loogle を実行すると、パターンが必要と表示して失敗する
         en: Fails showing a pattern is needed when :loogle runs without a pattern
@@ -346,7 +368,9 @@ def fib : Nat → Nat
         assert "パターンが必要" in err, err
 
     @story("J1")
-    def ノートブックで_colon_q_を実行しても終了しない(kernel):
+    def shows_that_it_does_nothing_in_a_notebook_and_runs_the_next_cell_when_q_runs(
+        kernel,
+    ):
         """
         ja: :q を実行すると、ノートブックでは何もしないと表示し、次のセルを実行する
         en: Shows that it does nothing in a notebook and runs the next cell when :q runs
@@ -357,7 +381,9 @@ def fib : Nat → Nat
         assert "6" in out, out
 
     @story("J1")
-    def 改ページを含む文字列を入力しても式として評価する(kernel):
+    def evaluates_the_expression_without_changing_the_string_when_a_cell_has_a_string_with_a_form_feed(
+        kernel,
+    ):
         """
         ja: 改ページの文字を含む文字列の式のセルを実行すると、文字列を変えずに式として評価する
         en: Evaluates the expression without changing the string when a cell has a string with a form feed
@@ -370,14 +396,14 @@ def fib : Nat → Nat
         assert "3" in out.split(), out
 
 
-def describe_補完():
+def describe_completion():
     """
     ja: 補完
     en: Completion
     """
 
     @story("J2", "D1")
-    def 名前の途中で補完すると定数名を候補に出す(kernel):
+    def offers_constant_names_as_candidates_when_a_partial_name_is_completed(kernel):
         """
         ja: 名前の途中で補完すると、定数名を候補に出す
         en: Offers constant names as candidates when a partial name is completed
@@ -388,7 +414,7 @@ def describe_補完():
         assert "Nat.add_comm" in matches, matches
 
     @story("J2", "D1")
-    def colon_undo_で宣言を取り消すとその名前は候補に出ない(kernel):
+    def removes_the_name_from_the_candidates_when_undo_undoes_its_declaration(kernel):
         """
         ja: :undo で宣言を取り消すと、その名前を候補から外す
         en: Removes the name from the candidates when :undo undoes its declaration
@@ -400,7 +426,7 @@ def describe_補完():
         assert "undoneOnly" not in matches, matches
 
     @story("J2", "D1")
-    def colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない(
+    def offers_the_added_name_as_a_candidate_but_not_the_undone_one_when_a_declaration_is_added_after_undo(
         kernel,
     ):
         """
@@ -417,7 +443,9 @@ def describe_補完():
         assert "swappedA" not in matches, matches
 
     @story("J2", "C5")
-    def 略記の途中で補完すると記号を候補に出す(kernel):
+    def offers_the_symbol_as_the_first_candidate_when_an_abbreviation_is_completed(
+        kernel,
+    ):
         """
         ja: 略記を補完すると、その記号を最初の候補に出す
         en: Offers the symbol as the first candidate when an abbreviation is completed
@@ -427,7 +455,9 @@ def describe_補完():
         assert matches[0] == "→", matches
 
     @story("J2", "H1")
-    def コマンド名の途中で補完するとコマンド名を候補に出す(kernel):
+    def offers_command_names_starting_with_the_typed_part_as_candidates_when_completing_a_command_name(
+        kernel,
+    ):
         """
         ja: コマンド名の途中で補完すると、入力した部分で始まるコマンド名を候補に出す
         en: Offers command names starting with the typed part as candidates when completing a command name
@@ -437,7 +467,9 @@ def describe_補完():
         assert matches == ["reload", "reset", "restart"], matches
 
     @story("J2", "B4")
-    def セルの_2_行目の_colon_l_の後で補完するとファイルのパスを候補に出す(kernel):
+    def offers_only_lean_files_as_candidates_when_the_path_after_l_on_a_cell_s_second_line_is_completed(
+        kernel,
+    ):
         """
         ja: セルの 2 行目の :l の後ろを補完すると、.lean のファイルだけを候補に出す
         en: Offers only .lean files as candidates when the path after :l on a cell's second line is completed
@@ -458,7 +490,7 @@ def jupyter(text):
     return leani.kernel.jupyter_matches(text, list(got))
 
 
-def describe_Jupyter_の補完の形():
+def describe_completions_in_the_jupyter_form():
     """
     ja: Jupyter の補完の形
     en: Completions in the Jupyter form
@@ -466,7 +498,7 @@ def describe_Jupyter_の補完の形():
 
     @story("J2", "B5")
     @pytest.mark.usefixtures("place")
-    def 続きの文字だけの候補は_Jupyter_に返すときに語全体に直す():
+    def turns_a_candidate_with_only_the_rest_of_a_word_into_the_whole_word():
         """
         ja: 続きの文字だけの候補は、入力済みの部分を含めた語全体に直す
         en: Turns a candidate with only the rest of a word into the whole word
@@ -476,7 +508,7 @@ def describe_Jupyter_の補完の形():
 
     @story("J2", "B4")
     @pytest.mark.usefixtures("place")
-    def ディレクトリの候補には_slash_を付ける():
+    def appends_a_slash_to_a_directory_candidate():
         """
         ja: ディレクトリの候補の後ろに / を付ける
         en: Appends a slash to a directory candidate
@@ -484,7 +516,7 @@ def describe_Jupyter_の補完の形():
         assert jupyter(":l ") == (len(":l "), ["bin/", "notes.lean"])
 
     @story("J2", "D1")
-    def 定数名の候補は名前全体を置き換える():
+    def replaces_the_whole_typed_name_with_a_constant_name_candidate():
         """
         ja: 定数名の候補は、入力した名前全体を置き換える
         en: Replaces the whole typed name with a constant name candidate
@@ -492,7 +524,7 @@ def describe_Jupyter_の補完の形():
         assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
 
     @story("J2", "D1")
-    def 文字列のエスケープの後ろで補完すると名前を候補に出す():
+    def replaces_only_the_name_after_an_escape_in_a_string_with_a_constant_name_candidate():
         """
         ja: 文字列のエスケープの後ろにある名前だけを定数名の候補で置き換える
         en: Replaces only the name after an escape in a string with a constant name candidate
@@ -502,7 +534,7 @@ def describe_Jupyter_の補完の形():
         assert jupyter(text) == (len(text) - len("Nat.su"), ["Nat.succ"])
 
     @story("J2", "D1")
-    def 名前の前に記号があれば記号の後ろから名前を補完する():
+    def replaces_only_the_part_after_a_symbol_before_a_name_with_a_constant_name_candidate():
         """
         ja: 名前の前に記号があると、記号の後ろだけを定数名の候補で置き換える
         en: Replaces only the part after a symbol before a name with a constant name candidate
@@ -510,7 +542,7 @@ def describe_Jupyter_の補完の形():
         assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 
     @story("J2", "D1")
-    def 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する():
+    def replaces_only_the_part_after_a_character_not_allowed_in_lean_names_with_a_constant_name_candidate():
         """
         ja: 名前の前に Lean の名前に使えない文字があると、その文字の後ろだけを定数名の候補で置き換える
         en: Replaces only the part after a character not allowed in Lean names with a constant name candidate
@@ -518,7 +550,7 @@ def describe_Jupyter_の補完の形():
         assert jupyter("#check 定理Nat.su") == (len("#check 定理"), ["Nat.succ"])
 
     @story("J2")
-    def 候補が無ければカーソルの位置を返す():
+    def returns_the_cursor_position_and_an_empty_list_if_there_is_no_candidate():
         """
         ja: 候補が無ければ、カーソルの位置と空の一覧を返す
         en: Returns the cursor position and an empty list if there is no candidate
@@ -526,14 +558,14 @@ def describe_Jupyter_の補完の形():
         assert jupyter(":env ") == (len(":env "), [])
 
 
-def describe_エンジンの異常終了と中断():
+def describe_engine_crashes_and_interrupts():
     """
     ja: エンジンの異常終了と中断
     en: Engine crashes and interrupts
     """
 
     @story("J3", "F1")
-    def エンジンが異常終了しても宣言が残る(kernel):
+    def keeps_earlier_declarations_for_the_next_cell_when_the_engine_crashes(kernel):
         """
         ja: エンジンが異常終了すると、それまでの宣言を残して次のセルを実行する
         en: Keeps earlier declarations for the next cell when the engine crashes
@@ -547,7 +579,9 @@ def describe_エンジンの異常終了と中断():
         assert "42" in out, out
 
     @story("J3", "A4")
-    def 評価を中断しても宣言が残る(kernel, tmp_path):
+    def stops_the_evaluation_with_an_error_and_keeps_earlier_declarations_when_it_is_interrupted(
+        kernel, tmp_path
+    ):
         """
         ja: 評価の途中で中断すると、評価を止めてエラーにし、それまでの宣言を残す
         en: Stops the evaluation with an error and keeps earlier declarations when it is interrupted
@@ -583,7 +617,7 @@ def execute(k, code="1"):
     return asyncio.run(k.do_execute(code, False))["status"]
 
 
-def describe_起動と再起動の失敗():
+def describe_startup_and_restart_failures():
     """
     ja: 起動と再起動の失敗
     en: Startup and restart failures
@@ -601,7 +635,7 @@ def describe_起動と再起動の失敗():
         return leani.kernel.LeaniKernel(), make, fake
 
     @story("J1", "G4")
-    def 設定にエラーがあればセルに表示して次のセルでもう一度起動する(
+    def fails_the_cell_with_the_error_and_retries_startup_in_the_next_cell_if_the_config_has_an_error(
         direct, mocker, capsys
     ):
         """
@@ -623,7 +657,7 @@ def describe_起動と再起動の失敗():
         assert make.called
 
     @story("J3")
-    def エンジンを起動できなければセルが_error_になり次のセルで起動し直す(
+    def fails_the_cell_with_the_error_and_retries_startup_in_the_next_cell_when_the_engine_does_not_start(
         direct, capsys
     ):
         """
@@ -645,7 +679,9 @@ def describe_起動と再起動の失敗():
             leani.types.EnvLost("main にも戻れなくなった"),
         ],
     )
-    def 再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
+    def fails_the_cell_and_starts_the_engine_again_in_the_next_cell_when_a_restart_fails(
+        direct, capsys, exc
+    ):
         """
         ja: エンジンの再起動に失敗すると、セルを失敗させ、次のセルでエンジンを起動し直す
         en: Fails the cell and starts the engine again in the next cell when a restart fails
@@ -662,7 +698,9 @@ def describe_起動と再起動の失敗():
         assert make.call_count == 2
 
     @story("J3")
-    def 想定外の例外が起きたら内部エラーとして表示しセッションを残す(direct, capsys):
+    def fails_the_cell_with_an_internal_error_and_keeps_the_session_when_an_unexpected_exception_occurs(
+        direct, capsys
+    ):
         """
         ja: 想定外の例外が起きると、内部エラーと表示してセルを失敗させ、セッションを残す
         en: Fails the cell with an internal error and keeps the session when an unexpected exception occurs
@@ -676,7 +714,7 @@ def describe_起動と再起動の失敗():
         assert fake.discard.called
 
 
-def describe_Lean_のバージョン():
+def describe_lean_version():
     """
     ja: Lean のバージョン
     en: Lean version
@@ -692,7 +730,9 @@ def describe_Lean_のバージョン():
         return run
 
     @story("J1", "G3")
-    def lean_の_version_を調べるときは時間を区切らずに待つ(lean):
+    def runs_lean_without_a_timeout_and_returns_the_version_it_prints_when_looking_up_the_local_toolchain(
+        lean,
+    ):
         """
         ja: 手元の toolchain を調べると、時間を区切らずに lean を実行し、lean が表示したバージョンを返す
         en: Runs lean without a timeout and returns the version it prints when looking up the local toolchain
@@ -701,7 +741,9 @@ def describe_Lean_のバージョン():
         assert "timeout" not in lean.call_args.kwargs
 
     @story("J1", "G3")
-    def toolchain_が_stable_なら今のバージョンに置き換える(lean, tmp_path):
+    def replaces_stable_with_the_version_that_the_stable_lean_reports_if_the_project_uses_stable(
+        lean, tmp_path
+    ):
         """
         ja: プロジェクトの toolchain が stable なら、stable の lean が示すバージョンに置き換える
         en: Replaces stable with the version that the stable lean reports if the project uses stable
@@ -716,7 +758,9 @@ def describe_Lean_のバージョン():
         ]
 
     @story("J1", "G3")
-    def エンジンを自分で指定したら_stable_を置き換えない(lean, tmp_path):
+    def returns_stable_as_it_is_without_running_lean_if_the_config_sets_the_engine(
+        lean, tmp_path
+    ):
         """
         ja: 設定でエンジンを指定してあれば、stable をそのまま返し、lean を実行しない
         en: Returns stable as it is without running lean if the config sets the engine
@@ -727,14 +771,16 @@ def describe_Lean_のバージョン():
         lean.assert_not_called()
 
 
-def describe_カーネルの登録():
+def describe_registering_the_kernel():
     """
     ja: カーネルの登録
     en: Registering the kernel
     """
 
     @story("J1")
-    def カーネルを登録すると今の_Python_で_leani_kernel_を起動する設定を書く(tmp_path):
+    def writes_a_kernel_json_that_starts_leani_kernel_with_the_current_python_when_install_runs(
+        tmp_path,
+    ):
         """
         ja: install を実行すると、今の Python で leani.kernel を起動する kernel.json を書く
         en: Writes a kernel.json that starts leani.kernel with the current Python when install runs
@@ -748,14 +794,16 @@ def describe_カーネルの登録():
         assert spec["env"] == {"FORCE_COLOR": "1"}
 
 
-def describe_SPEC_md_との対応():
+def describe_correspondence_with_spec():
     """
     ja: SPEC との対応
     en: Correspondence with SPEC
     """
 
     @story("X1")
-    def SPEC_md_に載らない形のテストを実行するとエラーにする(pytester):
+    def fails_the_run_and_shows_only_the_names_of_tests_spec_cannot_list_when_pytest_finds_such_tests(
+        pytester,
+    ):
         """
         ja: SPEC に載らない形のテストがあると、pytest の実行を失敗させ、そのテストの名前だけを表示する
         en: Fails the run and shows only the names of tests SPEC cannot list when pytest finds such tests
@@ -764,29 +812,29 @@ def describe_SPEC_md_との対応():
             test_forms="""
             from stories import story
 
-            def describe_セル():
+            def describe_cell():
                 @story("J1")
-                def 載る():
+                def listed_in_spec():
                     pass
 
-                def _補助():
+                def _helper():
                     pass
 
-                def story_が無い():
+                def missing_story():
                     pass
 
-            def test_直下():
+            def test_top_level():
                 pass
 
             class TestX:
-                def test_中(self):
+                def test_in_class(self):
                     pass
             """
         )
         result = pytester.runpytest("-p", "stories", "-p", "no:xdist")
         out = result.stdout.str() + result.stderr.str()
         assert result.ret != 0
-        for name in ("story_が無い", "test_直下", "test_中"):
+        for name in ("missing_story", "test_top_level", "test_in_class"):
             assert name in out
-        for name in ("載る", "_補助"):
+        for name in ("listed_in_spec", "_helper"):
             assert name not in out

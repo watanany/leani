@@ -27,6 +27,9 @@
 //! すぐ後ろの docstring の `ja:` と `en:` の行から読む。Python の構文を解析する crate は使わない。
 //! カーネルのテストは数が少なく、書き方も決まっているので、行単位で足りる。
 //!
+//! テストの関数名と `mod` の名前は、en の文から作る ([`ident`])。名前が違えばエラーにする。
+//! 名前を別に考えなくてよいように、名前は文から機械的に決める。
+//!
 //! 文は `ja:` と `en:` の後ろに 1 行で書く。`ja:` か `en:` の次の行に続きを書くと、続きを
 //! 読み落とすのでエラーにする。doc のほかの行には、テストの説明を自由に書いてよい。
 //!
@@ -266,6 +269,75 @@ fn both(lines: &[String], at: &str) -> Result<Both, String> {
     }
 }
 
+// ------------------------------------------------------------------ 名前
+
+/// en の文から作る識別子。小文字にし、英数字でない文字の並びを `_` にして、両端の `_` を消す。
+pub fn ident(en: &str) -> String {
+    en.to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .collect::<Vec<_>>()
+        .join("_")
+}
+
+/// 名前を付けるもの。使えない名前が、種類ごとに違う。
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Kind {
+    RustTest,
+    RustMod,
+    PyTest,
+    PyDescribe,
+}
+
+/// Rust か Python のキーワード。Rust の予約語も含める。
+const KEYWORDS: &[&str] = &[
+    "abstract", "and", "as", "assert", "async", "await", "become", "box", "break", "class",
+    "const", "continue", "crate", "def", "del", "do", "dyn", "elif", "else", "enum", "except",
+    "extern", "false", "final", "finally", "fn", "for", "from", "gen", "global", "if", "impl",
+    "import", "in", "is", "lambda", "let", "loop", "macro", "match", "mod", "move", "mut",
+    "nonlocal", "not", "or", "override", "pass", "priv", "pub", "raise", "ref", "return", "self",
+    "static", "struct", "super", "trait", "true", "try", "type", "typeof", "unsafe", "unsized",
+    "use", "virtual", "where", "while", "with", "yield",
+];
+
+/// テストのファイルが使う crate の名前。`mod` の名前がこれと同じだと、`use` が `mod` を指す。
+const CRATES: &[&str] = &["leani", "proptest", "spec", "story"];
+
+/// en の文から作った名前を使えない理由。
+fn unusable(id: &str, kind: Kind) -> Option<&'static str> {
+    if !id.starts_with(|c: char| c.is_ascii_lowercase()) {
+        Some("英字で始まらない")
+    } else if kind != Kind::PyDescribe && KEYWORDS.contains(&id) {
+        Some("キーワードと同じになる")
+    } else if kind == Kind::RustMod && CRATES.contains(&id) {
+        Some("crate の名前と同じになる")
+    } else if kind == Kind::PyTest && id.starts_with("describe") {
+        // pytest-describe は describe で始まる関数を describe として集め、テストとして実行しない。
+        Some("describe で始まる")
+    } else {
+        None
+    }
+}
+
+/// `name` が en の文から作った名前と同じか確かめる。Python の describe は前に `describe_` を
+/// 付ける。名前は en の文から機械的に決まるので、書く人が考えるのは ja と en の文だけになる。
+fn named(name: &str, en: &str, kind: Kind, at: &str) -> Result<(), String> {
+    let id = ident(en);
+    let want = match kind {
+        Kind::PyDescribe => format!("describe_{id}"),
+        Kind::RustTest | Kind::RustMod | Kind::PyTest => id.clone(),
+    };
+    match unusable(&id, kind) {
+        Some(why) => Err(format!(
+            "en の文から作る名前 {want} は{why}。en の文を書き直す: {at}"
+        )),
+        None if name == want => Ok(()),
+        None => Err(format!(
+            "名前が en の文から作る名前と違う。{want} にする: {at}"
+        )),
+    }
+}
+
 /// doc comment の行。`inner` なら `//!` を、そうでなければ `///` を読む。
 ///
 /// syn は、`mod` の外に書いた `///` と中に書いた `//!` を同じ `attrs` に入れるので、
@@ -429,6 +501,7 @@ fn item_tests(item: &Item, at: &str, dir: &Path) -> Result<(Option<Both>, Vec<Te
                 (_, true) => Ok((None, tests)),
                 (false, false) => {
                     let name = both(&docs, &format!("mod {inside}"))?;
+                    named(&ident, &name.en, Kind::RustMod, &format!("mod {inside}"))?;
                     let tests = tests
                         .into_iter()
                         .map(|t| Test {
@@ -455,6 +528,7 @@ fn item_tests(item: &Item, at: &str, dir: &Path) -> Result<(Option<Both>, Vec<Te
         Item::Fn(f) if is_test(&f.attrs) => {
             let name = f.sig.ident.to_string();
             let what = both(&doc_lines(&f.attrs, false), &format!("{at} / {name}"))?;
+            named(&name, &what.en, Kind::RustTest, &format!("{at} / {name}"))?;
             Ok((
                 None,
                 vec![Test {
@@ -731,7 +805,13 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
 
 /// docstring を閉じたときに、待っていた `def` を describe かテストにする。
 fn finish(mut scan: Scan, w: Waiting, lines: &[String], layer: &str) -> Result<Scan, String> {
-    let what = both(lines, &format!("{layer} / {}", w.name()))?;
+    let at = format!("{layer} / {}", w.name());
+    let what = both(lines, &at)?;
+    let kind = match w {
+        Waiting::Describe { .. } => Kind::PyDescribe,
+        Waiting::Test { .. } => Kind::PyTest,
+    };
+    named(w.name(), &what.en, kind, &at)?;
     match w {
         Waiting::Describe { indent, .. } => {
             let parent = scan.frames.len() - 1;
@@ -982,10 +1062,10 @@ mod tests {
     }
 
     #[test]
-    fn テストの属性が付いた関数だけを_doc_の_ja_の文で集める() {
+    fn collects_only_functions_with_a_test_attribute_using_the_ja_line() {
         let got = rust(
             r#"
-            mod eval {
+            mod evaluation {
                 //! ja: 式の評価
                 //! en: Evaluation
                 //!
@@ -995,14 +1075,14 @@ mod tests {
                 /// en: Evaluates a single expression
                 #[story("A1")]
                 #[test]
-                fn single() {}
+                fn evaluates_a_single_expression() {}
                 /// ja: どう連結しても閉じている
                 /// en: Stays balanced
                 ///
                 /// テストの説明。
                 #[story("E2")]
                 #[proptest]
-                fn concat(a: String) {}
+                fn stays_balanced(a: String) {}
             }
             mod common {
                 pub fn drive() {}
@@ -1015,13 +1095,13 @@ mod tests {
                 row(
                     "parsing / 式の評価",
                     "単独の式を評価する",
-                    "single",
+                    "evaluates_a_single_expression",
                     &["A1"]
                 ),
                 row(
                     "parsing / 式の評価",
                     "どう連結しても閉じている",
-                    "concat",
+                    "stays_balanced",
                     &["E2"]
                 ),
             ]
@@ -1029,30 +1109,30 @@ mod tests {
     }
 
     #[test]
-    fn mod_の文は中の_doc_だけから読む() {
+    fn reads_the_mod_text_only_from_the_inner_doc() {
         let got = rust(
             r#"
             /// ja: 外の文
             /// en: Outer text
-            mod eval {
+            mod inner_text {
                 //! ja: 中の文
                 //! en: Inner text
                 /// ja: 評価する
                 /// en: Evaluates
                 #[story("A1")]
                 #[test]
-                fn t() {}
+                fn evaluates() {}
             }
             "#,
         );
         assert_eq!(
             got.unwrap(),
-            [row("parsing / 中の文", "評価する", "t", &["A1"])]
+            [row("parsing / 中の文", "評価する", "evaluates", &["A1"])]
         );
     }
 
     #[test]
-    fn doc_の_ja_が無いか_2_つあるか続きの行があればエラーにする() {
+    fn rejects_a_missing_or_repeated_ja_line_or_a_continuation_line() {
         for doc in [
             "",
             "/// en: Evaluates",
@@ -1061,36 +1141,35 @@ mod tests {
             "/// ja:",
         ] {
             let text = format!(
-                "mod m {{ //! ja: 式\n//! en: Expr\n{doc}\n#[story(\"A1\")] #[test] fn t() {{}} }}"
+                "mod expr {{ //! ja: 式\n//! en: Expr\n{doc}\n#[story(\"A1\")] #[test] fn evaluates() {{}} }}"
             );
             assert!(rust(&text).is_err(), "{doc}");
         }
-        let no_mod_doc =
-            "mod m { /// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn t() {} }";
+        let no_mod_doc = "mod m { /// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {} }";
         assert!(rust(no_mod_doc).is_err());
     }
 
     #[test]
-    fn 同じ_mod_の中に同じ文の_mod_があればエラーにする() {
+    fn rejects_two_mods_with_the_same_text_in_one_mod() {
         let text = r#"
-            mod a { //! ja: 式
+            mod expr { //! ja: 式
                 //! en: Expr
                 /// ja: 評価する
                 /// en: Evaluates
-                #[story("A1")] #[test] fn t() {} }
-            mod b { //! ja: 式
+                #[story("A1")] #[test] fn evaluates() {} }
+            mod expr { //! ja: 式
                 //! en: Expr
                 /// ja: 表示する
                 /// en: Shows
-                #[story("A1")] #[test] fn u() {} }
+                #[story("A1")] #[test] fn shows() {} }
         "#;
         assert!(rust(text).is_err());
     }
 
     #[test]
-    fn describe_の中で_story_を付けた関数を_docstring_の_ja_の文で読む() {
+    fn reads_functions_with_story_inside_describe_using_the_docstring() {
         let text = r#"
-def describe_cell():
+def describe_running_cells():
     """
     ja: セルの実行
     en: Running cells
@@ -1098,7 +1177,7 @@ def describe_cell():
 
     @story("J1", "E3")
     @pytest.mark.usefixtures("place")
-    def quit(kernel):
+    def does_nothing(kernel):
         """
         ja: :q は何もしない
         en: Does nothing
@@ -1111,10 +1190,10 @@ def describe_cell():
     def helper():
         pass
 
-    def 補助():
+    def other():
         pass
 
-def describe_register():
+def describe_registering_the_kernel():
     """
     ja: カーネルの登録
     en: Registering the kernel
@@ -1126,7 +1205,7 @@ def describe_register():
         "exc",
         [1, 2],
     )
-    def multi(
+    def multi_line_arguments(
         tmp_path,
         exc,
     ):
@@ -1143,19 +1222,24 @@ def describe_register():
                 row(
                     "kernel / セルの実行",
                     ":q は何もしない",
-                    "quit",
+                    "does_nothing",
                     &["J1", "E3"]
                 ),
-                row("kernel / カーネルの登録", "複数行の引数", "multi", &["J1"]),
+                row(
+                    "kernel / カーネルの登録",
+                    "複数行の引数",
+                    "multi_line_arguments",
+                    &["J1"]
+                ),
             ]
         );
     }
 
     #[test]
-    fn docstring_より先に_def_が来るか_ja_が無ければエラーにする() {
-        let before = "def describe_cell():\n    @story(\"J1\")\n    def t(kernel):\n        \"\"\"\n        ja: 文\n        en: Text\n        \"\"\"\n";
+    fn rejects_a_def_before_the_docstring_or_a_docstring_without_ja() {
+        let before = "def describe_cell():\n    @story(\"J1\")\n    def text(kernel):\n        \"\"\"\n        ja: 文\n        en: Text\n        \"\"\"\n";
         assert!(python(before).is_err());
-        let test = "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n    @story(\"J1\")\n    def t(kernel):\n        pass\n";
+        let test = "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n    @story(\"J1\")\n    def text(kernel):\n        pass\n";
         assert!(python(test).is_err());
         let no_ja = "def describe_cell():\n    \"\"\"\n    セル\n    \"\"\"\n";
         assert!(python(no_ja).is_err());
@@ -1164,7 +1248,7 @@ def describe_register():
     }
 
     #[test]
-    fn 同じ_scope_に同じ名前の_def_があればエラーにする() {
+    fn rejects_two_defs_with_the_same_name_in_one_scope() {
         let doc = |ja: &str, en: &str, pad: &str| {
             format!("{pad}\"\"\"\n{pad}ja: {ja}\n{pad}en: {en}\n{pad}\"\"\"\n")
         };
@@ -1174,46 +1258,46 @@ def describe_register():
                 doc(ja, en, "        ")
             )
         };
-        let fixture = "    @pytest.fixture\n    def t():\n        pass\n";
+        let fixture = "    @pytest.fixture\n    def before():\n        pass\n";
         let head = format!("def describe_cell():\n{}", doc("セル", "Cell", "    "));
         for body in [
             format!(
                 "{}{}",
-                test("t", "前", "Before"),
-                test("t", "後ろ", "After")
+                test("before", "前", "Before"),
+                test("before", "後ろ", "Before.")
             ),
-            format!("{}{fixture}", test("t", "前", "Before")),
+            format!("{}{fixture}", test("before", "前", "Before")),
         ] {
             assert!(python(&format!("{head}{body}")).is_err(), "{body}");
         }
         let same_describe = format!(
             "{head}{}{head}{}",
-            test("a", "前", "Before"),
-            test("b", "後ろ", "After")
+            test("before", "前", "Before"),
+            test("after", "後ろ", "After")
         );
         assert!(python(&same_describe).is_err());
         let other_scope = format!(
             "{head}{}    def helper():\n        pass\n{}",
-            test("t", "前", "Before"),
+            test("before", "前", "Before"),
             "    def other():\n        def helper():\n            pass\n"
         );
         assert!(python(&other_scope).is_ok());
     }
 
     #[test]
-    fn 三重引用符の中の_def_は読まない() {
+    fn skips_defs_inside_triple_quoted_strings() {
         let text = r#"
 def helper():
     """1 行で閉じる docstring。"""
 
-def describe_cell():
+def describe_running_cells():
     """
     ja: セルの実行
     en: Running cells
     """
 
     @story("J1")
-    def before(kernel):
+    def uses_earlier_declarations(kernel):
         """
         ja: 前のセルの宣言を使える
         en: Uses earlier declarations
@@ -1224,7 +1308,7 @@ def fib : Nat → Nat
         pass
 
     @story("J2")
-    async def after(kernel):
+    async def later_test(kernel):
         """
         ja: 後ろのテスト
         en: Later test
@@ -1237,22 +1321,22 @@ def fib : Nat → Nat
                 row(
                     "kernel / セルの実行",
                     "前のセルの宣言を使える",
-                    "before",
+                    "uses_earlier_declarations",
                     &["J1"]
                 ),
-                row("kernel / セルの実行", "後ろのテスト", "after", &["J2"]),
+                row("kernel / セルの実行", "後ろのテスト", "later_test", &["J2"]),
             ]
         );
     }
 
     #[test]
-    fn story_が付いているのにテストでない関数はエラーにする() {
-        let text = "mod m { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] fn t() {} }";
+    fn rejects_a_function_with_story_but_no_test_attribute() {
+        let text = "mod expr { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] fn evaluates() {} }";
         assert!(rust(text).is_err());
     }
 
     #[test]
-    fn 入れ子の_mod_は外側の文から並べる() {
+    fn lists_nested_mods_from_the_outer_text() {
         let text = r#"
             mod outer {
                 //! ja: 外側
@@ -1264,7 +1348,7 @@ def fib : Nat → Nat
                     /// en: Evaluates
                     #[story("A1")]
                     #[test]
-                    fn t() {}
+                    fn evaluates() {}
                 }
             }
         "#;
@@ -1275,7 +1359,7 @@ def fib : Nat → Nat
     /// describe とテスト 2 件。`body` は 1 件目のテストの本文。
     fn two_tests(body: &str) -> String {
         format!(
-            "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n\n    @story(\"J1\")\n    def before(kernel):\n        \"\"\"\n        ja: 前のテスト\n        en: Earlier test\n        \"\"\"\n{body}\n\n    @story(\"J2\")\n    def after(kernel):\n        \"\"\"\n        ja: 後ろのテスト\n        en: Later test\n        \"\"\"\n        pass\n"
+            "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n\n    @story(\"J1\")\n    def before(kernel):\n        \"\"\"\n        ja: 前のテスト\n        en: Before\n        \"\"\"\n{body}\n\n    @story(\"J2\")\n    def after(kernel):\n        \"\"\"\n        ja: 後ろのテスト\n        en: After\n        \"\"\"\n        pass\n"
         )
     }
 
@@ -1284,24 +1368,24 @@ def fib : Nat → Nat
     }
 
     #[test]
-    fn コメントの中の三重引用符では文字列にしない() {
+    fn does_not_open_a_string_at_triple_quotes_in_a_comment() {
         let text = two_tests("        # 次の \"\"\" は文字列ではない\n        pass");
         assert_eq!(whats(&text), ["前のテスト", "後ろのテスト"]);
     }
 
     #[test]
-    fn describe_の外か_class_の中で_story_を付けるとエラーにする() {
-        let doc = "    \"\"\"\n    ja: 文\n    en: Text\n    \"\"\"\n";
-        let top = format!("@story(\"J1\")\ndef t(kernel):\n{doc}");
+    fn rejects_story_outside_describe_or_inside_a_class() {
+        let doc = "    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n";
+        let top = format!("@story(\"J1\")\ndef text(kernel):\n{doc}");
         assert!(python(&top).is_err());
         let class = format!(
-            "def describe_cell():\n{doc}    class TestX:\n        @story(\"J1\")\n        def t(self):\n            \"\"\"\n            ja: 文\n            en: Text\n            \"\"\"\n"
+            "def describe_cell():\n{doc}    class TestX:\n        @story(\"J1\")\n        def text(self):\n            \"\"\"\n            ja: 文\n            en: Text\n            \"\"\"\n"
         );
         assert!(python(&class).is_err());
     }
 
     #[test]
-    fn ふつうの文字列の中の三重引用符では文字列にしない() {
+    fn does_not_open_a_string_at_triple_quotes_in_a_plain_string() {
         let text = two_tests(
             "        src = 'x = \"\"\"'\n        code = \"theorem h''' : True := trivial\"\n        doc = \"\"\"閉じる\"\"\" + \"\"\"\n続く\"\"\"\n        pass",
         );
@@ -1309,9 +1393,9 @@ def fib : Nat → Nat
     }
 
     #[test]
-    fn 入れ子の_describe_は外側の文から並べる() {
+    fn lists_nested_describes_from_the_outer_text() {
         let text = r#"
-def describe_a():
+def describe_outer_a():
     """
     ja: 外側A
     en: Outer A
@@ -1322,14 +1406,14 @@ def describe_a():
         en: Common
         """
         @story("J1")
-        def same(kernel):
+        def same_text(kernel):
             """
             ja: 同じ文
             en: Same text
             """
             pass
 
-def describe_b():
+def describe_outer_b():
     """
     ja: 外側B
     en: Outer B
@@ -1340,7 +1424,7 @@ def describe_b():
         en: Common
         """
         @story("J1")
-        def same(kernel):
+        def same_text(kernel):
             """
             ja: 同じ文
             en: Same text
@@ -1363,18 +1447,19 @@ def describe_b():
     }
 
     #[test]
-    fn 別のファイルの_mod_のテストはそのファイルの_doc_の文で読む() {
-        let test = "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn t() {}\n";
+    fn reads_tests_of_a_file_mod_using_the_doc_of_that_file() {
+        let test =
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn evaluates() {}\n";
         let dir = scratch(
             "mod",
             &[
-                ("outer.rs", "//! ja: 外\n//! en: Out\nmod inner;\n"),
-                ("outer/inner.rs", &format!("//! ja: 内\n//! en: In\n{test}")),
-                ("common/mod.rs", "//! ja: 共通\n//! en: Common\nmod sub;\n"),
+                ("outer.rs", "//! ja: 外\n//! en: Outer\nmod inner;\n"),
                 (
-                    "common/sub.rs",
-                    &format!("//! ja: 下\n//! en: Below\n{test}"),
+                    "outer/inner.rs",
+                    &format!("//! ja: 内\n//! en: Inner\n{test}"),
                 ),
+                ("common/mod.rs", "//! ja: 共通\n//! en: Common\nmod sub;\n"),
+                ("common/sub.rs", &format!("//! ja: 下\n//! en: Sub\n{test}")),
             ],
         );
         let file = syn::parse_file("mod outer;\nmod common;\n").unwrap();
@@ -1385,13 +1470,13 @@ def describe_b():
     }
 
     #[test]
-    fn 実行されないか読み取れないテストはエラーにする() {
+    fn rejects_tests_that_may_not_run_or_cannot_be_read() {
         let dir = std::env::temp_dir();
         for text in [
             "proptest! { #[test] fn t(a in 0..1) {} }",
-            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[ignore] fn t() {}",
-            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[cfg(unix)] fn t() {}",
-            "#[cfg(unix)] mod m { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn t() {} }",
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[ignore] fn evaluates() {}",
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[cfg(unix)] fn evaluates() {}",
+            "#[cfg(unix)] mod expr { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {} }",
             "mod missing;",
         ] {
             let file = syn::parse_file(text).unwrap();
@@ -1400,7 +1485,7 @@ def describe_b():
     }
 
     #[test]
-    fn stories_toml_の誤りと同じ文のテストを見つける() {
+    fn finds_errors_in_stories_toml_and_tests_with_the_same_text() {
         let stories: Stories = toml::from_str(
             r#"
 unbuilt = ["A2"]
@@ -1456,9 +1541,9 @@ en = "z"
     }
 
     #[test]
-    fn en_の文と場所を読む() {
+    fn reads_the_en_text_and_place() {
         let file = syn::parse_file(
-            "mod m {\n//! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn t() {} }",
+            "mod expr {\n//! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {} }",
         )
         .unwrap();
         let got: Vec<(Both, Both)> = rust_tests(&file.items, "parsing", Path::new("."))
@@ -1476,7 +1561,7 @@ en = "z"
     }
 
     #[test]
-    fn en_が無いか_ascii_でないか_バックスラッシュがあればエラーにする() {
+    fn rejects_a_missing_or_non_ascii_en_line_or_a_backslash() {
         for doc in [
             "/// ja: 評価する",
             "/// ja: 評価する\n/// en:",
@@ -1485,11 +1570,11 @@ en = "z"
             "/// ja: \\to の略記\n/// en: The to abbreviation",
         ] {
             let text = format!(
-                "mod m {{ //! ja: 式\n//! en: Expr\n{doc}\n#[story(\"A1\")] #[test] fn t() {{}} }}"
+                "mod expr {{ //! ja: 式\n//! en: Expr\n{doc}\n#[story(\"A1\")] #[test] fn evaluates() {{}} }}"
             );
             assert!(rust(&text).is_err(), "{doc}");
         }
-        let no_mod_en = "mod m { //! ja: 式\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn t() {} }";
+        let no_mod_en = "mod expr { //! ja: 式\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {} }";
         assert!(rust(no_mod_en).is_err());
         let no_py_en = "def describe_cell():\n    \"\"\"\n    ja: セル\n    \"\"\"\n";
         assert!(python(no_py_en).is_err());
@@ -1532,7 +1617,7 @@ en = "I want to see the type"
     }
 
     #[test]
-    fn 英語で書き出す() {
+    fn renders_in_english() {
         let (stories, tests) = small();
         let got = render(&stories, &tests, Lang::En).unwrap();
         assert!(got.starts_with("<!-- Generated by crates/spec"), "{got}");
@@ -1550,7 +1635,7 @@ en = "I want to see the type"
     }
 
     #[test]
-    fn 日本語で書き出す() {
+    fn renders_in_japanese() {
         let (stories, tests) = small();
         let got = render(&stories, &tests, Lang::Ja).unwrap();
         assert!(
@@ -1565,8 +1650,9 @@ en = "I want to see the type"
     }
 
     #[test]
-    fn check_は古いほうのファイルの名前を出す() {
-        let test = "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn t() {}\n";
+    fn check_reports_the_outdated_file() {
+        let test =
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn evaluates() {}\n";
         let stories = "unbuilt = []\n[[group]]\nid = \"A\"\nja = \"式\"\nen = \"Expr\"\n[[story]]\nid = \"A1\"\nja = \"値\"\nen = \"Value\"\n";
         let dir = scratch(
             "check",
@@ -1588,5 +1674,58 @@ en = "I want to see the type"
                 Err("SPEC.en.md が古い: cargo run -p spec".to_string())
             )
         );
+    }
+
+    #[test]
+    fn makes_identifiers_from_the_en_line() {
+        assert_eq!(
+            ident("Shows the value when :help runs"),
+            "shows_the_value_when_help_runs"
+        );
+        assert_eq!(ident("Judges `a-b` as (x)"), "judges_a_b_as_x");
+    }
+
+    #[test]
+    fn rejects_names_that_differ_from_the_en_line() {
+        let rust_ok = "mod expr { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates it\n#[story(\"A1\")] #[test] fn evaluates_it() {} }";
+        assert!(rust(rust_ok).is_ok());
+        for text in [
+            rust_ok.replace("fn evaluates_it", "fn evaluates"),
+            rust_ok.replace("mod expr", "mod m"),
+        ] {
+            assert!(rust(&text).is_err(), "{text}");
+        }
+        let py_ok = "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n    @story(\"J1\")\n    def runs_it(kernel):\n        \"\"\"\n        ja: 実行する\n        en: Runs it\n        \"\"\"\n";
+        assert!(python(py_ok).is_ok());
+        for text in [
+            py_ok.replace("def runs_it", "def runs"),
+            py_ok.replace("describe_cell", "describe_cells"),
+        ] {
+            assert!(python(&text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
+    fn rejects_en_lines_that_make_unusable_names() {
+        for (name, en, kind) in [
+            ("_2_tests", "2 tests", Kind::RustTest),
+            ("type", "Type", Kind::RustTest),
+            ("pass_", "Pass", Kind::PyTest),
+            ("spec", "Spec", Kind::RustMod),
+            ("describes_the_cell", "Describes the cell", Kind::PyTest),
+        ] {
+            let got = named(name, en, kind, "at");
+            assert!(
+                got.as_ref().is_err_and(|e| e.contains("en の文を書き直す")),
+                "{en}: {got:?}"
+            );
+        }
+        for (name, en, kind) in [
+            ("spec", "Spec", Kind::RustTest),
+            ("describes_the_cell", "Describes the cell", Kind::RustTest),
+            ("describe_type", "Type", Kind::PyDescribe),
+        ] {
+            assert_eq!(named(name, en, kind, "at"), Ok(()), "{en}");
+        }
     }
 }

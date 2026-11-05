@@ -3,13 +3,6 @@
 //! Mathlib には定数が 47 万件あり、1 回の問い合わせに 1 秒かかる。名前空間ごとに
 //! まとめて取得してキャッシュし、宣言を実行するたびにキャッシュを捨てないことが要点。
 
-#![allow(
-    non_snake_case,
-    uncommon_codepoints,
-    confusable_idents,
-    mixed_script_confusables
-)]
-
 mod common;
 
 use std::fs;
@@ -107,7 +100,7 @@ fn asked(text: &str, names: Vec<String>) -> (Vec<(String, usize)>, Vec<String>) 
     )
 }
 
-mod 端末の_Tab_補完 {
+mod tab_completion_in_the_terminal {
     //! ja: 端末の Tab 補完
     //! en: Tab completion in the terminal
     use super::*;
@@ -116,7 +109,7 @@ mod 端末の_Tab_補完 {
     /// en: Returns candidates that replace only the name before the cursor in #check Nat.suc
     #[story("D1")]
     #[test]
-    fn Tab_で置き換える範囲はカーソルの前の名前だけ() {
+    fn returns_candidates_that_replace_only_the_name_before_the_cursor_in_check_nat_suc() {
         let text = "#check Nat.suc";
         let (got, prefixes) = asked(text, vec!["Nat.succ".to_string()]);
         assert_eq!(prefixes, ["Nat.suc"]);
@@ -127,7 +120,7 @@ mod 端末の_Tab_補完 {
     }
 }
 
-mod 略記の_Tab_補完 {
+mod tab_completion_of_abbreviations {
     //! ja: 略記の Tab 補完
     //! en: Tab completion of abbreviations
     use super::*;
@@ -136,7 +129,8 @@ mod 略記の_Tab_補完 {
     /// en: Returns only the symbol replacing the abbreviation for input ending in a partial abbreviation
     #[story("C8")]
     #[test]
-    fn 略記の途中なら記号を補完する() {
+    fn returns_only_the_symbol_replacing_the_abbreviation_for_input_ending_in_a_partial_abbreviation()
+     {
         let text = "theorem x : p \\alp";
         let (got, _) = asked(text, vec!["Nat.succ".to_string()]);
         assert_eq!(got, [("α".to_string(), text.len() - "\\alp".len())]);
@@ -146,7 +140,7 @@ mod 略記の_Tab_補完 {
     /// en: Does not query constant names for input ending in a partial abbreviation
     #[story("C8")]
     #[test]
-    fn 略記の途中なら定数名を問い合わせない() {
+    fn does_not_query_constant_names_for_input_ending_in_a_partial_abbreviation() {
         let (_, prefixes) = asked("\\to", Vec::new());
         assert!(prefixes.is_empty(), "{prefixes:?}");
     }
@@ -155,14 +149,14 @@ mod 略記の_Tab_補完 {
     /// en: Returns a symbol candidate for an abbreviation at the end of the arguments of :t and :!
     #[story("C8")]
     #[test]
-    fn コマンドの引数の中でも略記を補完する() {
+    fn returns_a_symbol_candidate_for_an_abbreviation_at_the_end_of_the_arguments_of_t_and() {
         // space はどこでも略記を変換する。Tab も同じ範囲で変換する。
         assert!(completions(":t p \\to").contains(&"→".to_string()));
         assert!(completions(":! echo \\to").contains(&"→".to_string()));
     }
 }
 
-mod shell_コマンドの_Tab_補完 {
+mod tab_completion_of_shell_commands {
     //! ja: shell コマンドの Tab 補完
     //! en: Tab completion of shell commands
     use super::*;
@@ -171,7 +165,7 @@ mod shell_コマンドの_Tab_補完 {
     /// en: Returns executable commands on PATH as candidates for the first word
     #[story("B5")]
     #[test]
-    fn _1_語目は_PATH_にある実行できるコマンドを補完する() {
+    fn returns_executable_commands_on_path_as_candidates_for_the_first_word() {
         assert_eq!(completions(":! leanf"), ["oo"]);
         assert_eq!(completions(":!lean"), ["bar", "foo"]);
     }
@@ -180,7 +174,7 @@ mod shell_コマンドの_Tab_補完 {
     /// en: Returns file paths as candidates from the second word on
     #[story("B5")]
     #[test]
-    fn _2_語目からはファイルのパスを補完する() {
+    fn returns_file_paths_as_candidates_from_the_second_word_on() {
         assert_eq!(completions(":! cat notes."), ["lean", "md"]);
         assert_eq!(completions(":! cat bin/leanf"), ["oo"]);
     }
@@ -189,7 +183,7 @@ mod shell_コマンドの_Tab_補完 {
     /// en: Returns file paths as candidates for a first word containing a slash
     #[story("B5")]
     #[test]
-    fn _1_語目でも_slash_を含めばパスを補完する() {
+    fn returns_file_paths_as_candidates_for_a_first_word_containing_a_slash() {
         assert_eq!(completions(":! ./notes.l"), ["ean"]);
     }
 
@@ -197,12 +191,12 @@ mod shell_コマンドの_Tab_補完 {
     /// en: Returns no constant names for a shell command argument that looks like a constant name
     #[story("B5")]
     #[test]
-    fn shell_コマンドの中では定数名を補完しない() {
+    fn returns_no_constant_names_for_a_shell_command_argument_that_looks_like_a_constant_name() {
         assert!(completions(":! cat Nat.su").is_empty());
     }
 }
 
-mod コマンドの_Tab_補完 {
+mod tab_completion_of_commands {
     //! ja: コマンドの Tab 補完
     //! en: Tab completion of commands
     use super::*;
@@ -211,7 +205,7 @@ mod コマンドの_Tab_補完 {
     /// en: Returns command names listed in HELP for a word starting with a colon
     #[story("H1")]
     #[test]
-    fn コマンド名は_HELP_に載っているものを補完する() {
+    fn returns_command_names_listed_in_help_for_a_word_starting_with_a_colon() {
         assert_eq!(completions(":re"), ["reload", "reset", "restart"]);
         assert_eq!(completions(":"), *META_NAMES);
     }
@@ -220,7 +214,7 @@ mod コマンドの_Tab_補完 {
     /// en: Extracts only alphabetic command names from the HELP text
     #[story("H1")]
     #[test]
-    fn HELP_から_コマンド名だけを取り出す() {
+    fn extracts_only_alphabetic_command_names_from_the_help_text() {
         let help_text = "  :t, :type <expr>  型\n  :{ ... :}  囲む\n  :! <cmd>\n(:l で読む)";
         assert_eq!(meta_names(help_text), ["l", "t", "type"]);
     }
@@ -229,7 +223,7 @@ mod コマンドの_Tab_補完 {
     /// en: Returns only lean files and directories as candidates after :l
     #[story("B4")]
     #[test]
-    fn colon_l_の後は_lean_ファイルとディレクトリだけを補完する() {
+    fn returns_only_lean_files_and_directories_as_candidates_after_l() {
         assert_eq!(completions(":l notes."), ["lean"]);
         assert_eq!(completions(":load "), ["bin", "notes.lean"]);
     }
@@ -238,7 +232,7 @@ mod コマンドの_Tab_補完 {
     /// en: Returns only lean file paths as candidates after :save
     #[story("B3")]
     #[test]
-    fn colon_save_の後も_lean_ファイルのパスを補完する() {
+    fn returns_only_lean_file_paths_as_candidates_after_save() {
         assert_eq!(completions(":save no"), ["tes.lean"]);
     }
 
@@ -246,7 +240,7 @@ mod コマンドの_Tab_補完 {
     /// en: Returns environment names as candidates after :env
     #[story("G5")]
     #[test]
-    fn colon_env_の後は設定ファイルに書いた環境の名前を補完する() {
+    fn returns_environment_names_as_candidates_after_env() {
         let (ctx, _dir) = place();
         let envs = || vec!["mathlib".to_string(), "plain".to_string()];
         assert_eq!(completions_in(&ctx, ":env ", &envs), ["mathlib", "plain"]);
@@ -257,7 +251,7 @@ mod コマンドの_Tab_補完 {
     /// en: Returns no environment names if the config file is not valid TOML
     #[story("G5")]
     #[test]
-    fn 設定ファイルを読めなければ環境の名前を補完しない() {
+    fn returns_no_environment_names_if_the_config_file_is_not_valid_toml() {
         let sb = sandbox();
         fs::write(&sb.ctx.config, "default = \"core\"\n[env\n").expect("write");
         assert!(config_envs(&sb.ctx).is_empty());
@@ -267,12 +261,12 @@ mod コマンドの_Tab_補完 {
     /// en: Returns constant names as candidates after :t
     #[story("D1")]
     #[test]
-    fn colon_t_の後は定数名を補完する() {
+    fn returns_constant_names_as_candidates_after_t() {
         assert_eq!(completions(":t Nat.su"), ["Nat.succ"]);
     }
 }
 
-mod 名前空間ごとのキャッシュ {
+mod cache_per_namespace {
     //! ja: 名前空間ごとのキャッシュ
     //! en: Cache per namespace
     use super::*;
@@ -281,7 +275,7 @@ mod 名前空間ごとのキャッシュ {
     /// en: Queries constants only once when names in the same namespace are completed in a row
     #[story("D1")]
     #[test]
-    fn 同じ名前空間なら_1_回しか問い合わせない() {
+    fn queries_constants_only_once_when_names_in_the_same_namespace_are_completed_in_a_row() {
         let mut repl = Driver::new();
         let asked = count_chunk_queries(&mut repl);
         assert!(
@@ -299,7 +293,7 @@ mod 名前空間ごとのキャッシュ {
     /// en: Queries constants again when a name in another namespace is completed
     #[story("D1")]
     #[test]
-    fn 別の名前空間なら取得し直す() {
+    fn queries_constants_again_when_a_name_in_another_namespace_is_completed() {
         let mut repl = Driver::new();
         let asked = count_chunk_queries(&mut repl);
         repl.repl.complete_names("Nat.suc");
@@ -311,7 +305,7 @@ mod 名前空間ごとのキャッシュ {
     /// en: Does not query constants again when the same name is completed after a declaration runs
     #[story("D1")]
     #[test]
-    fn 宣言を実行してもキャッシュを捨てない() {
+    fn does_not_query_constants_again_when_the_same_name_is_completed_after_a_declaration_runs() {
         let mut repl = Driver::new();
         repl.repl.complete_names("Nat.suc");
         repl.feed(&["def myOwnHelper := 1"]);
@@ -327,7 +321,7 @@ mod 名前空間ごとのキャッシュ {
     /// en: Queries constants only once when a name is completed after two namespaces are opened
     #[story("D1", "D5")]
     #[test]
-    fn open_した名前空間の名前も一度に取得する() {
+    fn queries_constants_only_once_when_a_name_is_completed_after_two_namespaces_are_opened() {
         let mut repl = Driver::new();
         repl.feed(&["open Lean", "open Nat"]);
         let asked = count_chunk_queries(&mut repl);
@@ -336,7 +330,7 @@ mod 名前空間ごとのキャッシュ {
     }
 }
 
-mod 候補 {
+mod completion_candidates {
     //! ja: 候補
     //! en: Completion candidates
     use super::*;
@@ -345,7 +339,7 @@ mod 候補 {
     /// en: Removes the name of a declaration from candidates when :undo undoes the declaration
     #[story("D1", "F2")]
     #[test]
-    fn colon_undo_で宣言を取り消すとその名前は候補に出ない() {
+    fn removes_the_name_of_a_declaration_from_candidates_when_undo_undoes_the_declaration() {
         // 宣言を実行したあとに問い合わせると、その宣言の名前もキャッシュに入る。
         let mut repl = Driver::new();
         repl.feed(&["def myUndone.helper := 1"]);
@@ -359,7 +353,8 @@ mod 候補 {
     /// en: Returns the added name instead of the undone one when :undo is followed by a new declaration
     #[story("D1", "F2")]
     #[test]
-    fn colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない() {
+    fn returns_the_added_name_instead_of_the_undone_one_when_undo_is_followed_by_a_new_declaration()
+    {
         // 宣言の数が同じなので、数だけを比べると前の名前を使い続ける。
         let mut repl = Driver::new();
         repl.feed(&["def myGone.helper := 1"]);
@@ -373,7 +368,7 @@ mod 候補 {
     /// en: Does not return the undone name when the constant query fails after :undo
     #[story("D1", "F2")]
     #[test]
-    fn 問い合わせ直しに失敗しても_colon_undo_で取り消した名前は候補に出ない() {
+    fn does_not_return_the_undone_name_when_the_constant_query_fails_after_undo() {
         // キャッシュを使えないときに問い合わせ直しに失敗しても、前の環境の名前を返さない。
         let mut repl = Driver::new();
         repl.feed(&["def myLost.helper := 1"]);
@@ -391,7 +386,7 @@ mod 候補 {
     /// en: Does not return the name of a declaration when :reset runs after the declaration
     #[story("D1", "F2")]
     #[test]
-    fn colon_reset_で取り消した宣言は候補に出ない() {
+    fn does_not_return_the_name_of_a_declaration_when_reset_runs_after_the_declaration() {
         let mut repl = Driver::new();
         repl.feed(&["def myReset.helper := 1"]);
         let got = repl.repl.complete_names("myReset.he");
@@ -404,7 +399,7 @@ mod 候補 {
     /// en: Returns the name of a declaration when it is completed after the declaration runs
     #[story("D1")]
     #[test]
-    fn 自分で実行した宣言も候補に表示される() {
+    fn returns_the_name_of_a_declaration_when_it_is_completed_after_the_declaration_runs() {
         let mut repl = Driver::new();
         repl.feed(&["def myOwnHelper := 1"]);
         assert_eq!(repl.repl.complete_names("myOwnH"), ["myOwnHelper"]);
@@ -414,7 +409,7 @@ mod 候補 {
     /// en: Returns no candidates without querying the engine when a one-letter name is completed
     #[story("D1")]
     #[test]
-    fn _1_文字では候補を表示しない() {
+    fn returns_no_candidates_without_querying_the_engine_when_a_one_letter_name_is_completed() {
         // Mathlib だと `C` だけで 7.5 万件になる。leani は問い合わせもしない。
         let mut repl = Driver::new();
         let asked = Arc::new(AtomicUsize::new(0));
@@ -430,7 +425,7 @@ mod 候補 {
     }
 }
 
-mod エンジンが異常終了したあとの_Tab_補完 {
+mod tab_completion_after_the_engine_crashes {
     //! ja: エンジンが異常終了したあとの Tab 補完
     //! en: Tab completion after the engine crashes
     use super::*;
@@ -439,7 +434,8 @@ mod エンジンが異常終了したあとの_Tab_補完 {
     /// en: Returns nothing without a restart on completion and restarts with declarations on the next input
     #[story("D1", "F1")]
     #[test]
-    fn 補完ではエンジンを再起動せず次の入力で再起動する() {
+    fn returns_nothing_without_a_restart_on_completion_and_restarts_with_declarations_on_the_next_input()
+     {
         // Tab 補完は行編集の途中で呼ばれる。そこで再起動すると、再起動の表示が
         // 入力の行に混ざり、証明モードなどの状態も失われる。
         let mut repl = Driver::new();
@@ -460,7 +456,7 @@ mod エンジンが異常終了したあとの_Tab_補完 {
     }
 }
 
-mod open_した名前空間 {
+mod opened_namespaces {
     //! ja: open した名前空間
     //! en: Opened namespaces
     use super::*;
@@ -469,7 +465,7 @@ mod open_した名前空間 {
     /// en: Returns names without the namespace prefix when the namespace is opened
     #[story("D5")]
     #[test]
-    fn open_すると短い名前で補完される() {
+    fn returns_names_without_the_namespace_prefix_when_the_namespace_is_opened() {
         let mut repl = Driver::new();
         repl.feed(&["open Lean"]);
         assert!(
@@ -483,7 +479,7 @@ mod open_した名前空間 {
     /// en: Does not return names without the namespace prefix if the namespace is not opened
     #[story("D5")]
     #[test]
-    fn open_しなければ短い名前では補完されない() {
+    fn does_not_return_names_without_the_namespace_prefix_if_the_namespace_is_not_opened() {
         let mut repl = Driver::new();
         assert!(repl.repl.complete_names("Json.pa").is_empty());
     }
@@ -492,7 +488,7 @@ mod open_した名前空間 {
     /// en: Does not return names without the namespace prefix after open X in runs
     #[story("D5")]
     #[test]
-    fn open_X_in_の効果は次の入力に残らない() {
+    fn does_not_return_names_without_the_namespace_prefix_after_open_x_in_runs() {
         let mut repl = Driver::new();
         repl.feed(&["open Lean in #check 1"]);
         assert!(repl.repl.complete_names("Json.pa").is_empty());
@@ -502,7 +498,7 @@ mod open_した名前空間 {
     /// en: Omits hidden names but returns the others when a namespace is opened with hiding
     #[story("D5")]
     #[test]
-    fn hiding_した名前は補完されない() {
+    fn omits_hidden_names_but_returns_the_others_when_a_namespace_is_opened_with_hiding() {
         let mut repl = Driver::new();
         repl.feed(&["open Lean hiding Json"]);
         let names = repl.repl.complete_names("Js");
@@ -514,7 +510,8 @@ mod open_した名前空間 {
     /// en: Returns both hidden names when a namespace is opened twice hiding a different name each time
     #[story("D5")]
     #[test]
-    fn もう一度_open_して_hiding_を外した名前は補完される() {
+    fn returns_both_hidden_names_when_a_namespace_is_opened_twice_hiding_a_different_name_each_time()
+     {
         // 2 回目の open Lean は JsonNumber だけを隠すので、Json はソースに書ける。
         let mut repl = Driver::new();
         repl.feed(&["open Lean hiding Json", "open Lean hiding JsonNumber"]);
@@ -527,7 +524,7 @@ mod open_した名前空間 {
     /// en: Returns only the listed names without the namespace prefix when open lists names
     #[story("D5")]
     #[test]
-    fn 名前を指定して_open_したものだけが補完される() {
+    fn returns_only_the_listed_names_without_the_namespace_prefix_when_open_lists_names() {
         let mut repl = Driver::new();
         repl.feed(&["open Nat (succ_le_succ)"]);
         let names = repl.repl.complete_names("succ_le");
@@ -539,7 +536,8 @@ mod open_した名前空間 {
     /// en: Returns only non-protected names without the namespace prefix when the namespace is opened
     #[story("D5")]
     #[test]
-    fn protected_な名前は最後の部分だけでは補完されない() {
+    fn returns_only_non_protected_names_without_the_namespace_prefix_when_the_namespace_is_opened()
+    {
         // Nat.add_comm は protected なので `open Nat` しても add_comm とは書けない。
         let mut repl = Driver::new();
         repl.feed(&["open Nat"]);
@@ -560,7 +558,7 @@ mod open_した名前空間 {
     /// en: Returns names of a namespace without its prefix when a namespace command has run
     #[story("D5")]
     #[test]
-    fn namespace_の中ではその名前空間の名前も短い名前で補完される() {
+    fn returns_names_of_a_namespace_without_its_prefix_when_a_namespace_command_has_run() {
         let mut repl = Driver::new();
         repl.feed(&["namespace Lean.Json"]);
         assert!(

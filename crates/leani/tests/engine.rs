@@ -1,12 +1,5 @@
 //! `Engine` と `Repl` を直接呼ぶテスト。1 テストに数秒かかる。
 
-#![allow(
-    non_snake_case,
-    uncommon_codepoints,
-    confusable_idents,
-    mixed_script_confusables
-)]
-
 mod common;
 
 use std::sync::atomic::{AtomicBool, Ordering::SeqCst};
@@ -39,7 +32,7 @@ fn died_message(r: Result<impl std::fmt::Debug, EngineFault>) -> String {
     }
 }
 
-mod 起動時の確認 {
+mod startup_checks {
     //! ja: 起動時の確認
     //! en: Startup checks
     //!
@@ -50,7 +43,7 @@ mod 起動時の確認 {
     /// en: Aborts startup and reports the import failure when started with an unresolvable import
     #[story("G4")]
     #[test]
-    fn 解決できない_import_では起動を中止する() {
+    fn aborts_startup_and_reports_the_import_failure_when_started_with_an_unresolvable_import() {
         let sb = sandbox();
         let cfg = EnvConfig::make(
             &sb.ctx,
@@ -69,7 +62,8 @@ mod 起動時の確認 {
     /// en: Names the signal in the report when a command is sent after the engine is killed by a signal
     #[story("G4")]
     #[test]
-    fn エンジンが異常終了したら終了シグナルや終了コードを報告に含める() {
+    fn names_the_signal_in_the_report_when_a_command_is_sent_after_the_engine_is_killed_by_a_signal()
+     {
         let sb = sandbox();
         let cfg = EnvConfig::make(&sb.ctx, "bogus", None, &[], None, None);
         let mut eng = Engine::new(&sb.ctx, cfg, &mut sink()).expect("起動できない");
@@ -83,7 +77,8 @@ mod 起動時の確認 {
     /// en: Stops the failed engine and leaves the engine of the original environment running when the engine for :env fails to start
     #[story("G4", "G5")]
     #[test]
-    fn 起動に失敗したエンジンのプロセスを残さない() {
+    fn stops_the_failed_engine_and_leaves_the_engine_of_the_original_environment_running_when_the_engine_for_env_fails_to_start()
+     {
         // Engine を作った時点で repl は起動している。boot が失敗したあとに
         // Repl がエンジンを差し替えると、終了させる方法が無いままプロセスが残る。
         let mut repl = Driver::new();
@@ -100,7 +95,7 @@ mod 起動時の確認 {
     }
 }
 
-mod 式の評価 {
+mod evaluating_expressions {
     //! ja: 式の評価
     //! en: Evaluating expressions
     use super::*;
@@ -109,7 +104,7 @@ mod 式の評価 {
     /// en: Shows the value when an expression is entered
     #[story("A1")]
     #[test]
-    fn 単独の式は評価されて値が表示される() {
+    fn shows_the_value_when_an_expression_is_entered() {
         let mut repl = Driver::new();
         assert!(repl.feed(&["1 + 1"]).contains('2'));
     }
@@ -118,7 +113,7 @@ mod 式の評価 {
     /// en: Shows the value when an expression with a form feed in a string is entered
     #[story("A1", "C1")]
     #[test]
-    fn 改ページを含む文字列を入力しても式として評価する() {
+    fn shows_the_value_when_an_expression_with_a_form_feed_in_a_string_is_entered() {
         // 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
         // エラーになり、式を宣言として送ってしまう。
         let mut repl = Driver::new();
@@ -130,7 +125,8 @@ mod 式の評価 {
     /// en: Shows the value of the unchanged string when an expression with a multi-line string is entered
     #[story("A1")]
     #[test]
-    fn 複数行の文字列を評価しても値は変わらない() {
+    fn shows_the_value_of_the_unchanged_string_when_an_expression_with_a_multi_line_string_is_entered()
+     {
         // #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
         let mut repl = Driver::new();
         let out = repl.feed(&["\"Hello", "World\".length"]);
@@ -141,7 +137,7 @@ mod 式の評価 {
     /// en: Runs the action and shows its output when an IO expression is entered
     #[story("A1", "B1")]
     #[test]
-    fn IO_の式はそのまま実行される() {
+    fn runs_the_action_and_shows_its_output_when_an_io_expression_is_entered() {
         let mut repl = Driver::new();
         assert!(repl.feed(&["IO.println \"hi\""]).contains("hi"));
     }
@@ -150,7 +146,7 @@ mod 式の評価 {
     /// en: Shows why it cannot be evaluated and the type when a term without Repr is entered
     #[story("A2")]
     #[test]
-    fn 評価できない項は理由と型を表示する() {
+    fn shows_why_it_cannot_be_evaluated_and_the_type_when_a_term_without_repr_is_entered() {
         // Nat -> Nat に Repr が無いので #eval できない。
         let mut repl = Driver::new();
         let out = repl.feed(&["Nat.succ"]);
@@ -162,7 +158,7 @@ mod 式の評価 {
     /// en: Shows why it cannot be evaluated and the type when a noncomputable constant is entered
     #[story("A2")]
     #[test]
-    fn noncomputable_な定数は理由と型を表示する() {
+    fn shows_why_it_cannot_be_evaluated_and_the_type_when_a_noncomputable_constant_is_entered() {
         let mut repl = Driver::new();
         repl.feed(&["noncomputable def nc : Nat := Classical.choice ⟨1⟩"]);
         let out = repl.feed(&["nc"]);
@@ -174,7 +170,8 @@ mod 式の評価 {
     /// en: Runs the block as IO without an error when a do block mixing BaseIO and IO actions is entered
     #[story("A1", "B1")]
     #[test]
-    fn do_ブロックは_IO_として読み直す() {
+    fn runs_the_block_as_io_without_an_error_when_a_do_block_mixing_baseio_and_io_actions_is_entered()
+     {
         // IO.getEnv は BaseIO なので、Lean は do 全体を BaseIO と決めてしまい、
         // IO.println を書けなくなる。
         let mut repl = Driver::new();
@@ -189,7 +186,8 @@ mod 式の評価 {
     /// en: Wraps it in do and runs it without an error when an expression with a left arrow is entered
     #[story("A1", "B1")]
     #[test]
-    fn do_の外の_action_は_do_で包み直す() {
+    fn wraps_it_in_do_and_runs_it_without_an_error_when_an_expression_with_a_left_arrow_is_entered()
+    {
         let mut repl = Driver::new();
         let path = repl.tmp().join("note.txt");
         std::fs::write(&path, "from file\n").expect("write");
@@ -205,7 +203,8 @@ mod 式の評価 {
     /// en: Runs it as IO without an error when an expression with a left arrow on a BaseIO action is entered
     #[story("A1", "B1")]
     #[test]
-    fn do_で包み直した式も_IO_として読み直す() {
+    fn runs_it_as_io_without_an_error_when_an_expression_with_a_left_arrow_on_a_baseio_action_is_entered()
+     {
         let mut repl = Driver::new();
         let out =
             repl.feed(&["IO.println s!\"none={(← IO.getEnv \"LEANI_NO_SUCH_VAR\").isNone}\""]);
@@ -217,7 +216,8 @@ mod 式の評価 {
     /// en: Shows the error position within the original input when an expression with a left arrow fails
     #[story("A5")]
     #[test]
-    fn do_で包み直した式のエラー位置は元の入力の中を指す() {
+    fn shows_the_error_position_within_the_original_input_when_an_expression_with_a_left_arrow_fails()
+     {
         let mut repl = Driver::new();
         let out = repl.feed(&["IO.println (← pure (1 + true))"]);
         // 1 + true の位置。do で包んだ分 (1 行 4 桁) を戻していなければずれる。
@@ -233,7 +233,7 @@ mod 式の評価 {
     /// en: Shows the file contents when a do block that reads a file is entered
     #[story("B1")]
     #[test]
-    fn do_ブロックでファイルを読める() {
+    fn shows_the_file_contents_when_a_do_block_that_reads_a_file_is_entered() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("note.txt");
         std::fs::write(&path, "from file\n").expect("write");
@@ -248,7 +248,8 @@ mod 式の評価 {
     /// en: Shows the process output without an error when a do block that starts a process is entered
     #[story("B1")]
     #[test]
-    fn do_ブロックでプロセスを起動して出力を受け取れる() {
+    fn shows_the_process_output_without_an_error_when_a_do_block_that_starts_a_process_is_entered()
+    {
         let mut repl = Driver::new();
         let out = repl.feed(&[
             "do let r ← IO.Process.output {cmd := \"echo\", args := #[\"hi\"]}; IO.print r.stdout",
@@ -258,7 +259,7 @@ mod 式の評価 {
     }
 }
 
-mod 複数行の宣言 {
+mod multi_line_declarations {
     //! ja: 複数行の宣言
     //! en: Multi-line declarations
     use super::*;
@@ -267,7 +268,8 @@ mod 複数行の宣言 {
     /// en: Runs the lines as one declaration when a multi-line declaration is followed by a blank line
     #[story("C1")]
     #[test]
-    fn 空行までをまとめて_1_つの宣言として実行する() {
+    fn runs_the_lines_as_one_declaration_when_a_multi_line_declaration_is_followed_by_a_blank_line()
+    {
         let mut repl = Driver::new();
         repl.block(&[
             "def fib : Nat -> Nat",
@@ -283,7 +285,7 @@ mod 複数行の宣言 {
     /// en: Continues a one-line declaration when an indented line is entered right after it
     #[story("C2")]
     #[test]
-    fn 確定した直後のインデントした行は前の入力の続きとして扱う() {
+    fn continues_a_one_line_declaration_when_an_indented_line_is_entered_right_after_it() {
         let mut repl = Driver::new();
         repl.feed(&["def three := 1"]);
         repl.block(&["  + 2"]);
@@ -299,7 +301,8 @@ mod 複数行の宣言 {
     /// en: Continues a block confirmed by a blank line when an indented line is entered right after it
     #[story("C2")]
     #[test]
-    fn 空行で確定したブロックの直後のインデントした行も続きとして扱う() {
+    fn continues_a_block_confirmed_by_a_blank_line_when_an_indented_line_is_entered_right_after_it()
+    {
         let mut repl = Driver::new();
         repl.block(&["def pick : Nat → Nat", "  | 0 => 10"]);
         repl.block(&["  | _ => 20"]);
@@ -315,7 +318,7 @@ mod 複数行の宣言 {
     /// en: Leaves the declaration out of the environment when a declaration with an error is entered
     #[story("C1")]
     #[test]
-    fn エラーになった宣言は環境を進めない() {
+    fn leaves_the_declaration_out_of_the_environment_when_a_declaration_with_an_error_is_entered() {
         let mut repl = Driver::new();
         repl.feed(&["def broken : Nat := \"oops\""]);
         assert!(repl.declarations().is_empty());
@@ -325,7 +328,7 @@ mod 複数行の宣言 {
     /// en: Runs one declaration only after :} when input with a blank line is between :{ and :}
     #[story("C6")]
     #[test]
-    fn 波括弧のあいだは空行があっても_1_つの宣言として実行する() {
+    fn runs_one_declaration_only_after_when_input_with_a_blank_line_is_between_and() {
         let mut repl = Driver::new();
         repl.feed(&[":{", "def gap : Nat :=", "", "  5"]);
         assert!(repl.declarations().is_empty(), ":}} の前に実行した");
@@ -338,14 +341,14 @@ mod 複数行の宣言 {
     /// en: Runs and shows nothing when :} is entered right after :{
     #[story("C6")]
     #[test]
-    fn 波括弧のあいだが空なら何も実行しない() {
+    fn runs_and_shows_nothing_when_is_entered_right_after() {
         let mut repl = Driver::new();
         assert_eq!(repl.feed(&[":{", ":}"]), "");
         assert!(repl.declarations().is_empty());
     }
 }
 
-mod ノートブックのセルの終わり {
+mod end_of_a_notebook_cell {
     //! ja: ノートブックのセルの終わり
     //! en: End of a notebook cell
     use super::*;
@@ -354,7 +357,7 @@ mod ノートブックのセルの終わり {
     /// en: Runs the unfinished declaration when the cell ends
     #[story("J1")]
     #[test]
-    fn セルの終わりで入力途中の宣言を確定する() {
+    fn runs_the_unfinished_declaration_when_the_cell_ends() {
         let mut repl = Driver::new();
         repl.feed(&["def cellEnd : Nat :=", "  7"]);
         assert!(repl.declarations().is_empty(), "セルの終わりの前に実行した");
@@ -367,7 +370,7 @@ mod ノートブックのセルの終わり {
     /// en: Shows that :} is missing without running the block when the cell ends inside :{
     #[story("J1", "C6")]
     #[test]
-    fn セルの終わりで閉じていない複数行ブロックは実行しない() {
+    fn shows_that_is_missing_without_running_the_block_when_the_cell_ends_inside() {
         let mut repl = Driver::new();
         repl.feed(&[":{", "def unclosed := 1"]);
         let out = repl.feed_with("end_block", Repl::end_block);
@@ -390,7 +393,7 @@ impl LineSource for Script {
     }
 }
 
-mod 入力の終わり {
+mod end_of_input {
     //! ja: 入力の終わり
     //! en: End of input
     //!
@@ -419,7 +422,7 @@ mod 入力の終わり {
     /// en: Runs the unfinished block when input ends
     #[story("C6", "F4")]
     #[test]
-    fn 入力の終わりで入力途中のブロックを実行する() {
+    fn runs_the_unfinished_block_when_input_ends() {
         // ファイルの末尾に空行が無いと、最後のブロックは入力途中のまま EOF になる。
         // 捨てると、ファイルの最後の宣言だけが表示なしに実行されない。
         let (got, out, _) = run(vec!["#eval", "  41 + 1"]);
@@ -431,7 +434,7 @@ mod 入力の終わり {
     /// en: Shows that :} is missing without running the block when input ends inside :{
     #[story("C6")]
     #[test]
-    fn 入力の終わりで閉じていない複数行ブロックは実行せずに知らせる() {
+    fn shows_that_is_missing_without_running_the_block_when_input_ends_inside() {
         // `:}` を書き忘れたのか、ここで終わるつもりだったのかは区別できない。
         let (got, out, decls) = run(vec![":{", "def unclosed := 1"]);
         assert_eq!(got, Ok(0));
@@ -440,7 +443,7 @@ mod 入力の終わり {
     }
 }
 
-mod エンジンが異常終了してもセッションが続く {
+mod recovering_from_engine_crashes {
     //! ja: エンジンの異常終了からの復旧
     //! en: Recovering from engine crashes
     use super::*;
@@ -449,7 +452,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Restarts and replays the declarations, including the one being sent, when the engine crashes
     #[story("F1")]
     #[test]
-    fn エンジンが異常終了したら再起動して宣言を_replay_する() {
+    fn restarts_and_replays_the_declarations_including_the_one_being_sent_when_the_engine_crashes()
+    {
         let mut repl = Driver::new();
         repl.feed(&["def survivor := 9"]);
         let mut crashed = false;
@@ -481,7 +485,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Shows correct values for later input when the replay after an interrupt is interrupted again
     #[story("A4", "F1")]
     #[test]
-    fn 再起動中にもう一度中断しても応答がずれない() {
+    fn shows_correct_values_for_later_input_when_the_replay_after_an_interrupt_is_interrupted_again()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def before := 5"]);
         let second = Arc::new(AtomicBool::new(false));
@@ -512,7 +517,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Shows the PANIC in a warning and leaves the declaration out of the environment when the engine panics on it
     #[story("F1")]
     #[test]
-    fn エンジンが_PANIC_したら宣言を環境に追加せず警告する() {
+    fn shows_the_panic_in_a_warning_and_leaves_the_declaration_out_of_the_environment_when_the_engine_panics_on_it()
+     {
         // PANIC したあとのエンジンは状態がおかしくなっている可能性があるので、結果を
         // 普通の結果として扱わない。
         let mut repl = Driver::new();
@@ -533,7 +539,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Shows a warning instead of the result when the engine panics while evaluating an expression
     #[story("F1")]
     #[test]
-    fn 式の評価で_PANIC_したら結果を表示せず警告する() {
+    fn shows_a_warning_instead_of_the_result_when_the_engine_panics_while_evaluating_an_expression()
+    {
         let mut repl = Driver::new();
         repl.hook(|stage| match stage {
             Stage::Before(obj)
@@ -554,7 +561,7 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Shows a warning when the engine panics on an expression, a do block or a declaration
     #[story("F1")]
     #[test]
-    fn 入力したものがどの経路で送られても_PANIC_を警告する() {
+    fn shows_a_warning_when_the_engine_panics_on_an_expression_a_do_block_or_a_declaration() {
         // 呼び出し側で検査を書き忘れた経路を見つけるため、エンジンとのやりとりの
         // 1 か所で応答に PANIC を足す。
         type Hit = fn(&str) -> bool;
@@ -582,7 +589,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Reports the repeated crash and keeps earlier declarations when a declaration always crashes the engine
     #[story("F1")]
     #[test]
-    fn 再実行してもまた異常終了したら知らせてセッションを続ける() {
+    fn reports_the_repeated_crash_and_keeps_earlier_declarations_when_a_declaration_always_crashes_the_engine()
+     {
         // 同じ入力でエンジンが毎回異常終了する場合。再実行でも終了したあとに
         // 再起動しないと、終了したプロセスが残り、次の入力もすべて失敗する。
         let mut repl = Driver::new();
@@ -601,7 +609,7 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Replays the declarations when :restart runs after a restart was interrupted
     #[story("A4", "F1")]
     #[test]
-    fn 再起動を中断しても_colon_restart_でやり直せる() {
+    fn replays_the_declarations_when_restart_runs_after_a_restart_was_interrupted() {
         let mut repl = Driver::new();
         repl.feed(&["def before := 5"]);
         repl.hook(|stage| match stage {
@@ -620,7 +628,8 @@ mod エンジンが異常終了してもセッションが続く {
     /// en: Restores the file and the declarations when :restart runs after reloading the file was interrupted
     #[story("A4", "F1")]
     #[test]
-    fn ファイルの読み込み直しを中断しても_colon_restart_でやり直せる() {
+    fn restores_the_file_and_the_declarations_when_restart_runs_after_reloading_the_file_was_interrupted()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "lib.lean", "def libA := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -641,7 +650,7 @@ mod エンジンが異常終了してもセッションが続く {
     }
 }
 
-mod エンジンを再起動できないとき {
+mod when_the_engine_fails_to_restart {
     //! ja: エンジンを再起動できないとき
     //! en: When the engine fails to restart
     //!
@@ -652,7 +661,7 @@ mod エンジンを再起動できないとき {
     /// en: Reports that the restart failed when the engine fails to start on :restart
     #[story("F1")]
     #[test]
-    fn 再起動に失敗しても報告して異常終了しない() {
+    fn reports_that_the_restart_failed_when_the_engine_fails_to_start_on_restart() {
         let mut repl = Driver::new();
         repl.feed(&["def kept := 4"]);
         repl.hook(|stage| match stage {
@@ -667,7 +676,8 @@ mod エンジンを再起動できないとき {
     /// en: Keeps the declarations pending and replays them on the next :restart when the restart fails
     #[story("F1")]
     #[test]
-    fn 失敗しても宣言を捨てない() {
+    fn keeps_the_declarations_pending_and_replays_them_on_the_next_restart_when_the_restart_fails()
+    {
         // 捨てると、原因を直して再実行しても replay できなくなる。ただし log には
         // 残せない (env が無いので「環境に含まれている宣言」ではない)。
         let mut repl = Driver::new();
@@ -686,7 +696,7 @@ mod エンジンを再起動できないとき {
     }
 }
 
-mod replay_が途中で止まったとき {
+mod when_a_replay_stops_partway {
     //! ja: replay が途中で止まったとき
     //! en: When a replay stops partway
     //!
@@ -699,7 +709,8 @@ mod replay_が途中で止まったとき {
     /// en: Keeps the remaining declarations pending and out of the environment when the replay is interrupted
     #[story("F1", "F2")]
     #[test]
-    fn 実行できなかった宣言を環境の並びに混ぜない() {
+    fn keeps_the_remaining_declarations_pending_and_out_of_the_environment_when_the_replay_is_interrupted()
+     {
         let mut repl = Driver::new();
         for one in ["def r1 := 1", "def r2 := 2", "def r3 := 3"] {
             repl.feed(&[one]);
@@ -719,7 +730,7 @@ mod replay_が途中で止まったとき {
     /// en: Replays the pending declarations when :restart runs again
     #[story("F1", "F2")]
     #[test]
-    fn 次の_colon_restart_で再実行する() {
+    fn replays_the_pending_declarations_when_restart_runs_again() {
         let mut repl = Driver::new();
         for one in ["def s1 := 1", "def s2 := 2"] {
             repl.feed(&[one]);
@@ -746,7 +757,8 @@ mod replay_が途中で止まったとき {
     /// en: Skips the entered line and says so when the replay after a crash is interrupted with Ctrl-C
     #[story("A4", "F1")]
     #[test]
-    fn 異常終了後の再実行を_Ctrl_C_で止めたら入力を再実行しない() {
+    fn skips_the_entered_line_and_says_so_when_the_replay_after_a_crash_is_interrupted_with_ctrl_c()
+    {
         // ユーザーは再実行を止めたいので、入力した行も送らない。送ると、止めた
         // はずのエンジンに書いて「再実行しても異常終了した」と表示し、もう一度
         // 再起動する。
@@ -779,7 +791,7 @@ mod replay_が途中で止まったとき {
     }
 }
 
-mod 内部エラーでもセッションが続く {
+mod when_an_internal_error_occurs {
     //! ja: 内部エラーが起きたとき
     //! en: When an internal error occurs
     //!
@@ -790,7 +802,8 @@ mod 内部エラーでもセッションが続く {
     /// en: Shows an internal error and replays the earlier declarations when leani panics while sending a declaration
     #[story("F1")]
     #[test]
-    fn panic_を捕まえて宣言を失わない() {
+    fn shows_an_internal_error_and_replays_the_earlier_declarations_when_leani_panics_while_sending_a_declaration()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def before := 5"]);
         repl.hook(|stage| match stage {
@@ -850,7 +863,7 @@ fn add_env(repl: &Driver, text: &str) {
     std::fs::write(&config, conf).expect("write config");
 }
 
-mod ファイルの読み書き {
+mod reading_and_writing_files {
     //! ja: ファイルの読み書き
     //! en: Reading and writing files
     use super::*;
@@ -859,7 +872,7 @@ mod ファイルの読み書き {
     /// en: Loads the declarations of a file when leani starts with the file
     #[story("B4")]
     #[test]
-    fn 起動時に指定したファイルの関数を呼べる() {
+    fn loads_the_declarations_of_a_file_when_leani_starts_with_the_file() {
         let dir = tempfile::tempdir().expect("tempdir");
         let path = dir.path().join("preload.lean");
         std::fs::write(&path, "def preloaded := 11\n").expect("write");
@@ -871,7 +884,7 @@ mod ファイルの読み書き {
     /// en: Restores the saved declarations when a file written by :save is loaded with :l
     #[story("B3", "B4")]
     #[test]
-    fn colon_save_したファイルを読み込み直せる() {
+    fn restores_the_saved_declarations_when_a_file_written_by_save_is_loaded_with_l() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("saved.lean").display().to_string();
         repl.feed(&["def saved := 7"]);
@@ -890,7 +903,8 @@ mod ファイルの読み書き {
     /// en: Says the file could not be loaded and keeps the environment when :l loads a file with an error
     #[story("B4", "F1")]
     #[test]
-    fn 読み込みに失敗しても今の環境を失わない() {
+    fn says_the_file_could_not_be_loaded_and_keeps_the_environment_when_l_loads_a_file_with_an_error()
+     {
         // env を捨てたまま戻さないと、以後の入力が import 無しの環境に送られて
         // 何を書いてもエラーになる。
         let mut repl = Driver::new();
@@ -907,7 +921,7 @@ mod ファイルの読み書き {
     /// en: Says the file cannot be read when :l loads a file without read permission
     #[story("B4")]
     #[test]
-    fn 読み込めないファイルは理由を表示する() {
+    fn says_the_file_cannot_be_read_when_l_loads_a_file_without_read_permission() {
         use std::os::unix::fs::PermissionsExt;
         let mut repl = Driver::new();
         let path = file(&repl, "locked.lean", "def x := 1\n");
@@ -919,7 +933,7 @@ mod ファイルの読み書き {
     /// en: Loads the edited declarations when :r runs after the loaded file is edited
     #[story("B4")]
     #[test]
-    fn 編集したファイルを_colon_r_で読み込み直す() {
+    fn loads_the_edited_declarations_when_r_runs_after_the_loaded_file_is_edited() {
         let mut repl = Driver::new();
         let path = file(&repl, "edited.lean", "def edited := 1\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -933,7 +947,7 @@ mod ファイルの読み書き {
     /// en: Removes all entered declarations when :r runs with no file loaded
     #[story("B4", "F2")]
     #[test]
-    fn ファイルを読み込んでいなければ_colon_r_は起動直後に戻す() {
+    fn removes_all_entered_declarations_when_r_runs_with_no_file_loaded() {
         let mut repl = Driver::new();
         repl.feed(&["def gone := 1"]);
         repl.feed(&[":r"]);
@@ -941,7 +955,7 @@ mod ファイルの読み書き {
     }
 }
 
-mod 少しずつ組み立てる {
+mod building_up_declarations {
     //! ja: 宣言の組み立て
     //! en: Building up declarations
     //!
@@ -952,7 +966,7 @@ mod 少しずつ組み立てる {
     /// en: Shows the value when a declaration that calls an earlier one is evaluated
     #[story("B2")]
     #[test]
-    fn 実行した宣言を次の宣言から呼べる() {
+    fn shows_the_value_when_a_declaration_that_calls_an_earlier_one_is_evaluated() {
         let mut repl = Driver::new();
         repl.feed(&["def step1 (n : Nat) := n * 2"]);
         repl.feed(&["def step2 (n : Nat) := step1 n + 1"]);
@@ -963,7 +977,7 @@ mod 少しずつ組み立てる {
     /// en: Writes the declarations in the order they ran when :save runs
     #[story("B2", "B3")]
     #[test]
-    fn 組み立てた順に書き出す() {
+    fn writes_the_declarations_in_the_order_they_ran_when_save_runs() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("grown.lean").display().to_string();
         repl.feed(&["def step1 (n : Nat) := n * 2"]);
@@ -976,7 +990,7 @@ mod 少しずつ組み立てる {
     }
 }
 
-mod コマンドの一覧 {
+mod the_command_list {
     //! ja: コマンドの一覧
     //! en: The command list
     use super::*;
@@ -985,7 +999,7 @@ mod コマンドの一覧 {
     /// en: Shows the command list when :help runs
     #[story("H1")]
     #[test]
-    fn colon_help_でコマンドの一覧を表示する() {
+    fn shows_the_command_list_when_help_runs() {
         let mut repl = Driver::new();
         let out = repl.feed(&[":help"]);
         assert!(out.contains(":prove"), "{out}");
@@ -996,7 +1010,7 @@ mod コマンドの一覧 {
     /// en: Shows the proof mode help when :help runs in proof mode
     #[story("H1")]
     #[test]
-    fn 証明モードの_colon_help_では証明用のコマンドを表示する() {
+    fn shows_the_proof_mode_help_when_help_runs_in_proof_mode() {
         let mut repl = Driver::new();
         repl.feed(&["theorem t5 : 1 = 1 := by sorry", ":prove"]);
         assert!(repl.feed(&[":help"]).contains("1 回の入力が 1 タクティク"));
@@ -1006,7 +1020,7 @@ mod コマンドの一覧 {
     /// en: Says the command is unknown and keeps the session when a nonexistent command is entered
     #[story("H1")]
     #[test]
-    fn 無いコマンドを入力したら知らせてセッションを続ける() {
+    fn says_the_command_is_unknown_and_keeps_the_session_when_a_nonexistent_command_is_entered() {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":nosuch"]).contains("不明なコマンド: :nosuch"));
         assert!(repl.feed(&["1 + 1"]).contains('2'));
@@ -1016,7 +1030,8 @@ mod コマンドの一覧 {
     /// en: Shows matching abbreviations for a symbol or a prefix, or says there are none, when :abbrev runs
     #[story("C7")]
     #[test]
-    fn colon_abbrev_で略記の一覧を表示する() {
+    fn shows_matching_abbreviations_for_a_symbol_or_a_prefix_or_says_there_are_none_when_abbrev_runs()
+     {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":abbrev →"]).contains("\\to"));
         assert!(
@@ -1030,7 +1045,7 @@ mod コマンドの一覧 {
     }
 }
 
-mod 実行時間 {
+mod run_time {
     //! ja: 実行時間
     //! en: Run time
     //!
@@ -1041,7 +1056,7 @@ mod 実行時間 {
     /// en: Toggles whether results show the run time each time :time runs
     #[story("A3")]
     #[test]
-    fn colon_time_で実行時間を表示する() {
+    fn toggles_whether_results_show_the_run_time_each_time_time_runs() {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":time"]).contains("on"));
         let out = repl.feed(&["1 + 1"]);
@@ -1053,7 +1068,7 @@ mod 実行時間 {
     }
 }
 
-mod 型と_docstring {
+mod types_and_docstrings {
     //! ja: 型と docstring
     //! en: Types and docstrings
     use super::*;
@@ -1062,7 +1077,7 @@ mod 型と_docstring {
     /// en: Shows the type and the docstring when :i runs with a name
     #[story("D2")]
     #[test]
-    fn colon_i_は型と_docstring_を表示する() {
+    fn shows_the_type_and_the_docstring_when_i_runs_with_a_name() {
         let mut repl = Driver::new();
         let out = repl.feed(&[":i Nat.succ"]);
         assert!(out.contains("Nat.succ : Nat → Nat"), "{out}");
@@ -1073,14 +1088,14 @@ mod 型と_docstring {
     /// en: Says the name is unknown when :i runs with a nonexistent name
     #[story("D2")]
     #[test]
-    fn 無い名前はエラーを表示する() {
+    fn says_the_name_is_unknown_when_i_runs_with_a_nonexistent_name() {
         let mut repl = Driver::new();
         let out = repl.feed(&[":i Nat.nosuchThing"]);
         assert!(out.contains("不明: Nat.nosuchThing"), "{out}");
     }
 }
 
-mod 型と定義の表示 {
+mod showing_types_and_definitions {
     //! ja: 型と定義の表示
     //! en: Showing types and definitions
     use super::*;
@@ -1089,7 +1104,7 @@ mod 型と定義の表示 {
     /// en: Shows the type of the expression when :t or :type runs with an expression
     #[story("D2")]
     #[test]
-    fn colon_t_は式の型を表示する() {
+    fn shows_the_type_of_the_expression_when_t_or_type_runs_with_an_expression() {
         let mut repl = Driver::new();
         for cmd in [":t", ":type"] {
             assert!(repl.feed(&[&format!("{cmd} 1 + 1")]).contains("Nat"));
@@ -1100,7 +1115,7 @@ mod 型と定義の表示 {
     /// en: Shows the body of the definition when :p runs with its name
     #[story("D3")]
     #[test]
-    fn colon_p_は定義の本体を表示する() {
+    fn shows_the_body_of_the_definition_when_p_runs_with_its_name() {
         let mut repl = Driver::new();
         repl.feed(&["def shown := 1 + 2"]);
         assert!(repl.feed(&[":p shown"]).contains("1 + 2"));
@@ -1110,13 +1125,13 @@ mod 型と定義の表示 {
     /// en: Says a name is required when :p runs without a name
     #[story("D3", "H1")]
     #[test]
-    fn colon_p_に名前が無ければ名前が必要と伝える() {
+    fn says_a_name_is_required_when_p_runs_without_a_name() {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":p"]).contains(":p には名前が必要"));
     }
 }
 
-mod 定理を外部サービスで探す {
+mod theorem_search_with_an_external_service {
     //! ja: 外部サービスでの定理検索
     //! en: Theorem search with an external service
     //!
@@ -1127,7 +1142,7 @@ mod 定理を外部サービスで探す {
     /// en: Says a pattern is required and sends no query when :loogle runs without a pattern
     #[story("D4")]
     #[test]
-    fn パターンが無ければ問い合わせない() {
+    fn says_a_pattern_is_required_and_sends_no_query_when_loogle_runs_without_a_pattern() {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":loogle"]).contains("必要"));
         assert_eq!(repl.loogle_calls(), 0, "空の :loogle で問い合わせた");
@@ -1137,7 +1152,7 @@ mod 定理を外部サービスで探す {
     /// en: Shows the found theorems and leaves the environment unchanged when :loogle runs
     #[story("D4")]
     #[test]
-    fn 問い合わせても環境は変わらない() {
+    fn shows_the_found_theorems_and_leaves_the_environment_unchanged_when_loogle_runs() {
         let mut repl = Driver::new();
         repl.feed(&["def beforeLoogle := 7"]);
         let env = repl.repl.eng().env();
@@ -1164,7 +1179,7 @@ mod 定理を外部サービスで探す {
     /// en: Shows why the search failed and keeps the session when the query for :loogle times out
     #[story("D4", "F4")]
     #[test]
-    fn loogle_が応答しなくてもセッションは続く() {
+    fn shows_why_the_search_failed_and_keeps_the_session_when_the_query_for_loogle_times_out() {
         let mut repl = Driver::new();
         repl.answer_loogle(Err("timed out"));
 
@@ -1178,7 +1193,7 @@ mod 定理を外部サービスで探す {
     }
 }
 
-mod 書き出しの安全対策 {
+mod safeguards_for_saving_files {
     //! ja: 書き出しの安全対策
     //! en: Safeguards for saving files
     //!
@@ -1189,7 +1204,7 @@ mod 書き出しの安全対策 {
     /// en: Says the file exists and does not overwrite it when :save targets an existing file
     #[story("B3")]
     #[test]
-    fn すでにあるファイルは上書きしない() {
+    fn says_the_file_exists_and_does_not_overwrite_it_when_save_targets_an_existing_file() {
         let mut repl = Driver::new();
         let path = file(&repl, "existing.lean", "-- 大事なもの\n");
         repl.feed(&["def x := 1"]);
@@ -1207,7 +1222,7 @@ mod 書き出しの安全対策 {
     /// en: Says the file exists and does not create the target when :save targets a dangling symlink
     #[story("B3")]
     #[test]
-    fn リンク先の無いシンボリックリンクも上書きしない() {
+    fn says_the_file_exists_and_does_not_create_the_target_when_save_targets_a_dangling_symlink() {
         // `exists` はリンク先を見るので、リンク先が無いと「無い」と判定する。そのまま
         // 書くと、リンク先に新しいファイルができる。
         let mut repl = Driver::new();
@@ -1227,7 +1242,7 @@ mod 書き出しの安全対策 {
     /// en: Overwrites the file when :save targets a file that leani wrote
     #[story("B3")]
     #[test]
-    fn leani_が書き出したファイルは上書きする() {
+    fn overwrites_the_file_when_save_targets_a_file_that_leani_wrote() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("mine.lean").display().to_string();
         repl.feed(&["def x := 1"]);
@@ -1245,7 +1260,8 @@ mod 書き出しの安全対策 {
     /// en: Says the file could not be written and keeps the session when :save targets a missing directory
     #[story("B3")]
     #[test]
-    fn 書き込めない場所を指定しても異常終了しない() {
+    fn says_the_file_could_not_be_written_and_keeps_the_session_when_save_targets_a_missing_directory()
+     {
         let mut repl = Driver::new();
         let path = repl.tmp().join("no/such/dir/x.lean").display().to_string();
         repl.feed(&["def x := 1"]);
@@ -1255,7 +1271,7 @@ mod 書き出しの安全対策 {
     }
 }
 
-mod 再起動のあとで読み込み直せないとき {
+mod when_a_file_cannot_be_reloaded_after_a_restart {
     //! ja: 再起動のあとで読み込み直せないとき
     //! en: When a file cannot be reloaded after a restart
     use super::*;
@@ -1264,7 +1280,8 @@ mod 再起動のあとで読み込み直せないとき {
     /// en: Reports the failed reload and drops the file's declarations when the loaded file is deleted before :restart
     #[story("F1", "B4")]
     #[test]
-    fn 読み込んだファイルが消えていたら理由を表示して宣言から外す() {
+    fn reports_the_failed_reload_and_drops_the_file_s_declarations_when_the_loaded_file_is_deleted_before_restart()
+     {
         // 外さないと、環境に無い宣言を :save が書き出す。
         let mut repl = Driver::new();
         let path = file(&repl, "gone.lean", "def fromFile := 7\n");
@@ -1281,7 +1298,8 @@ mod 再起動のあとで読み込み直せないとき {
     /// en: Keeps init and restores it on the next :restart when the restart is interrupted while sending init
     #[story("F1", "G2")]
     #[test]
-    fn init_の再実行中に異常終了しても_init_を捨てない() {
+    fn keeps_init_and_restores_it_on_the_next_restart_when_the_restart_is_interrupted_while_sending_init()
+     {
         // init ファイルの内容に問題があるわけではないので、次の :restart で戻せる。
         let mut repl = Driver::new();
         init_with(&mut repl, "def fromInit := 99\n");
@@ -1304,7 +1322,7 @@ mod 再起動のあとで読み込み直せないとき {
     }
 }
 
-mod init_の扱い {
+mod handling_init {
     //! ja: init の扱い
     //! en: Handling init
     //!
@@ -1315,7 +1333,7 @@ mod init_の扱い {
     /// en: Keeps the init declarations when :restart runs
     #[story("F1", "G2")]
     #[test]
-    fn 再起動しても_init_の宣言が残る() {
+    fn keeps_the_init_declarations_when_restart_runs() {
         let mut repl = Driver::new();
         init_with(&mut repl, "def fromInit := 99\n");
 
@@ -1331,7 +1349,7 @@ mod init_の扱い {
     /// en: Keeps the init declarations when :reset runs
     #[story("F2", "G2")]
     #[test]
-    fn colon_reset_しても_init_の宣言が残る() {
+    fn keeps_the_init_declarations_when_reset_runs() {
         let mut repl = Driver::new();
         init_with(&mut repl, "def fromInit := 99\n");
 
@@ -1346,7 +1364,7 @@ mod init_の扱い {
     /// en: Evaluates short names from a namespace in entered input when init opens the namespace
     #[story("G2")]
     #[test]
-    fn init_に書いた_open_は入力した行でも有効になる() {
+    fn evaluates_short_names_from_a_namespace_in_entered_input_when_init_opens_the_namespace() {
         let mut repl = Driver::new();
         init_with(&mut repl, "open Nat\n");
 
@@ -1357,7 +1375,7 @@ mod init_の扱い {
     /// en: Keeps the open from init when :reset runs
     #[story("F2", "G2")]
     #[test]
-    fn colon_reset_しても_init_の_open_が残る() {
+    fn keeps_the_open_from_init_when_reset_runs() {
         let mut repl = Driver::new();
         init_with(&mut repl, "open Nat\n");
 
@@ -1369,7 +1387,8 @@ mod init_の扱い {
     /// en: Reports the error and leaves the environment unchanged when an init file with an error is loaded
     #[story("G2", "G4")]
     #[test]
-    fn エラーのある_init_は知らせて環境を変えない() {
+    fn reports_the_error_and_leaves_the_environment_unchanged_when_an_init_file_with_an_error_is_loaded()
+     {
         let mut repl = Driver::new();
         let base = repl.repl.eng().base();
         let out = init_with(&mut repl, "def bad : Nat := \"x\"\n");
@@ -1384,7 +1403,7 @@ mod init_の扱い {
     /// en: Says the init file cannot be read when a directory is given as init
     #[story("G2", "G4")]
     #[test]
-    fn 読めない_init_は理由を表示する() {
+    fn says_the_init_file_cannot_be_read_when_a_directory_is_given_as_init() {
         let mut repl = Driver::new();
         let dir = repl.tmp().display().to_string(); // ディレクトリ
         repl.repl.set_init(&dir);
@@ -1396,7 +1415,8 @@ mod init_の扱い {
     /// en: Shows nothing and leaves the environment unchanged when an init file with only imports is loaded
     #[story("G2")]
     #[test]
-    fn import_だけの_init_は何もしない() {
+    fn shows_nothing_and_leaves_the_environment_unchanged_when_an_init_file_with_only_imports_is_loaded()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "init.lean", "import Lean\n");
         repl.repl.set_init(&path);
@@ -1407,7 +1427,7 @@ mod init_の扱い {
     }
 }
 
-mod 書き出しにすべての宣言を含める {
+mod declarations_included_in_a_saved_file {
     //! ja: 書き出しに含める宣言
     //! en: Declarations included in a saved file
     //!
@@ -1418,7 +1438,7 @@ mod 書き出しにすべての宣言を含める {
     /// en: Writes the declarations from init, loaded files and input when :save runs
     #[story("B3", "G2")]
     #[test]
-    fn init_と_読み込んだファイルの宣言も書き出す() {
+    fn writes_the_declarations_from_init_loaded_files_and_input_when_save_runs() {
         let mut repl = Driver::new();
         let loaded = file(&repl, "loaded.lean", "def fromFile := 2\n");
         let out = repl.tmp().join("all.lean").display().to_string();
@@ -1441,7 +1461,7 @@ mod 書き出しにすべての宣言を含める {
     }
 }
 
-mod 書き直しをやめたとき {
+mod when_a_rewrite_is_abandoned {
     //! ja: 書き直しをやめたとき
     //! en: When a rewrite is abandoned
     //!
@@ -1452,7 +1472,7 @@ mod 書き直しをやめたとき {
     /// en: Restores the original declaration when Ctrl-C is pressed while continuing a declaration
     #[story("C2")]
     #[test]
-    fn 続きを書く途中で捨てたら元の宣言が戻る() {
+    fn restores_the_original_declaration_when_ctrl_c_is_pressed_while_continuing_a_declaration() {
         let mut repl = Driver::new();
         repl.feed(&["def three := 1"]);
         repl.feed(&["  + 2"]); // 前の宣言の続きを書く (宣言は取り消されている)
@@ -1469,7 +1489,8 @@ mod 書き直しをやめたとき {
     /// en: Keeps the rewritten declaration when Ctrl-C is pressed after the continuation is confirmed
     #[story("C2")]
     #[test]
-    fn 書き直しが確定したら戻さない() {
+    fn keeps_the_rewritten_declaration_when_ctrl_c_is_pressed_after_the_continuation_is_confirmed()
+    {
         let mut repl = Driver::new();
         repl.feed(&["def three := 1"]);
         repl.block(&["  + 2"]);
@@ -1485,7 +1506,7 @@ mod 書き直しをやめたとき {
     /// en: Restores the previous tactic when Ctrl-C is pressed while continuing a tactic
     #[story("C2", "E1")]
     #[test]
-    fn タクティクの続きを捨てたら直前のタクティクが戻る() {
+    fn restores_the_previous_tactic_when_ctrl_c_is_pressed_while_continuing_a_tactic() {
         let mut repl = Driver::new();
         repl.feed(&["theorem keepTac : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         repl.feed(&["constructor"]);
@@ -1503,7 +1524,7 @@ mod 書き直しをやめたとき {
     /// en: Keeps the finished proof when Ctrl-C is pressed after a tactic continuation finishes it
     #[story("C2", "E1")]
     #[test]
-    fn タクティクの書き直しが確定したら戻さない() {
+    fn keeps_the_finished_proof_when_ctrl_c_is_pressed_after_a_tactic_continuation_finishes_it() {
         let mut repl = Driver::new();
         repl.feed(&["theorem doneTac : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         repl.feed(&["constructor"]);
@@ -1522,7 +1543,8 @@ mod 書き直しをやめたとき {
     /// en: Shows the sorry's goal on :prove when Ctrl-C is pressed while continuing a declaration with sorry
     #[story("C2", "E1")]
     #[test]
-    fn sorry_を含む宣言の続きを捨てたら_prove_も戻る() {
+    fn shows_the_sorry_s_goal_on_prove_when_ctrl_c_is_pressed_while_continuing_a_declaration_with_sorry()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def withSorry : Nat := sorry"]);
         // 続きを書いているあいだは宣言が取り消されているので、保留した sorry も
@@ -1537,7 +1559,7 @@ mod 書き直しをやめたとき {
     }
 }
 
-mod 読み込みの中断 {
+mod interrupting_a_load {
     //! ja: 読み込みの中断
     //! en: Interrupting a load
     use super::*;
@@ -1546,7 +1568,7 @@ mod 読み込みの中断 {
     /// en: Keeps the previous environment and declarations when loading a file is interrupted
     #[story("A4", "F1")]
     #[test]
-    fn 中断しても環境と宣言を失わない() {
+    fn keeps_the_previous_environment_and_declarations_when_loading_a_file_is_interrupted() {
         let mut repl = Driver::new();
         repl.feed(&["def before := 5"]);
         let path = repl.tmp().join("any.lean").display().to_string();
@@ -1573,7 +1595,8 @@ mod 読み込みの中断 {
     /// en: Cancels the load and keeps earlier declarations when reapplying init during :l is interrupted
     #[story("A4", "F1", "G2")]
     #[test]
-    fn init_の再適用中に中断したら読み込みを取り消す() {
+    fn cancels_the_load_and_keeps_earlier_declarations_when_reapplying_init_during_l_is_interrupted()
+     {
         // ファイルの読み込みは終わっていても、init を戻せていない環境は使わせない。
         // 「中断した」と表示したのに読み込んだままにすると、表示と状態が食い違い、
         // それまでの宣言も表示なしに消える。
@@ -1594,7 +1617,7 @@ mod 読み込みの中断 {
     }
 }
 
-mod 履歴の書き出し {
+mod writing_history {
     //! ja: 履歴の書き出し
     //! en: Writing history
     //!
@@ -1607,7 +1630,8 @@ mod 履歴の書き出し {
     /// en: Keeps the existing content when an input is recorded in a history file in an unreadable format
     #[story("F3")]
     #[test]
-    fn 読めない形式の履歴を上書きしない() {
+    fn keeps_the_existing_content_when_an_input_is_recorded_in_a_history_file_in_an_unreadable_format()
+     {
         // readline や libedit の履歴を引き継いだ環境ではこの形式になる。読み込むときは
         // 無視されるが、書き込みは追記なので前の履歴は残る。
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1623,7 +1647,7 @@ mod 履歴の書き出し {
     /// en: Loads a multi-line input back as one entry when it is recorded
     #[story("C3", "F3")]
     #[test]
-    fn 複数行の入力を_1_件として保存する() {
+    fn loads_a_multi_line_input_back_as_one_entry_when_it_is_recorded() {
         let dir = tempfile::tempdir().expect("tempdir");
         let history = BlockHistory::new(dir.path().join("history"));
         history.record("def f : Nat -> Nat\n  | 0 => 1");
@@ -1634,7 +1658,7 @@ mod 履歴の書き出し {
     /// en: Enables history at startup only if stdin is a terminal
     #[story("F3")]
     #[test]
-    fn 標準入力が端末でなければ履歴を持たない() {
+    fn enables_history_at_startup_only_if_stdin_is_a_terminal() {
         // echo … | leani を端末で実行したとき。stdout は端末だが、パイプから読んだ
         // 入力を履歴に残さない。
         let has_history = |stdin_tty: bool| {
@@ -1663,7 +1687,7 @@ mod 履歴の書き出し {
     /// en: Records nothing when line editing tries to add a single line to history
     #[story("C3", "F3")]
     #[test]
-    fn 行ごとの追加は受け付けない() {
+    fn records_nothing_when_line_editing_tries_to_add_a_single_line_to_history() {
         // 行編集の crate は 1 行読むたびに 1 行追加しようとする。受け付けると
         // 複数行の宣言が行ごとに分かれ、呼び戻すのに Ctrl-P が何度も必要になる。
         let dir = tempfile::tempdir().expect("tempdir");
@@ -1673,7 +1697,7 @@ mod 履歴の書き出し {
     }
 }
 
-mod 履歴から呼び出した入力 {
+mod input_recalled_from_history {
     //! ja: 履歴から呼び出した入力
     //! en: Input recalled from history
     //!
@@ -1684,7 +1708,7 @@ mod 履歴から呼び出した入力 {
     /// en: Runs a complete block without waiting for a blank line when Enter is pressed
     #[story("C3")]
     #[test]
-    fn 完結したブロックは_Enter_だけで送る() {
+    fn runs_a_complete_block_without_waiting_for_a_blank_line_when_enter_is_pressed() {
         let mut repl = Driver::new();
         repl.feed_with("feed_line", |r| {
             r.feed_line("def recalled : Nat -> Nat\n  | 0 => 1\n  | _ => 2");
@@ -1702,7 +1726,7 @@ mod 履歴から呼び出した入力 {
     /// en: Waits for more lines without sending when Enter is pressed on an unfinished block
     #[story("C3")]
     #[test]
-    fn 途中のブロックは送らずに続きの行を待つ() {
+    fn waits_for_more_lines_without_sending_when_enter_is_pressed_on_an_unfinished_block() {
         // Ctrl-C で捨てた入力も、途中のまま履歴に残る。呼び出してすぐに送ると
         // unexpected end of input のエラーになる。
         let mut repl = Driver::new();
@@ -1716,7 +1740,7 @@ mod 履歴から呼び出した入力 {
     }
 }
 
-mod replay_で再実行できなかったもの {
+mod what_the_replay_could_not_run {
     //! ja: replay で再実行できなかったもの
     //! en: What the replay could not run
     //!
@@ -1727,7 +1751,8 @@ mod replay_で再実行できなかったもの {
     /// en: Reports the failed reload and the lost declarations when :restart runs after the loaded file gets an error
     #[story("F1", "B4")]
     #[test]
-    fn 読み込み直せないファイルと消えた宣言を報告する() {
+    fn reports_the_failed_reload_and_the_lost_declarations_when_restart_runs_after_the_loaded_file_gets_an_error()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "lib.lean", "def libA := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -1748,7 +1773,7 @@ mod replay_で再実行できなかったもの {
     }
 }
 
-mod 書き出したファイルのヘッダ {
+mod header_of_a_saved_file {
     //! ja: 書き出したファイルのヘッダ
     //! en: Header of a saved file
     use super::*;
@@ -1757,7 +1782,7 @@ mod 書き出したファイルのヘッダ {
     /// en: Writes import Lean at the top of the file when :save runs
     #[story("B3")]
     #[test]
-    fn lean_でそのまま実行できる_import_を書く() {
+    fn writes_import_lean_at_the_top_of_the_file_when_save_runs() {
         let mut repl = Driver::new();
         let path = repl.tmp().join("out.lean").display().to_string();
         repl.feed(&["def savedOne := Lean.versionString"]);
@@ -1770,7 +1795,7 @@ mod 書き出したファイルのヘッダ {
     }
 }
 
-mod init_と読み込みが混ざるとき {
+mod when_init_and_a_loaded_file_are_combined {
     //! ja: init と読み込みが混ざるとき
     //! en: When init and a loaded file are combined
     use super::*;
@@ -1779,7 +1804,7 @@ mod init_と読み込みが混ざるとき {
     /// en: Adds the init declarations again after the file when :l loads a file
     #[story("G2", "B3")]
     #[test]
-    fn 読み込んだあとも_init_を追加し直す() {
+    fn adds_the_init_declarations_again_after_the_file_when_l_loads_a_file() {
         let mut repl = Driver::new();
         init_with(&mut repl, "def fromInit := 1\n");
 
@@ -1804,7 +1829,7 @@ mod init_と読み込みが混ざるとき {
     }
 }
 
-mod 宣言の取り消し {
+mod undoing_declarations {
     //! ja: 宣言の取り消し
     //! en: Undoing declarations
     use super::*;
@@ -1813,7 +1838,7 @@ mod 宣言の取り消し {
     /// en: Undoes the last n declarations when :undo n runs
     #[story("F2")]
     #[test]
-    fn colon_undo_n_で_n_件取り消す() {
+    fn undoes_the_last_n_declarations_when_undo_n_runs() {
         let mut repl = Driver::new();
         repl.feed(&["def u1 := 1"]);
         repl.feed(&["def u2 := 2"]);
@@ -1824,7 +1849,7 @@ mod 宣言の取り消し {
     }
 }
 
-mod 保留した宣言とエンジンの世代 {
+mod pending_declarations_and_engine_generations {
     //! ja: 保留した宣言とエンジンの世代
     //! en: Pending declarations and engine generations
     //!
@@ -1835,7 +1860,8 @@ mod 保留した宣言とエンジンの世代 {
     /// en: Evaluates an expression using the undone declaration when rewriting is abandoned after :restart
     #[story("F1", "C2")]
     #[test]
-    fn 無効になった_env_id_を設定し直さない() {
+    fn evaluates_an_expression_using_the_undone_declaration_when_rewriting_is_abandoned_after_restart()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def held := 1"]);
         // 前の宣言を書き直している途中
@@ -1853,7 +1879,8 @@ mod 保留した宣言とエンジンの世代 {
     /// en: Says :prove finds no sorry when a rewrite after a declaration with sorry is abandoned after an engine crash
     #[story("C2", "E1", "F1")]
     #[test]
-    fn 再起動のあとで書き直しをやめたら前の宣言の_sorry_を残さない() {
+    fn says_prove_finds_no_sorry_when_a_rewrite_after_a_declaration_with_sorry_is_abandoned_after_an_engine_crash()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem s1 : True := by sorry", "def other := 1"]);
 
@@ -1875,7 +1902,8 @@ mod 保留した宣言とエンジンの世代 {
     /// en: Shows an environment error and :restart when a declaration is entered and the engine has an invalid env id
     #[story("F1")]
     #[test]
-    fn 無効な_env_id_を持っていたらそのことを報告する() {
+    fn shows_an_environment_error_and_restart_when_a_declaration_is_entered_and_the_engine_has_an_invalid_env_id()
+     {
         let mut repl = Driver::new();
         repl.repl.eng_mut().set_env(Some(987_654)); // 無効になった世代の env id を持つ状態
         let out = repl.feed(&["def afterGhost := 1"]);
@@ -1885,7 +1913,7 @@ mod 保留した宣言とエンジンの世代 {
     }
 }
 
-mod 環境に無い宣言の扱い {
+mod declarations_missing_from_the_environment {
     //! ja: 環境に無い宣言の扱い
     //! en: Declarations missing from the environment
     //!
@@ -1897,7 +1925,8 @@ mod 環境に無い宣言の扱い {
     /// en: Shows and keeps pending a declaration that fails to replay when :restart runs without its dependency
     #[story("F1")]
     #[test]
-    fn 再実行に失敗した宣言を保留する() {
+    fn shows_and_keeps_pending_a_declaration_that_fails_to_replay_when_restart_runs_without_its_dependency()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "lib2.lean", "def libB := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -1914,7 +1943,7 @@ mod 環境に無い宣言の扱い {
     /// en: Writes pending declarations as comments when :save runs
     #[story("B3", "F1")]
     #[test]
-    fn colon_save_はコメントとして添える() {
+    fn writes_pending_declarations_as_comments_when_save_runs() {
         let mut repl = Driver::new();
         let path = file(&repl, "lib3.lean", "def libC := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -1936,7 +1965,8 @@ mod 環境に無い宣言の扱い {
     /// en: Discards pending declarations with a notice when :reset runs and does not replay them on :restart
     #[story("F2")]
     #[test]
-    fn colon_reset_したら保留も捨てる() {
+    fn discards_pending_declarations_with_a_notice_when_reset_runs_and_does_not_replay_them_on_restart()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "lib4.lean", "def libD := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -1954,7 +1984,7 @@ mod 環境に無い宣言の扱い {
     }
 }
 
-mod 読み込んだファイルの_import {
+mod imports_of_a_loaded_file {
     //! ja: 読み込んだファイルの import
     //! en: Imports of a loaded file
     use super::*;
@@ -1963,7 +1993,7 @@ mod 読み込んだファイルの_import {
     /// en: Writes the imports into the header of the saved file when :save runs
     #[story("B3", "B4")]
     #[test]
-    fn colon_save_に書き戻す() {
+    fn writes_the_imports_into_the_header_of_the_saved_file_when_save_runs() {
         let mut repl = Driver::new();
         let src = file(
             &repl,
@@ -1987,7 +2017,7 @@ mod 読み込んだファイルの_import {
     /// en: Leaves out the imports of a file that :restart could not reload when :save runs
     #[story("B3", "F1")]
     #[test]
-    fn 読み込み直せなかったファイルの_import_は_colon_save_に書かない() {
+    fn leaves_out_the_imports_of_a_file_that_restart_could_not_reload_when_save_runs() {
         let mut repl = Driver::new();
         let src = file(
             &repl,
@@ -2008,7 +2038,7 @@ mod 読み込んだファイルの_import {
     }
 }
 
-mod module_のファイル {
+mod module_files {
     //! ja: module のファイル
     //! en: Module files
     //!
@@ -2027,7 +2057,7 @@ mod module_のファイル {
     /// en: Loads the declarations on :l and saves a file that starts with the module line on :save
     #[story("B4")]
     #[test]
-    fn module_のファイルを_colon_l_できる() {
+    fn loads_the_declarations_on_l_and_saves_a_file_that_starts_with_the_module_line_on_save() {
         let mut repl = Driver::new();
         let src = file(&repl, "Mod.lean", SRC);
         let out = repl.feed(&[&format!(":l {src}")]);
@@ -2048,7 +2078,8 @@ mod module_のファイル {
     /// en: Adds public import Lean instead of the configured imports when :l runs in an environment with imports
     #[story("B4")]
     #[test]
-    fn module_のファイルには設定の_import_を足さない() {
+    fn adds_public_import_lean_instead_of_the_configured_imports_when_l_runs_in_an_environment_with_imports()
+     {
         // 既定の core は設定の import が空なので、wide に切り替えてから確かめる。
         // wide の import (Lean.Elab.Frontend) は module なので、読み込めるかどうか
         // では確かめられない。送ったリクエストを見る。
@@ -2077,7 +2108,7 @@ mod module_のファイル {
     }
 }
 
-mod コメントに書いた_import {
+mod imports_written_in_comments {
     //! ja: コメントに書いた import
     //! en: Imports written in comments
     use super::*;
@@ -2086,7 +2117,7 @@ mod コメントに書いた_import {
     /// en: Saves a loadable file without the commented import when :save runs
     #[story("B3", "B4")]
     #[test]
-    fn colon_save_のヘッダに書かない() {
+    fn saves_a_loadable_file_without_the_commented_import_when_save_runs() {
         let mut repl = Driver::new();
         let lib = file(
             &repl,
@@ -2112,7 +2143,7 @@ mod コメントに書いた_import {
     }
 }
 
-mod 元になる環境を失ったとき {
+mod when_the_base_environment_is_lost {
     //! ja: 元になる環境を失ったとき
     //! en: When the base environment is lost
     //!
@@ -2141,7 +2172,7 @@ mod 元になる環境を失ったとき {
     /// en: Says there is no base environment and keeps the pending declaration when :reset runs
     #[story("F1", "F2")]
     #[test]
-    fn colon_reset_は受け付けずに保留を残す() {
+    fn says_there_is_no_base_environment_and_keeps_the_pending_declaration_when_reset_runs() {
         let mut repl = Driver::new();
         no_env(&mut repl);
 
@@ -2161,7 +2192,7 @@ mod 元になる環境を失ったとき {
     /// en: Says the replay failed and keeps the declarations pending when a replay starts
     #[story("F1")]
     #[test]
-    fn 再実行せずに保留する() {
+    fn says_the_replay_failed_and_keeps_the_declarations_pending_when_a_replay_starts() {
         let mut repl = Driver::new();
         no_env(&mut repl);
 
@@ -2185,7 +2216,8 @@ mod 元になる環境を失ったとき {
     /// en: Drops a carried-over sorry when the environment is lost, so :prove does not start proof mode
     #[story("F1", "E1")]
     #[test]
-    fn sorry_の持ち越しも捨てる() {
+    fn drops_a_carried_over_sorry_when_the_environment_is_lost_so_prove_does_not_start_proof_mode()
+    {
         let mut repl = Driver::new();
         repl.feed(&["theorem ghostSorry : True := by sorry"]);
         assert!(repl.repl.held().is_some());
@@ -2213,7 +2245,8 @@ mod 元になる環境を失ったとき {
     /// en: Returns NoEnvironment for a command on the environment and sends one that starts a new environment
     #[story("F1")]
     #[test]
-    fn 送る前にエラーにする() {
+    fn returns_noenvironment_for_a_command_on_the_environment_and_sends_one_that_starts_a_new_environment()
+     {
         let mut repl = Driver::new();
         no_env(&mut repl);
         repl.unhook();
@@ -2238,7 +2271,7 @@ mod 元になる環境を失ったとき {
     /// en: Says the type could not be obtained when :t runs
     #[story("F1", "D2")]
     #[test]
-    fn 型も返さない() {
+    fn says_the_type_could_not_be_obtained_when_t_runs() {
         let mut repl = Driver::new();
         no_env(&mut repl);
 
@@ -2249,7 +2282,7 @@ mod 元になる環境を失ったとき {
     }
 }
 
-mod 解決できない_import_のファイル {
+mod files_with_unresolvable_imports {
     //! ja: 解決できない import のファイル
     //! en: Files with unresolvable imports
     use super::*;
@@ -2258,7 +2291,7 @@ mod 解決できない_import_のファイル {
     /// en: Says the file could not be loaded and keeps the current environment when :l runs
     #[story("B4", "G4")]
     #[test]
-    fn 読み込んだと表示しない() {
+    fn says_the_file_could_not_be_loaded_and_keeps_the_current_environment_when_l_runs() {
         let mut repl = Driver::new();
         // 本文は空にしておく。宣言があると、ヘッダを捨てられた環境でその宣言が
         // エラーになり、probe の確認より前に失敗してしまう。
@@ -2281,7 +2314,7 @@ mod 解決できない_import_のファイル {
     }
 }
 
-mod 引数の受け取り {
+mod argument_parsing {
     //! ja: 引数の受け取り
     //! en: Argument parsing
     use super::*;
@@ -2290,7 +2323,7 @@ mod 引数の受け取り {
     /// en: Undoes one declaration when :undo runs with an argument that is not a number
     #[story("F2")]
     #[test]
-    fn colon_undo_の引数が数でなければ_1_件戻す() {
+    fn undoes_one_declaration_when_undo_runs_with_an_argument_that_is_not_a_number() {
         // 上付きの ²。Unicode では数字の文字だが、数としては読めない。
         let mut repl = Driver::new();
         repl.feed(&["def a := 1"]);
@@ -2300,7 +2333,7 @@ mod 引数の受け取り {
     }
 }
 
-mod 送る前の確認 {
+mod checks_before_sending_to_the_engine {
     //! ja: 送る前の確認
     //! en: Checks before sending to the engine
     use super::*;
@@ -2309,7 +2342,8 @@ mod 送る前の確認 {
     /// en: Says the engine is unusable and records nothing when a declaration is entered without an environment
     #[story("F1")]
     #[test]
-    fn 起動できていないエンジンには送らない() {
+    fn says_the_engine_is_unusable_and_records_nothing_when_a_declaration_is_entered_without_an_environment()
+     {
         // boot に失敗したエンジン。import 無しの環境に宣言を追加すると、
         // 以後何を書いてもエラーになる。
         let mut repl = Driver::new();
@@ -2320,7 +2354,7 @@ mod 送る前の確認 {
     }
 }
 
-mod 証明モード {
+mod proof_mode {
     //! ja: 証明モード
     //! en: Proof mode
     use super::*;
@@ -2329,7 +2363,8 @@ mod 証明モード {
     /// en: Writes the suggested exact in place of exact? into the declaration when exact? finishes the proof
     #[story("E2")]
     #[test]
-    fn exact_の提案をスクリプトに追加する() {
+    fn writes_the_suggested_exact_in_place_of_exact_into_the_declaration_when_exact_finishes_the_proof()
+     {
         // `exact?` のままだと :save したファイルで毎回検索が実行され、
         // 結果も環境によって変わる。
         let mut repl = Driver::new();
@@ -2347,7 +2382,8 @@ mod 証明モード {
     /// en: Keeps the entered string as the declaration's value when a multi-line string proves its sorry
     #[story("E3")]
     #[test]
-    fn 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない() {
+    fn keeps_the_entered_string_as_the_declaration_s_value_when_a_multi_line_string_proves_its_sorry()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def greeting : String := by sorry", ":prove"]);
         let out = repl.feed(&["exact \"Hello", "World\""]);
@@ -2360,7 +2396,7 @@ mod 証明モード {
     /// en: Runs an unclosed tactic with the next line as one tactic when it is entered
     #[story("E1")]
     #[test]
-    fn 証明モードで閉じていないタクティクを入力すると次の行に続ける() {
+    fn runs_an_unclosed_tactic_with_the_next_line_as_one_tactic_when_it_is_entered() {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem pair (p q : Prop) (hp : p) (hq : q) : p ∧ q := by sorry",
@@ -2374,7 +2410,8 @@ mod 証明モード {
     /// en: Runs all tactics and finishes the proof when one line of semicolon-separated tactics is entered
     #[story("E1")]
     #[test]
-    fn セミコロンでタクティクを並べると_1_行で実行する() {
+    fn runs_all_tactics_and_finishes_the_proof_when_one_line_of_semicolon_separated_tactics_is_entered()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem semi : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         let out = repl.feed(&["constructor; rfl; rfl"]);
@@ -2385,7 +2422,7 @@ mod 証明モード {
     /// en: Shows the position in the entered line when a tactic with a parse error is entered
     #[story("E1")]
     #[test]
-    fn タクティクのパースエラーは入力した行の位置で表示する() {
+    fn shows_the_position_in_the_entered_line_when_a_tactic_with_a_parse_error_is_entered() {
         let mut repl = Driver::new();
         repl.feed(&["theorem semi2 : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         let out = repl.feed(&["constructor; rfl;; rfl"]);
@@ -2396,7 +2433,8 @@ mod 証明モード {
     /// en: Shows a parse error at the entered position when a tactic has an extra token or parenthesis
     #[story("E1")]
     #[test]
-    fn 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する() {
+    fn shows_a_parse_error_at_the_entered_position_when_a_tactic_has_an_extra_token_or_parenthesis()
+    {
         let mut repl = Driver::new();
         repl.feed(&["theorem paren : 1 = 1 := by sorry", ":prove"]);
         let out = repl.feed(&["rfl rfl"]);
@@ -2409,7 +2447,7 @@ mod 証明モード {
     /// en: Shows the remaining goals and the tactics so far when :goals and :script run mid-proof
     #[story("E1")]
     #[test]
-    fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
+    fn shows_the_remaining_goals_and_the_tactics_so_far_when_goals_and_script_run_mid_proof() {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem t2 : 1 = 1 ∧ 2 = 2 := by sorry",
@@ -2426,7 +2464,8 @@ mod 証明モード {
     /// en: Says it is not in proof mode when :done, :goals or :script runs outside proof mode with no sorry
     #[story("E1")]
     #[test]
-    fn 証明モードの外で証明用のコマンドを入力すると証明モードではないと伝える() {
+    fn says_it_is_not_in_proof_mode_when_done_goals_or_script_runs_outside_proof_mode_with_no_sorry()
+     {
         // 証明が完成すると leani は自動で証明モードを終了するので、その直後に
         // ユーザーが入力することがある。
         let mut repl = Driver::new();
@@ -2439,7 +2478,7 @@ mod 証明モード {
     /// en: Keeps the earlier declaration when :prove runs after :undo of a declaration with a sorry
     #[story("E1", "F2")]
     #[test]
-    fn colon_undo_のあとの_colon_prove_が手前の宣言を消さない() {
+    fn keeps_the_earlier_declaration_when_prove_runs_after_undo_of_a_declaration_with_a_sorry() {
         let mut repl = Driver::new();
         repl.feed(&[
             "def keepme := 42",
@@ -2458,7 +2497,7 @@ mod 証明モード {
     /// en: Restores the goal before the last tactic and drops it from the script when :undo runs
     #[story("E1")]
     #[test]
-    fn colon_undo_でタクティクを_1_つ取り消す() {
+    fn restores_the_goal_before_the_last_tactic_and_drops_it_from_the_script_when_undo_runs() {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem t3 : 1 = 1 ∧ 2 = 2 := by sorry",
@@ -2478,7 +2517,8 @@ mod 証明モード {
     /// en: Reruns the previous tactic joined with an indented line when that line is entered right after it
     #[story("E1", "C2")]
     #[test]
-    fn タクティクの直後にインデントした行を書くと前のタクティクの続きとして読み直す() {
+    fn reruns_the_previous_tactic_joined_with_an_indented_line_when_that_line_is_entered_right_after_it()
+     {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem t7 : 1 = 1 ∧ 2 = 2 := by sorry",
@@ -2495,7 +2535,7 @@ mod 証明モード {
     /// en: Exits proof mode and evaluates the next expression when :q or :quit is entered
     #[story("E1")]
     #[test]
-    fn 証明モードの_colon_q_は証明モードだけを終了する() {
+    fn exits_proof_mode_and_evaluates_the_next_expression_when_q_or_quit_is_entered() {
         for quit in [":q", ":quit"] {
             let mut repl = Driver::new();
             repl.feed(&["theorem t6 : 1 = 1 := by sorry", ":prove"]);
@@ -2509,7 +2549,7 @@ mod 証明モード {
     /// en: Shows the error without recording the tactic or changing the goal when a tactic fails
     #[story("E1")]
     #[test]
-    fn エラーになったタクティクはスクリプトに記録しない() {
+    fn shows_the_error_without_recording_the_tactic_or_changing_the_goal_when_a_tactic_fails() {
         let mut repl = Driver::new();
         repl.feed(&["theorem bad : 1 = 1 := by sorry", ":prove"]);
         assert!(repl.feed(&["exact nosuchLemma"]).contains("nosuchLemma"));
@@ -2521,7 +2561,7 @@ mod 証明モード {
     /// en: Shows the error and keeps the goal when the engine returns an error response to a tactic
     #[story("E1")]
     #[test]
-    fn エンジンが返したエラーを表示してゴールを変えない() {
+    fn shows_the_error_and_keeps_the_goal_when_the_engine_returns_an_error_response_to_a_tactic() {
         let mut repl = Driver::new();
         repl.feed(&["theorem lost : 1 = 1 := by sorry", ":prove"]);
         let state = repl.repl.proof().expect("proof").state;
@@ -2541,7 +2581,8 @@ mod 証明モード {
     /// en: Shows a PANIC warning and keeps the proofState and script when the engine panics on a tactic
     #[story("E1", "F1")]
     #[test]
-    fn タクティクで_PANIC_したら警告して_proofState_を進めない() {
+    fn shows_a_panic_warning_and_keeps_the_proofstate_and_script_when_the_engine_panics_on_a_tactic()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem panicT : 1 = 1 := by sorry", ":prove"]);
         let state = repl.repl.proof().expect("proof").state;
@@ -2561,7 +2602,8 @@ mod 証明モード {
     /// en: Records the entered tactic and says it cannot read the suggestion when the engine returns a malformed one
     #[story("E2")]
     #[test]
-    fn 提案を読み取れなければ入力したタクティクを記録する() {
+    fn records_the_entered_tactic_and_says_it_cannot_read_the_suggestion_when_the_engine_returns_a_malformed_one()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem cut : 1 = 1 ∧ 2 = 2 := by sorry", ":prove"]);
         repl.hook(|stage| match stage {
@@ -2581,7 +2623,8 @@ mod 証明モード {
     /// en: Keeps the declaration with its sorry and says the position is unreadable when a proof ends with no position
     #[story("E3")]
     #[test]
-    fn sorry_の位置が分からなければ宣言は_sorry_のままだと知らせる() {
+    fn keeps_the_declaration_with_its_sorry_and_says_the_position_is_unreadable_when_a_proof_ends_with_no_position()
+     {
         // 宣言の応答から sorry の位置を消して、位置が分からない状態を作る。
         let mut repl = Driver::new();
         repl.hook(|stage| match stage {
@@ -2616,7 +2659,8 @@ mod 証明モード {
     /// en: Shows the goal of the sorry when :goals runs outside proof mode with a declaration that has a sorry
     #[story("E1")]
     #[test]
-    fn 証明モードの外の_colon_goals_で残っている_sorry_を表示する() {
+    fn shows_the_goal_of_the_sorry_when_goals_runs_outside_proof_mode_with_a_declaration_that_has_a_sorry()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem t4 : 3 = 3 := by sorry"]);
         let out = repl.feed(&[":goals"]);
@@ -2625,7 +2669,7 @@ mod 証明モード {
     }
 }
 
-mod 項の位置の_sorry {
+mod sorry_in_term_position {
     //! ja: 項の位置の sorry
     //! en: Sorry in term position
     //!
@@ -2636,7 +2680,7 @@ mod 項の位置の_sorry {
     /// en: Says the sorry stays and keeps the original declaration when a tactic finishes the proof
     #[story("E3")]
     #[test]
-    fn 置き換えられなければ_sorry_のまま残す() {
+    fn says_the_sorry_stays_and_keeps_the_original_declaration_when_a_tactic_finishes_the_proof() {
         let mut repl = Driver::new();
         repl.feed(&["def termSorry : Nat := sorry", ":prove"]);
         let out = repl.feed(&["exact 0"]);
@@ -2648,7 +2692,7 @@ mod 項の位置の_sorry {
     }
 }
 
-mod 環境全体が置き換わるとき {
+mod when_the_whole_environment_is_replaced {
     //! ja: 環境全体が置き換わるとき
     //! en: When the whole environment is replaced
     use super::*;
@@ -2657,7 +2701,7 @@ mod 環境全体が置き換わるとき {
     /// en: Exits proof mode when :l runs in proof mode
     #[story("B4", "E1")]
     #[test]
-    fn 読み込んだら証明モードを終了する() {
+    fn exits_proof_mode_when_l_runs_in_proof_mode() {
         // 前の環境の proofState を持ったままだと、送っても新しい環境と合わない。
         let mut repl = Driver::new();
         let path = file(&repl, "other.lean", "def other := 1\n");
@@ -2670,7 +2714,7 @@ mod 環境全体が置き換わるとき {
     }
 }
 
-mod 折り返した提案 {
+mod wrapped_suggestions {
     //! ja: 折り返した提案
     //! en: Wrapped suggestions
     //!
@@ -2689,7 +2733,8 @@ mod 折り返した提案 {
     /// en: Replaces the sorry with the whole suggestion, wrapped lines included, when it finishes the proof
     #[story("E2", "E3")]
     #[test]
-    fn 折り返した提案でも_sorry_を置き換えられる() {
+    fn replaces_the_sorry_with_the_whole_suggestion_wrapped_lines_included_when_it_finishes_the_proof()
+     {
         // 途中で切れたスクリプトでは置き換えが失敗し、成功したはずの証明が捨てられる。
         let mut repl = Driver::new();
         repl.feed(&[&format!(
@@ -2708,7 +2753,8 @@ mod 折り返した提案 {
     /// en: Shows the script to its last line when a wrapped suggestion proves a sorry in term position
     #[story("E2")]
     #[test]
-    fn 項の位置の_sorry_でもスクリプトを切り詰めない() {
+    fn shows_the_script_to_its_last_line_when_a_wrapped_suggestion_proves_a_sorry_in_term_position()
+    {
         // 表示したスクリプトは、置き換えが成功したかどうかに関係なく画面に残る。
         // 途中で切れていると、「証明完了」と表示したまま誰も気付けない。
         let mut repl = Driver::new();
@@ -2726,7 +2772,7 @@ mod 折り返した提案 {
     }
 }
 
-mod sorry_が複数あるとき {
+mod when_a_declaration_has_several_sorries {
     //! ja: sorry が複数あるとき
     //! en: When a declaration has several sorries
     //!
@@ -2739,7 +2785,7 @@ mod sorry_が複数あるとき {
     /// en: Replaces only the chosen sorry when :prove 1 picks it and the proof ends
     #[story("E1", "E3")]
     #[test]
-    fn 選んだ_sorry_だけを置き換える() {
+    fn replaces_only_the_chosen_sorry_when_prove_1_picks_it_and_the_proof_ends() {
         let mut repl = Driver::new();
         repl.feed(&[
             "theorem two : 1 = 1 ∧ 2 = 2 := ⟨by sorry, by sorry⟩",
@@ -2762,7 +2808,7 @@ mod sorry_が複数あるとき {
     /// en: Leaves no sorry in the declaration when the remaining sorry is proved after the first
     #[story("E1", "E3")]
     #[test]
-    fn 残った_sorry_を続けて証明できる() {
+    fn leaves_no_sorry_in_the_declaration_when_the_remaining_sorry_is_proved_after_the_first() {
         let mut repl = Driver::new();
         repl.feed(&["theorem both : 1 = 1 ∧ 2 = 2 := ⟨by sorry, by sorry⟩"]);
         repl.feed(&[":prove 1", "rfl", ":prove", "rfl"]);
@@ -2776,7 +2822,8 @@ mod sorry_が複数あるとき {
     /// en: Replaces a sorry on its own line with the tactic at the same indentation when the proof ends
     #[story("E1", "E3")]
     #[test]
-    fn 単独の行にある_sorry_のインデントを変えない() {
+    fn replaces_a_sorry_on_its_own_line_with_the_tactic_at_the_same_indentation_when_the_proof_ends()
+     {
         // 前後の空白まで変えると "    sorry" が " trivial" になり、インデントが
         // 浅くなって by ブロックの外に出る (unexpected identifier)。
         let mut repl = Driver::new();
@@ -2806,7 +2853,7 @@ mod sorry_が複数あるとき {
     /// en: Replaces each sorry in an indented declaration when they are proved in turn
     #[story("E1", "E3")]
     #[test]
-    fn インデントのある宣言でも順に置き換えられる() {
+    fn replaces_each_sorry_in_an_indented_declaration_when_they_are_proved_in_turn() {
         let mut repl = Driver::new();
         repl.block(&[
             "theorem tidy : True ∧ True := by",
@@ -2834,7 +2881,8 @@ mod sorry_が複数あるとき {
     /// en: Shows the goal of the remaining sorry when :prove 2 runs after a term-position sorry is not replaced
     #[story("E3")]
     #[test]
-    fn 置き換えられなくても残りの_sorry_の証明を続けられる() {
+    fn shows_the_goal_of_the_remaining_sorry_when_prove_2_runs_after_a_term_position_sorry_is_not_replaced()
+     {
         // 項の位置の sorry にはタクティクを書けない。元に戻すときに持ち越した sorry まで
         // 捨てると、残っている sorry の証明を :prove で続けられなくなる。
         let mut repl = Driver::new();
@@ -2853,7 +2901,7 @@ mod sorry_が複数あるとき {
     }
 }
 
-mod タクティクの途中でエンジンが変わる {
+mod when_the_engine_changes_during_a_tactic {
     //! ja: タクティクの途中でエンジンが変わったとき
     //! en: When the engine changes during a tactic
     //!
@@ -2865,7 +2913,8 @@ mod タクティクの途中でエンジンが変わる {
     /// en: Exits proof mode and keeps the declaration with the sorry when the engine crashes on a tactic
     #[story("F1", "E1")]
     #[test]
-    fn エンジンが異常終了したら証明モードを終了して宣言を残す() {
+    fn exits_proof_mode_and_keeps_the_declaration_with_the_sorry_when_the_engine_crashes_on_a_tactic()
+     {
         let mut repl = Driver::new();
         repl.feed(&[
             "def keep := 7",
@@ -2897,7 +2946,7 @@ mod タクティクの途中でエンジンが変わる {
     /// en: Says the proof can resume when a tactic is interrupted, and replaces the sorry after :prove
     #[story("A4", "F1", "E1")]
     #[test]
-    fn 中断しても証明モードを再開できる() {
+    fn says_the_proof_can_resume_when_a_tactic_is_interrupted_and_replaces_the_sorry_after_prove() {
         let mut repl = Driver::new();
         repl.feed(&["theorem again : 1 = 1 := by sorry", ":prove"]);
 
@@ -2914,7 +2963,7 @@ mod タクティクの途中でエンジンが変わる {
     }
 }
 
-mod エラーになった宣言の_sorry {
+mod sorry_in_a_declaration_with_an_error {
     //! ja: エラーになった宣言の sorry
     //! en: Sorry in a declaration with an error
     //!
@@ -2926,7 +2975,8 @@ mod エラーになった宣言の_sorry {
     /// en: Says there is no sorry on :prove and shows no goal or hint when such a declaration is entered
     #[story("E1", "E3")]
     #[test]
-    fn ゴールも証明モードの案内も表示しない() {
+    fn says_there_is_no_sorry_on_prove_and_shows_no_goal_or_hint_when_such_a_declaration_is_entered()
+     {
         let mut repl = Driver::new();
         let out = repl.feed(&["theorem ng : True := ⟨by sorry, nonsense⟩"]);
 
@@ -2940,7 +2990,8 @@ mod エラーになった宣言の_sorry {
     /// en: Shows the original sorry count, not the sorry of the replacement declaration, when a replacement fails
     #[story("E1", "E3")]
     #[test]
-    fn 置き換えに失敗しても件数を報告し直さない() {
+    fn shows_the_original_sorry_count_not_the_sorry_of_the_replacement_declaration_when_a_replacement_fails()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def nums : Nat × Nat := (sorry, sorry)", ":prove 1"]);
         let out = repl.feed(&["exact 0"]); // 項の位置なのでタクティクは書けない
@@ -2955,7 +3006,7 @@ mod エラーになった宣言の_sorry {
     }
 }
 
-mod 依存している公理 {
+mod axioms_a_declaration_depends_on {
     //! ja: 依存している公理
     //! en: Axioms a declaration depends on
     use super::*;
@@ -2964,7 +3015,7 @@ mod 依存している公理 {
     /// en: Says no axioms are used when #print axioms runs on a theorem without sorry
     #[story("E4")]
     #[test]
-    fn print_axioms_を実行できる() {
+    fn says_no_axioms_are_used_when_print_axioms_runs_on_a_theorem_without_sorry() {
         let mut repl = Driver::new();
         repl.feed(&["theorem ax1 : 1 = 1 := rfl"]);
         assert!(
@@ -2977,7 +3028,7 @@ mod 依存している公理 {
     /// en: Shows sorryAx when #print axioms runs on a declaration with a sorry
     #[story("E4")]
     #[test]
-    fn sorry_のままなら_sorryAx_に依存する() {
+    fn shows_sorryax_when_print_axioms_runs_on_a_declaration_with_a_sorry() {
         let mut repl = Driver::new();
         repl.feed(&["def ax2 : Nat := sorry"]);
         assert!(repl.feed(&["#print axioms ax2"]).contains("sorryAx"));
@@ -2987,7 +3038,7 @@ mod 依存している公理 {
     /// en: Says no axioms are used when #print axioms runs on a theorem whose sorry was proved
     #[story("E4", "E1", "E3")]
     #[test]
-    fn 置き換えたら_sorryAx_が消える() {
+    fn says_no_axioms_are_used_when_print_axioms_runs_on_a_theorem_whose_sorry_was_proved() {
         // 置き換えられたかを公理の側から確認できる。あいだに環境を進める入力を
         // 挟むと持ち越した proofState を捨てるので、続けて入力する。
         let mut repl = Driver::new();
@@ -2999,7 +3050,7 @@ mod 依存している公理 {
     }
 }
 
-mod 入力の判定の途中でエンジンが異常終了する {
+mod when_the_engine_crashes_while_judging_input {
     //! ja: 入力の判定の途中でエンジンが異常終了したとき
     //! en: When the engine crashes while judging input
     //!
@@ -3011,7 +3062,8 @@ mod 入力の判定の途中でエンジンが異常終了する {
     /// en: Says the tactic line did not run and that :prove can resume when a tactic is entered in proof mode
     #[story("F1", "E1")]
     #[test]
-    fn タクティクの行を宣言として送らない() {
+    fn says_the_tactic_line_did_not_run_and_that_prove_can_resume_when_a_tactic_is_entered_in_proof_mode()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem probeDied : 1 = 1 := by sorry", ":prove"]);
 
@@ -3035,7 +3087,7 @@ mod 入力の判定の途中でエンジンが異常終了する {
     }
 }
 
-mod 完結の判定を中断したとき {
+mod when_the_completeness_judgment_is_interrupted {
     //! ja: 完結の判定を中断したとき
     //! en: When the completeness judgment is interrupted
     //!
@@ -3052,7 +3104,7 @@ mod 完結の判定を中断したとき {
     /// en: Says the declaration did not run and records nothing when Ctrl-C stops its judgment
     #[story("A4", "C1")]
     #[test]
-    fn 判定を_Ctrl_C_で止めたら入力を送らない() {
+    fn says_the_declaration_did_not_run_and_records_nothing_when_ctrl_c_stops_its_judgment() {
         let mut repl = Driver::new();
         let hit = interrupt_after_write(&mut repl, |o| probes(o, "stopped"));
         let out = repl.feed(&["def stopped := 1"]);
@@ -3067,7 +3119,8 @@ mod 完結の判定を中断したとき {
     /// en: Restores the undone declaration when Ctrl-C stops the judgment on the empty line ending a continuation
     #[story("A4", "C6")]
     #[test]
-    fn 途中のブロックを確定する判定を止めたら取り消した宣言を戻す() {
+    fn restores_the_undone_declaration_when_ctrl_c_stops_the_judgment_on_the_empty_line_ending_a_continuation()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def a := 1"]);
 
@@ -3104,7 +3157,8 @@ mod 完結の判定を中断したとき {
     /// en: Queues the undone declaration after the pending ones when Ctrl-C stops a replay after an engine crash
     #[story("A4", "F1")]
     #[test]
-    fn 判定で再起動したときの再実行を止めたら取り消した宣言を保留の後ろに戻す() {
+    fn queues_the_undone_declaration_after_the_pending_ones_when_ctrl_c_stops_a_replay_after_an_engine_crash()
+     {
         // 取り消した宣言 r3 は、保留にした r2 より後ろにあった。r3 をすぐに再実行
         // すると、ユーザーが止めた再実行を続けることになり、:restart では r3 が r2
         // より先に実行される。
@@ -3139,7 +3193,7 @@ mod 完結の判定を中断したとき {
     }
 }
 
-mod 保留と環境の切り替え {
+mod pending_declarations_and_environment_switching {
     //! ja: 保留と環境の切り替え
     //! en: Pending declarations and environment switching
     //!
@@ -3170,7 +3224,7 @@ mod 保留と環境の切り替え {
     /// en: Keeps pending declarations when :env switches the environment
     #[story("G5", "F1")]
     #[test]
-    fn colon_env_の切り替えでも保留を引き継ぐ() {
+    fn keeps_pending_declarations_when_env_switches_the_environment() {
         let mut repl = Driver::new();
         strand(&mut repl, "envKeep");
 
@@ -3185,7 +3239,7 @@ mod 保留と環境の切り替え {
     /// en: Says pending declarations are discarded when :l runs
     #[story("B4", "F1")]
     #[test]
-    fn colon_l_が保留を捨てるなら件数を表示する() {
+    fn says_pending_declarations_are_discarded_when_l_runs() {
         let mut repl = Driver::new();
         strand(&mut repl, "loadDrop");
 
@@ -3197,7 +3251,7 @@ mod 保留と環境の切り替え {
     }
 }
 
-mod sorry_の置き換えの途中でエンジンが異常終了する {
+mod when_the_engine_crashes_while_replacing_a_sorry {
     //! ja: sorry の置き換えの途中でエンジンが異常終了したとき
     //! en: When the engine crashes while replacing a sorry
     use super::*;
@@ -3206,7 +3260,7 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
     /// en: Replaces the sorry on the restarted engine without saying it stays when the proof ends
     #[story("E3", "F1")]
     #[test]
-    fn 置き換えが成功したのに_sorry_のままと報告しない() {
+    fn replaces_the_sorry_on_the_restarted_engine_without_saying_it_stays_when_the_proof_ends() {
         let mut repl = Driver::new();
         repl.feed(&["theorem died : True := by sorry", ":prove"]);
 
@@ -3231,7 +3285,8 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
     /// en: Keeps the sorry and says the engine restarted when the replaced declaration fails on the restarted engine
     #[story("E3", "F1")]
     #[test]
-    fn 再起動したあとの再実行も失敗したら_sorry_のままと知らせる() {
+    fn keeps_the_sorry_and_says_the_engine_restarted_when_the_replaced_declaration_fails_on_the_restarted_engine()
+     {
         let mut repl = Driver::new();
         repl.feed(&["theorem died2 : True := by sorry", ":prove"]);
 
@@ -3261,7 +3316,7 @@ mod sorry_の置き換えの途中でエンジンが異常終了する {
     }
 }
 
-mod sorry_の置き換えを中断したとき {
+mod when_replacing_a_sorry_is_interrupted {
     //! ja: sorry の置き換えを中断したとき
     //! en: When replacing a sorry is interrupted
     use super::*;
@@ -3270,7 +3325,8 @@ mod sorry_の置き換えを中断したとき {
     /// en: Puts the original declaration last in pending when Ctrl-C stops the replacement and the replay on restart
     #[story("E3", "F1")]
     #[test]
-    fn 再起動のあとの再実行も中断したら置き換えを戻す宣言を保留の後ろに並べる() {
+    fn puts_the_original_declaration_last_in_pending_when_ctrl_c_stops_the_replacement_and_the_replay_on_restart()
+     {
         let mut repl = Driver::new();
         repl.feed(&[
             "def baseVal := 1",
@@ -3304,7 +3360,7 @@ mod sorry_の置き換えを中断したとき {
     }
 }
 
-mod 再起動に失敗したときの証明モード {
+mod proof_mode_after_a_failed_restart {
     //! ja: 再起動に失敗したときの証明モード
     //! en: Proof mode after a failed restart
     use super::*;
@@ -3313,7 +3369,8 @@ mod 再起動に失敗したときの証明モード {
     /// en: Says the restart failed and exits proof mode when the engine crashes while judging a tactic
     #[story("F1", "E1")]
     #[test]
-    fn 無効になった_proofState_を使い続けない() {
+    fn says_the_restart_failed_and_exits_proof_mode_when_the_engine_crashes_while_judging_a_tactic()
+    {
         let mut repl = Driver::new();
         repl.feed(&["theorem ghost : True := by sorry", ":prove"]);
 
@@ -3343,7 +3400,7 @@ mod 再起動に失敗したときの証明モード {
     /// en: Says once that proof mode exited when the engine crashes as a tactic is sent
     #[story("E1", "F1")]
     #[test]
-    fn 再起動に失敗したら証明モードの終了を_1_回だけ知らせる() {
+    fn says_once_that_proof_mode_exited_when_the_engine_crashes_as_a_tactic_is_sent() {
         let mut repl = Driver::new();
         repl.feed(&["theorem twice : True := by sorry", ":prove"]);
 
@@ -3359,7 +3416,7 @@ mod 再起動に失敗したときの証明モード {
     }
 }
 
-mod 環境の切り替え {
+mod switching_environments {
     //! ja: 環境の切り替え
     //! en: Switching environments
     use super::*;
@@ -3368,7 +3425,7 @@ mod 環境の切り替え {
     /// en: Switches to the configured core when :env core runs in a core started with extra imports
     #[story("G5")]
     #[test]
-    fn 名前が同じでも設定の違う環境には_colon_env_で切り替える() {
+    fn switches_to_the_configured_core_when_env_core_runs_in_a_core_started_with_extra_imports() {
         // -e core -i Lean.Elab.Frontend で起動したとき。名前だけを比べると
         // 「すでに core」と表示して、設定にある core に戻れない。
         let sb = sandbox();
@@ -3401,7 +3458,8 @@ mod 環境の切り替え {
     /// en: Says the environment is already in use when :env names the current one missing from the config
     #[story("G5")]
     #[test]
-    fn 設定に無い環境でも今の名前なら_colon_env_はすでにと表示する() {
+    fn says_the_environment_is_already_in_use_when_env_names_the_current_one_missing_from_the_config()
+     {
         // -p から推測した環境は設定に無いので、設定から探すと見つからない。
         let sb = sandbox();
         let table = load_config(&sb.ctx.config).expect("config");
@@ -3429,7 +3487,8 @@ mod 環境の切り替え {
     /// en: Keeps the :time setting and the declarations of the loaded file when :env switches the environment
     #[story("G1", "G5")]
     #[test]
-    fn 切り替えても設定と読み込んだファイルが残る() {
+    fn keeps_the_time_setting_and_the_declarations_of_the_loaded_file_when_env_switches_the_environment()
+     {
         let mut repl = Driver::new();
         let path = repl.tmp().join("switched.lean").display().to_string();
         repl.feed(&["def switched := 11", &format!(":save {path}"), ":reset"]);
@@ -3447,7 +3506,8 @@ mod 環境の切り替え {
     /// en: Says the name is not in the config and evaluates the next expression when :env gets an unknown name
     #[story("G5")]
     #[test]
-    fn 設定に無い名前を指定してもセッションが続く() {
+    fn says_the_name_is_not_in_the_config_and_evaluates_the_next_expression_when_env_gets_an_unknown_name()
+     {
         let mut repl = Driver::new();
         assert!(repl.feed(&[":env nosuch"]).contains("設定に無い"));
         assert!(
@@ -3460,7 +3520,8 @@ mod 環境の切り替え {
     /// en: Says startup failed and goes back to the original environment when :env picks one that cannot start
     #[story("G4", "G5")]
     #[test]
-    fn 切り替え先が起動できなければ元の環境に戻る() {
+    fn says_startup_failed_and_goes_back_to_the_original_environment_when_env_picks_one_that_cannot_start()
+     {
         // import が成功するかは boot するまで分からない。今のエンジンは kill 済み
         // なので、そのままエラーを返すとセッションごと消える。
         let mut repl = Driver::new();
@@ -3476,7 +3537,7 @@ mod 環境の切り替え {
     /// en: Shows the list of target environments when :env runs without arguments
     #[story("G5")]
     #[test]
-    fn 引数の無い_colon_env_は今の環境と切り替え先を表示する() {
+    fn shows_the_list_of_target_environments_when_env_runs_without_arguments() {
         let mut repl = Driver::new();
         let out = repl.feed(&[":env"]);
         assert!(out.contains("core"), "{out}");
@@ -3487,7 +3548,8 @@ mod 環境の切り替え {
     /// en: Says the environment is already in use and does not restart the engine when :env names the current one
     #[story("G5")]
     #[test]
-    fn 今の環境の名前を指定したら再起動しない() {
+    fn says_the_environment_is_already_in_use_and_does_not_restart_the_engine_when_env_names_the_current_one()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def stay := 1"]);
         let before = (repl.repl.eng().pid(), repl.repl.eng().generation());
@@ -3498,7 +3560,7 @@ mod 環境の切り替え {
     }
 }
 
-mod 切り替えに失敗したとき {
+mod when_switching_fails {
     //! ja: 切り替えに失敗したとき
     //! en: When switching fails
     use super::*;
@@ -3507,7 +3569,8 @@ mod 切り替えに失敗したとき {
     /// en: Keeps the entered declarations in the original environment when :env targets one that cannot start
     #[story("G4", "G5")]
     #[test]
-    fn 入力した宣言も元の環境に残る() {
+    fn keeps_the_entered_declarations_in_the_original_environment_when_env_targets_one_that_cannot_start()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def typedHere := 42"]);
         only_core(&mut repl);
@@ -3526,7 +3589,8 @@ mod 切り替えに失敗したとき {
     /// en: Keeps the current engine and shows the lake env failure when :env targets an environment it cannot set up
     #[story("G4", "G5")]
     #[test]
-    fn エンジンを用意できない環境に切り替えても今のエンジンを残す() {
+    fn keeps_the_current_engine_and_shows_the_lake_env_failure_when_env_targets_an_environment_it_cannot_set_up()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def typedHere := 42"]);
         let before = (repl.repl.eng().pid(), repl.repl.eng().generation());
@@ -3552,7 +3616,7 @@ mod 切り替えに失敗したとき {
     /// en: Leaves the loop and keeps the reason when :env runs and neither environment can start
     #[story("G4", "G5")]
     #[test]
-    fn colon_env_で元の環境にも戻れなければ入力のループを抜けて理由を残す() {
+    fn leaves_the_loop_and_keeps_the_reason_when_env_runs_and_neither_environment_can_start() {
         // 環境が無いまま続けても、どの入力もエラーになるだけ。feed は true (ループを
         // 抜ける) を返して理由を `env_lost` に残し、端末 (cli) はこの理由を表示して
         // 終了する。
@@ -3568,7 +3632,8 @@ mod 切り替えに失敗したとき {
     /// en: Ends the terminal loop with the reason, not an internal error, when :env runs and no environment starts
     #[story("G4", "G5")]
     #[test]
-    fn 端末では元の環境にも戻れなければ内部エラーにせずループを抜ける() {
+    fn ends_the_terminal_loop_with_the_reason_not_an_internal_error_when_env_runs_and_no_environment_starts()
+     {
         // ループが想定外のエラーとして扱うと、環境が無いままセッションが続く。
         // cli::run は Mutex<Repl> を受け取るので、Driver を使わずに Repl を作る。
         let sb = sandbox();
@@ -3596,7 +3661,8 @@ mod 切り替えに失敗したとき {
     /// en: Keeps declarations pending until :restart when Ctrl-C interrupts the return to the original environment
     #[story("A4", "G5")]
     #[test]
-    fn 元の環境に戻るのを中断しても宣言を失わず_colon_restart_でやり直せる() {
+    fn keeps_declarations_pending_until_restart_when_ctrl_c_interrupts_the_return_to_the_original_environment()
+     {
         // 切り替え先の boot は失敗させ、元の環境に戻る boot は Ctrl-C で中断する。
         // 戻れなかったときと違って、環境を失った理由は無いのでセッションを続ける。
         let mut repl = Driver::new();
@@ -3629,7 +3695,8 @@ mod 切り替えに失敗したとき {
     /// en: Reloads the loaded file on :restart when Ctrl-C interrupts the return to the original environment
     #[story("A4", "G5")]
     #[test]
-    fn 元の環境に戻るのを中断しても_colon_l_したファイルを_colon_restart_で読み込み直す() {
+    fn reloads_the_loaded_file_on_restart_when_ctrl_c_interrupts_the_return_to_the_original_environment()
+     {
         let mut repl = Driver::new();
         let path = file(&repl, "lib.lean", "def libA := 10\n");
         repl.feed(&[&format!(":l {path}")]);
@@ -3658,7 +3725,8 @@ mod 切り替えに失敗したとき {
     /// en: Keeps declarations only pending when Ctrl-C interrupts setting up the original environment's engine
     #[story("F1", "G5")]
     #[test]
-    fn 元の環境のエンジンを用意するのを中断したら宣言を保留だけに残す() {
+    fn keeps_declarations_only_pending_when_ctrl_c_interrupts_setting_up_the_original_environment_s_engine()
+     {
         // 切り替え先の boot を失敗させるときにフラグを立てると、元の環境に戻るときの
         // lean --version (Engine::new の中) が中断する。新しい Engine はできないので、
         // 終了させた前のエンジンが宣言の記録を持ったまま残る。
@@ -3689,7 +3757,8 @@ mod 切り替えに失敗したとき {
     /// en: Shows the count of declarations not replayed and keeps them pending when Ctrl-C interrupts the replay
     #[story("F1", "G5")]
     #[test]
-    fn 切り替えたあとの再実行が中断されても宣言を保留に残す() {
+    fn shows_the_count_of_declarations_not_replayed_and_keeps_them_pending_when_ctrl_c_interrupts_the_replay()
+     {
         let mut repl = Driver::new();
         repl.feed(&["def carried := 1"]);
 
@@ -3701,7 +3770,7 @@ mod 切り替えに失敗したとき {
     }
 }
 
-mod 切り替えが成功したとき {
+mod when_switching_succeeds {
     //! ja: 切り替えが成功したとき
     //! en: When switching succeeds
     use super::*;
@@ -3710,7 +3779,7 @@ mod 切り替えが成功したとき {
     /// en: Adds the entered declarations to the new environment when :env switches
     #[story("G1", "G5")]
     #[test]
-    fn 入力した宣言も新しい環境に追加される() {
+    fn adds_the_entered_declarations_to_the_new_environment_when_env_switches() {
         let mut repl = Driver::new();
         repl.feed(&["def carried := 42"]);
         let out = repl.feed(&[":env wide"]);

@@ -1,13 +1,6 @@
 //! 入力をどう解釈するかを決める純粋関数と、読み取りのテスト。端末もエンジンも
 //! 使わないのでミリ秒で終わる。
 
-#![allow(
-    non_snake_case,
-    uncommon_codepoints,
-    confusable_idents,
-    mixed_script_confusables
-)]
-
 use leani::{boot, search};
 use leani_core::abbrev::{
     ABBREV, abbrev_candidates, abbrev_head, abbrev_lookup, abbrev_table, cell_width, expand_abbrev,
@@ -89,7 +82,7 @@ fn abbrev_keys() -> impl Strategy<Value = &'static str> {
     prop::sample::select(ABBREV.keys().map(String::as_str).collect::<Vec<_>>())
 }
 
-mod 継続行の判定 {
+mod judging_continuation_lines {
     //! ja: 継続行の判定
     //! en: Judging continuation lines
     //!
@@ -100,7 +93,7 @@ mod 継続行の判定 {
     /// en: Judges an indented line as a continuation of the previous line
     #[story("C1")]
     #[test]
-    fn インデントした行は前の行の続き() {
+    fn judges_an_indented_line_as_a_continuation_of_the_previous_line() {
         for line in ["  | 0 => 0", "\tfoo", "  bar"] {
             assert!(pure::continues(line), "継続にならない: {line:?}");
         }
@@ -110,7 +103,7 @@ mod 継続行の判定 {
     /// en: Judges a line starting with a pipe as a continuation of the previous line
     #[story("C1")]
     #[test]
-    fn 行頭のパイプは前の行の続き() {
+    fn judges_a_line_starting_with_a_pipe_as_a_continuation_of_the_previous_line() {
         // `|` で始まる command も tactic も Lean には無い。
         assert!(pure::continues("| zero => rfl"));
     }
@@ -119,14 +112,14 @@ mod 継続行の判定 {
     /// en: Judges a line without indentation or a leading pipe as a separate input
     #[story("A1", "C1")]
     #[test]
-    fn ふつうの行は単独の入力() {
+    fn judges_a_line_without_indentation_or_a_leading_pipe_as_a_separate_input() {
         for line in ["def f := 1", "#eval 1", "", "x + 1"] {
             assert!(!pure::continues(line), "継続にされた: {line:?}");
         }
     }
 }
 
-mod 続きを待つ行 {
+mod lines_that_wait_for_more_input {
     //! ja: 続きを待つ行
     //! en: Lines that wait for more input
     //!
@@ -137,7 +130,7 @@ mod 続きを待つ行 {
     /// en: Judges a line ending in where, with, do or by as a line that waits for more
     #[story("C1")]
     #[test]
-    fn where_with_do_by_で終わる行は空行を待つ() {
+    fn judges_a_line_ending_in_where_with_do_or_by_as_a_line_that_waits_for_more() {
         for line in [
             "structure P where",
             "induction n with",
@@ -152,14 +145,14 @@ mod 続きを待つ行 {
     /// en: Judges a line with where or by only inside a word as a line that does not wait
     #[story("C1")]
     #[test]
-    fn 語の一部として含むだけなら待たない() {
+    fn judges_a_line_with_where_or_by_only_inside_a_word_as_a_line_that_does_not_wait() {
         for line in ["def where_ := 1", "#eval byte", "def f := 1"] {
             assert!(!BLOCK_OPEN.is_match(line), "余計に待つ: {line:?}");
         }
     }
 }
 
-mod パーサからの応答 {
+mod responses_from_the_parser {
     //! ja: パーサからの応答
     //! en: Responses from the parser
     //!
@@ -170,7 +163,7 @@ mod パーサからの応答 {
     /// en: Judges a response about unfinished input as waiting for the next line
     #[story("C1")]
     #[test]
-    fn 入力の途中なら次の行を待つ() {
+    fn judges_a_response_about_unfinished_input_as_waiting_for_the_next_line() {
         assert!(INCOMPLETE.is_match("<input>:1:5: unexpected end of input"));
         assert!(INCOMPLETE.is_match("unterminated comment"));
     }
@@ -179,7 +172,8 @@ mod パーサからの応答 {
     /// en: Judges a response about an unterminated raw string or name escape as waiting for the next line
     #[story("C6")]
     #[test]
-    fn 閉じていない_raw_文字列と名前のエスケープは続きを待つ() {
+    fn judges_a_response_about_an_unterminated_raw_string_or_name_escape_as_waiting_for_the_next_line()
+     {
         assert!(INCOMPLETE.is_match("<input>:1:9: unterminated raw string literal"));
         assert!(INCOMPLETE.is_match("<input>:1:8: unterminated identifier escape"));
     }
@@ -188,12 +182,12 @@ mod パーサからの応答 {
     /// en: Judges an error response not about unfinished input as ready to send
     #[story("C1")]
     #[test]
-    fn ただのエラーは待たずに送る() {
+    fn judges_an_error_response_not_about_unfinished_input_as_ready_to_send() {
         assert!(!INCOMPLETE.is_match("unknown identifier 'foo'"));
     }
 }
 
-mod タクティクの提案 {
+mod tactic_suggestions {
     //! ja: タクティクの提案
     //! en: Tactic suggestions
     //!
@@ -204,7 +198,7 @@ mod タクティクの提案 {
     /// en: Returns the tactic without the [apply] mark from a suggestion
     #[story("E2")]
     #[test]
-    fn 提案から項だけを取り出す() {
+    fn returns_the_tactic_without_the_apply_mark_from_a_suggestion() {
         let found = pure::try_this(&[
             json!({"severity": "info", "data": "Try this:\n  [apply] exact Nat.le_refl n"}),
         ]);
@@ -215,7 +209,7 @@ mod タクティクの提案 {
     /// en: Returns every line of a suggestion that wraps over several lines
     #[story("E2")]
     #[test]
-    fn 折り返した提案をすべて取り出す() {
+    fn returns_every_line_of_a_suggestion_that_wraps_over_several_lines() {
         // pretty printer が 100 桁前後で折り返す。1 行目だけ取り出すと
         // `simp only [a, b,` になり、それが完成した証明として表示されてしまう。
         let found = pure::try_this(&[json!({
@@ -229,7 +223,7 @@ mod タクティクの提案 {
     /// en: Returns a suggestion written on the same line as Try this
     #[story("E2")]
     #[test]
-    fn Try_this_と同じ行に書かれた提案も取り出す() {
+    fn returns_a_suggestion_written_on_the_same_line_as_try_this() {
         let found = pure::try_this(&[json!({"data": "Try this: exact Nat.le_refl n"})]);
         assert_eq!(found.as_deref(), Some("exact Nat.le_refl n"));
     }
@@ -238,7 +232,8 @@ mod タクティクの提案 {
     /// en: Judges a suggestion with unmatched brackets as cut off and one with matched brackets as whole
     #[story("E2")]
     #[test]
-    fn 括弧が合わない提案は途中で切れていると判定する() {
+    fn judges_a_suggestion_with_unmatched_brackets_as_cut_off_and_one_with_matched_brackets_as_whole()
+     {
         // スクリプトに追加する前の最後の確認。途中で切ると必ず括弧が合わなくなる。
         assert!(pure::balanced("simp only [aaa, bbb]"));
         assert!(pure::balanced("exact ⟨foo (bar x), rfl⟩"));
@@ -251,7 +246,7 @@ mod タクティクの提案 {
     /// en: Judges any concatenation of two balanced strings as balanced
     #[story("E2")]
     #[proptest]
-    fn 閉じた文字列同士を連結しても閉じている(
+    fn judges_any_concatenation_of_two_balanced_strings_as_balanced(
         #[strategy(balanced_src())] a: String,
         #[strategy(balanced_src())] b: String,
         #[strategy(closer())] close: char,
@@ -269,14 +264,14 @@ mod タクティクの提案 {
     /// en: Returns None for a message without a suggestion and for no messages
     #[story("E2")]
     #[test]
-    fn 提案でなければ何も返さない() {
+    fn returns_none_for_a_message_without_a_suggestion_and_for_no_messages() {
         let done = json!({"severity": "info", "data": "goals accomplished"});
         assert_eq!(pure::try_this(&[done]), None);
         assert_eq!(pure::try_this(&[]), None);
     }
 }
 
-mod 宣言の名前の取り出し {
+mod extracting_the_name_of_a_declaration {
     //! ja: 宣言の名前の取り出し
     //! en: Extracting the name of a declaration
     //!
@@ -294,7 +289,7 @@ mod 宣言の名前の取り出し {
     /// en: Returns the name of a declaration even with modifiers or attributes
     #[story("D1")]
     #[test]
-    fn 修飾子や属性が付いていても名前を取り出せる() {
+    fn returns_the_name_of_a_declaration_even_with_modifiers_or_attributes() {
         let cases = [
             ("def foo := 1", "foo"),
             ("theorem bar (n : Nat) : n = n := rfl", "bar"),
@@ -310,12 +305,12 @@ mod 宣言の名前の取り出し {
     /// en: Returns no names for an input that is not a declaration
     #[story("D1")]
     #[test]
-    fn 宣言でないものからは名前を取り出さない() {
+    fn returns_no_names_for_an_input_that_is_not_a_declaration() {
         assert!(names("#eval 1 + 1").is_empty());
     }
 }
 
-mod 補完する名前の切り出し {
+mod cutting_out_the_name_to_complete {
     //! ja: 補完する名前の切り出し
     //! en: Cutting out the name to complete
     use super::*;
@@ -324,7 +319,7 @@ mod 補完する名前の切り出し {
     /// en: Cuts out the name after a delimiter without splitting at a dot
     #[story("D1")]
     #[test]
-    fn 区切り文字の直後から名前を切り出す() {
+    fn cuts_out_the_name_after_a_delimiter_without_splitting_at_a_dot() {
         assert_eq!(pure::name_start("#check (Nat.suc"), "#check (".len());
         assert_eq!(pure::name_start("Nat.suc"), 0, "`.` で区切った");
     }
@@ -333,7 +328,7 @@ mod 補完する名前の切り出し {
     /// en: Cuts out the name after a symbol in front of it
     #[story("D1")]
     #[test]
-    fn 名前の前に記号があれば記号の後ろから名前を補完する() {
+    fn cuts_out_the_name_after_a_symbol_in_front_of_it() {
         // `@` や `¬` の直後から名前を補完する。区切り文字の一覧に無い記号を名前に
         // 含めると、`@Nat.su` を `@Nat.su` という名前として問い合わせ、候補が出ない。
         for (text, before) in [
@@ -359,7 +354,7 @@ mod 補完する名前の切り出し {
     /// en: Cuts out the name after a character that Lean does not allow in names
     #[story("D1")]
     #[test]
-    fn 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する() {
+    fn cuts_out_the_name_after_a_character_that_lean_does_not_allow_in_names() {
         // Lean の名前に使える文字は、Unicode の英数字より狭い。漢字や全角の英字を
         // 名前に含めると、`定理Nat.su` を 1 つの名前として問い合わせ、候補が出ない。
         for (text, before) in [("定理Nat.su", "定理"), ("①x", "①"), ("Ａx", "Ａ")] {
@@ -374,7 +369,7 @@ mod 補完する名前の切り出し {
     /// en: Returns the start of a very long name without running out of stack
     #[story("D1")]
     #[test]
-    fn 長い名前でもスタックを使い切らない() {
+    fn returns_the_start_of_a_very_long_name_without_running_out_of_stack() {
         assert_eq!(pure::name_start(&"a".repeat(1_000_000)), 0);
         assert_eq!(pure::name_start(&"«a»".repeat(300_000)), 0);
     }
@@ -383,7 +378,7 @@ mod 補完する名前の切り出し {
     /// en: Cuts out any name exactly as written after any separator symbol
     #[story("D1")]
     #[proptest]
-    fn 記号のあとの名前をそのまま切り出す(
+    fn cuts_out_any_name_exactly_as_written_after_any_separator_symbol(
         #[strategy(prop::sample::select(vec!["@", "¬", "(", "⟨", " ", "+", "λ", "∘", "↦", "\""]))]
         sep: &'static str,
         #[strategy("[A-Za-zα-κμ-ω_][A-Za-z0-9_'!?.₀-₉]{0,8}")] name: String,
@@ -393,7 +388,7 @@ mod 補完する名前の切り出し {
     }
 }
 
-mod 補完の候補をまとめて取得する単位 {
+mod unit_for_getting_completion_candidates_together {
     //! ja: 補完の候補をまとめて取得する単位
     //! en: Unit for getting completion candidates together
     //!
@@ -404,7 +399,7 @@ mod 補完の候補をまとめて取得する単位 {
     /// en: Returns the name up to the namespace dot for a name with a namespace
     #[story("D1")]
     #[test]
-    fn 名前空間の区切りで分ける() {
+    fn returns_the_name_up_to_the_namespace_dot_for_a_name_with_a_namespace() {
         assert_eq!(pure::name_chunk("Nat.suc"), "Nat.");
         assert_eq!(
             pure::name_chunk("MeasureTheory.integral_"),
@@ -416,13 +411,13 @@ mod 補完の候補をまとめて取得する単位 {
     /// en: Returns the first two characters for a name without a namespace
     #[story("D1")]
     #[test]
-    fn 名前空間が無ければ先頭_2_文字() {
+    fn returns_the_first_two_characters_for_a_name_without_a_namespace() {
         // Mathlib では 1 文字だと `C` で 7.5 万件になるので、単位を広げすぎない。
         assert_eq!(pure::name_chunk("Contin"), "Co");
     }
 }
 
-mod Lean_の文字列リテラル {
+mod lean_string_literals {
     //! ja: Lean の文字列リテラル
     //! en: Lean string literals
     use super::*;
@@ -431,7 +426,7 @@ mod Lean_の文字列リテラル {
     /// en: Builds a literal using only escapes that Lean reads from any string
     #[story("C1")]
     #[proptest]
-    fn バックスラッシュの後ろには_Lean_が読む文字だけを書く(
+    fn builds_a_literal_using_only_escapes_that_lean_reads_from_any_string(
         #[strategy("[\\x00-\\x1f\\x7f\\\\\"aあ]{0,12}")] s: String,
     ) {
         // Lean の文字列は \b や \f を受け付けない。読めないエスケープを書くと
@@ -450,7 +445,7 @@ mod Lean_の文字列リテラル {
     }
 }
 
-mod エンジンの出力の_JSON {
+mod json_in_the_engine_output {
     //! ja: エンジンの出力の JSON
     //! en: JSON in the engine output
     //!
@@ -461,7 +456,7 @@ mod エンジンの出力の_JSON {
     /// en: Returns the last line of the output parsed as JSON
     #[story("D1", "C1")]
     #[test]
-    fn 出力の最後の行を_JSON_として読む() {
+    fn returns_the_last_line_of_the_output_parsed_as_json() {
         let got = pure::last_json(Some("宣言が出力した行\n{\"a\": [1]}\n"));
         assert_eq!(got, Some(json!({"a": [1]})));
     }
@@ -470,7 +465,7 @@ mod エンジンの出力の_JSON {
     /// en: Returns None if the output is missing or blank or its last line is not JSON
     #[story("D1", "C1")]
     #[test]
-    fn 出力が空か最後の行が_JSON_でなければ_None_を返す() {
+    fn returns_none_if_the_output_is_missing_or_blank_or_its_last_line_is_not_json() {
         for out in [
             None,
             Some(""),
@@ -482,7 +477,7 @@ mod エンジンの出力の_JSON {
     }
 }
 
-mod 入力が完結したかの判定 {
+mod judging_whether_the_input_is_complete {
     //! ja: 入力が完結したかの判定
     //! en: Judging whether the input is complete
     //!
@@ -493,7 +488,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges input that parses as a command as a complete command
     #[story("A1", "C1")]
     #[test]
-    fn command_として読めたらそのまま送る() {
+    fn judges_input_that_parses_as_a_command_as_a_complete_command() {
         let probe = json!({"cmd": {"ok": true}, "term": {"ok": false, "err": "x"}});
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Cmd));
     }
@@ -502,7 +497,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges input that parses only as a term as a complete term
     #[story("A1")]
     #[test]
-    fn term_としてしか読めなければ_eval_に包む() {
+    fn judges_input_that_parses_only_as_a_term_as_a_complete_term() {
         let probe = json!({"cmd": {"ok": false, "err": "x"}, "term": {"ok": true}});
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Term));
     }
@@ -511,7 +506,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges input that ends early as a command as waiting for more lines
     #[story("C1")]
     #[test]
-    fn 途中なら次の行を待つ() {
+    fn judges_input_that_ends_early_as_a_command_as_waiting_for_more_lines() {
         let probe = json!({
             "cmd": {"ok": false, "err": "<input>:1:9: unexpected end of input"},
             "term": {"ok": false, "err": "<input>:1:3: unexpected token"},
@@ -523,7 +518,8 @@ mod 入力が完結したかの判定 {
     /// en: Judges input that parses as neither command nor term as an error of the kind that got further
     #[story("C1")]
     #[test]
-    fn より先まで解析できたほうをユーザーの意図とみなす() {
+    fn judges_input_that_parses_as_neither_command_nor_term_as_an_error_of_the_kind_that_got_further()
+     {
         let probe = json!({
             "cmd": {"ok": false, "err": "<input>:1:2: unexpected token"},
             "term": {"ok": false, "err": "<input>:1:7: unexpected token"},
@@ -535,7 +531,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges input as a command error when there is no parser response
     #[story("C1")]
     #[test]
-    fn 判定できなければ_Lean_に本当のエラーを出させる() {
+    fn judges_input_as_a_command_error_when_there_is_no_parser_response() {
         // leani の推測でエラーを作らない。command として送る。
         assert_eq!(pure::classify(None), (State::Err, Kind::Cmd));
     }
@@ -544,7 +540,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges input in proof mode as complete, unfinished or an error by parsing it as tactics
     #[story("E1")]
     #[test]
-    fn 証明モードではタクティクの列として読めるかだけを見る() {
+    fn judges_input_in_proof_mode_as_complete_unfinished_or_an_error_by_parsing_it_as_tactics() {
         let ok = json!({"tac": {"ok": true}});
         assert_eq!(pure::classify_tac(Some(&ok)), (State::Complete, Kind::Tac));
         let more = json!({"tac": {"ok": false, "err": "unexpected end of input"}});
@@ -556,7 +552,7 @@ mod 入力が完結したかの判定 {
     /// en: Judges a block ending in an indented line as waiting for a blank line and one line as not
     #[story("C1")]
     #[test]
-    fn インデントで続いたブロックは空行まで待つ() {
+    fn judges_a_block_ending_in_an_indented_line_as_waiting_for_a_blank_line_and_one_line_as_not() {
         assert!(pure::block_continues(
             &["def f", "  | 0 => 0"],
             "def f\n  | 0 => 0"
@@ -565,7 +561,7 @@ mod 入力が完結したかの判定 {
     }
 }
 
-mod 評価できない理由 {
+mod reasons_a_value_cannot_be_evaluated {
     //! ja: 評価できない理由
     //! en: Reasons a value cannot be evaluated
     //!
@@ -576,7 +572,7 @@ mod 評価できない理由 {
     /// en: Returns a reason mentioning Repr for an error about a missing Repr instance
     #[story("A2")]
     #[test]
-    fn Repr_が無いという理由を取り出す() {
+    fn returns_a_reason_mentioning_repr_for_an_error_about_a_missing_repr_instance() {
         let blob = "Could not synthesize a `ToExpr`, `Repr`, or `ToString` instance";
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("Repr")));
     }
@@ -585,7 +581,7 @@ mod 評価できない理由 {
     /// en: Returns a reason mentioning noncomputable for an error that suggests noncomputable
     #[story("A2")]
     #[test]
-    fn noncomputable_という理由を取り出す() {
+    fn returns_a_reason_mentioning_noncomputable_for_an_error_that_suggests_noncomputable() {
         let blob = "failed to compile definition, consider marking it as 'noncomputable'";
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("noncomputable")));
     }
@@ -594,12 +590,12 @@ mod 評価できない理由 {
     /// en: Returns None for an error unrelated to evaluation
     #[story("A2")]
     #[test]
-    fn 評価できないエラーでなければ_None_を返す() {
+    fn returns_none_for_an_error_unrelated_to_evaluation() {
         assert_eq!(pure::not_evaluable_reason("Unknown identifier `x`"), None);
     }
 }
 
-mod do_の外の_action {
+mod actions_outside_do {
     //! ja: do の外の action
     //! en: Actions outside do
     use super::*;
@@ -608,7 +604,7 @@ mod do_の外の_action {
     /// en: Judges an error about an action written outside do as an action outside do
     #[story("A1")]
     #[test]
-    fn do_の外に書いた_action_のエラーを見分ける() {
+    fn judges_an_error_about_an_action_written_outside_do_as_an_action_outside_do() {
         let blob = "Nested action `← f` must be nested inside a `do` expression.";
         assert!(pure::nested_action(blob));
     }
@@ -617,12 +613,12 @@ mod do_の外の_action {
     /// en: Judges other errors as not about an action outside do
     #[story("A1")]
     #[test]
-    fn ほかのエラーは_do_の外の_action_と見なさない() {
+    fn judges_other_errors_as_not_about_an_action_outside_do() {
         assert!(!pure::nested_action("Unknown identifier `x`"));
     }
 }
 
-mod エラー位置の範囲 {
+mod range_of_an_error_position {
     //! ja: エラー位置の範囲
     //! en: Range of an error position
     //!
@@ -633,7 +629,7 @@ mod エラー位置の範囲 {
     /// en: Returns the range shifted back by the lines and columns that wrapping in eval added
     #[story("A5")]
     #[test]
-    fn eval_で包んだ分だけ位置を戻す() {
+    fn returns_the_range_shifted_back_by_the_lines_and_columns_that_wrapping_in_eval_added() {
         let m = json!({"pos": {"line": 2, "column": 6}, "endPos": {"line": 2, "column": 9}});
         // #eval で 1 行 2 桁ずらして送っているので、元のソースでは 1 行 4 桁。
         assert_eq!(pure::span(&m, &["foo bar"], 1, 2), Some((1, 4, 3)));
@@ -643,7 +639,7 @@ mod エラー位置の範囲 {
     /// en: Shifts back only the line, not the column, for a line that starts inside a string
     #[story("A5")]
     #[test]
-    fn 文字列の中で始まる行は桁を戻さない() {
+    fn shifts_back_only_the_line_not_the_column_for_a_line_that_starts_inside_a_string() {
         // 2 行目は文字列の中で始まるので、`#eval` に包むときに空白を足していない。
         // そのため、桁はずれていない。
         let m = json!({"pos": {"line": 3, "column": 3}, "endPos": {"line": 3, "column": 5}});
@@ -654,7 +650,7 @@ mod エラー位置の範囲 {
     /// en: Returns None for a position outside the lines
     #[story("A5")]
     #[test]
-    fn 位置が行の外なら範囲を返さない() {
+    fn returns_none_for_a_position_outside_the_lines() {
         let m = json!({"pos": {"line": 9, "column": 0}});
         assert_eq!(pure::span(&m, &["foo"], 0, 0), None);
     }
@@ -663,7 +659,7 @@ mod エラー位置の範囲 {
     /// en: Limits the width of a range to the length of the line
     #[story("A5")]
     #[test]
-    fn 範囲の幅は行の長さに収める() {
+    fn limits_the_width_of_a_range_to_the_length_of_the_line() {
         let m = json!({"pos": {"line": 1, "column": 1}, "endPos": {"line": 1, "column": 99}});
         assert_eq!(pure::span(&m, &["abc"], 0, 0), Some((1, 1, 2)));
     }
@@ -672,7 +668,7 @@ mod エラー位置の範囲 {
     /// en: Counts a full-width character as two columns for the caret position and length
     #[story("A5")]
     #[test]
-    fn 全角文字の幅だけキャレットをずらす() {
+    fn counts_a_full_width_character_as_two_columns_for_the_caret_position_and_length() {
         // 端末では全角文字が 2 桁を占めるので、文字の数だけずらすとキャレットが
         // 左にずれる。
         assert_eq!(pure::caret_pad("あい x", 3), " ".repeat(5));
@@ -684,13 +680,13 @@ mod エラー位置の範囲 {
     /// en: Keeps a tab before the caret as a tab instead of spaces
     #[story("A5")]
     #[test]
-    fn タブはタブのまま残す() {
+    fn keeps_a_tab_before_the_caret_as_a_tab_instead_of_spaces() {
         // タブの幅は端末が決めるので、同じ位置にタブを置けば列がそろう。
         assert_eq!(pure::caret_pad("\tfoo bar", 5), "\t    ");
     }
 }
 
-mod レスポンスの切り出し {
+mod cutting_out_responses {
     //! ja: レスポンスの切り出し
     //! en: Cutting out responses
     //!
@@ -701,7 +697,7 @@ mod レスポンスの切り出し {
     /// en: Returns None before a blank line arrives
     #[story("A1")]
     #[test]
-    fn 受信し終えるまでは何も返さない() {
+    fn returns_none_before_a_blank_line_arrives() {
         assert_eq!(pure::first_response("{\"env\": 1}"), None);
     }
 
@@ -709,7 +705,7 @@ mod レスポンスの切り出し {
     /// en: Returns the JSON before a blank line once the blank line arrives
     #[story("A1")]
     #[test]
-    fn 空行を受け取ったら読み込む() {
+    fn returns_the_json_before_a_blank_line_once_the_blank_line_arrives() {
         assert_eq!(
             pure::first_response("{\"env\": 1}\n\n"),
             Some(json!({"env": 1}))
@@ -720,14 +716,14 @@ mod レスポンスの切り出し {
     /// en: Reads JSON with a blank line in a string value and keeps the value
     #[story("A1")]
     #[test]
-    fn JSON_の中の空行では区切らない() {
+    fn reads_json_with_a_blank_line_in_a_string_value_and_keeps_the_value() {
         let buf = "{\"messages\": [{\"data\": \"a\\n\\nb\"}]}\n\n";
         let got = pure::first_response(buf).expect("レスポンスを読めない");
         assert_eq!(got["messages"][0]["data"], "a\n\nb");
     }
 }
 
-mod エンジンの_PANIC {
+mod panic_in_the_engine {
     //! ja: エンジンの PANIC
     //! en: PANIC in the engine
     //!
@@ -738,7 +734,7 @@ mod エンジンの_PANIC {
     /// en: Returns the PANIC line without the backtrace for a response with a PANIC
     #[story("F1")]
     #[test]
-    fn PANIC_の行を返す() {
+    fn returns_the_panic_line_without_the_backtrace_for_a_response_with_a_panic() {
         let resp = json!({"messages": [
             {"severity": "info", "data": "1"},
             {"severity": "info", "data": PANIC},
@@ -753,7 +749,7 @@ mod エンジンの_PANIC {
     /// en: Returns the PANIC line when output comes before it in the same message
     #[story("F1")]
     #[test]
-    fn PANIC_の前に出力があっても_PANIC_の行を返す() {
+    fn returns_the_panic_line_when_output_comes_before_it_in_the_same_message() {
         let resp = json!({"messages": [{"severity": "info", "data": format!("42\n{PANIC}")}]});
         assert_eq!(
             pure::panic_line(&resp).as_deref(),
@@ -765,14 +761,14 @@ mod エンジンの_PANIC {
     /// en: Returns None for a response without a PANIC or without any messages
     #[story("F1")]
     #[test]
-    fn PANIC_していなければ_None_を返す() {
+    fn returns_none_for_a_response_without_a_panic_or_without_any_messages() {
         let resp = json!({"messages": [{"severity": "info", "data": "2"}]});
         assert_eq!(pure::panic_line(&resp), None);
         assert_eq!(pure::panic_line(&json!({})), None);
     }
 }
 
-mod 起動前の準備 {
+mod preparation_before_startup {
     //! ja: 起動前の準備
     //! en: Preparation before startup
     //!
@@ -783,7 +779,7 @@ mod 起動前の準備 {
     /// en: Returns the contents of an init file with its import lines removed
     #[story("G2")]
     #[test]
-    fn init_ファイルの_import_行は取り除く() {
+    fn returns_the_contents_of_an_init_file_with_its_import_lines_removed() {
         // init は既存の環境の上に追加するので、import を書けない。
         assert_eq!(pure::strip_imports("import Foo\ndef x := 1"), "def x := 1");
     }
@@ -792,7 +788,7 @@ mod 起動前の準備 {
     /// en: Judges a file as having imports by its import lines and not by import in a comment
     #[story("G2")]
     #[test]
-    fn import_を含むファイルには_import_を追加しない() {
+    fn judges_a_file_as_having_imports_by_its_import_lines_and_not_by_import_in_a_comment() {
         assert!(pure::has_import("\nimport Mathlib\ndef f := 1"));
         assert!(!pure::has_import("def f := 1  -- import ではない"));
     }
@@ -801,7 +797,7 @@ mod 起動前の準備 {
     /// en: Returns the variable names and values from the lines of the lake env cache
     #[story("G1")]
     #[test]
-    fn lake_env_のキャッシュを読む() {
+    fn returns_the_variable_names_and_values_from_the_lines_of_the_lake_env_cache() {
         let env = pure::parse_env_lines("LEAN_PATH=/a:/b\nLD_LIBRARY_PATH=\n");
         let want = [("LEAN_PATH", "/a:/b"), ("LD_LIBRARY_PATH", "")]
             .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -813,7 +809,7 @@ mod 起動前の準備 {
     /// en: Judges the cache as stale when lean-toolchain is newer than the cache
     #[story("G4", "G6")]
     #[test]
-    fn toolchain_が変わったらキャッシュを作り直す() {
+    fn judges_the_cache_as_stale_when_lean_toolchain_is_newer_than_the_cache() {
         // LEAN_PATH は core の .olean も指す。前のバージョンのキャッシュを再利用すると、
         // repl は起動するのに import がすべて失敗して、原因が分からなくなる。
         let dir = tmp();
@@ -838,7 +834,7 @@ mod 起動前の準備 {
     }
 }
 
-mod エンジンのバージョン {
+mod engine_version {
     //! ja: エンジンのバージョン
     //! en: Engine version
     //!
@@ -851,7 +847,7 @@ mod エンジンのバージョン {
     /// en: Returns only the version part of a toolchain name
     #[story("G3")]
     #[test]
-    fn toolchain_からバージョンだけ取る() {
+    fn returns_only_the_version_part_of_a_toolchain_name() {
         assert_eq!(
             pure::toolchain_version("leanprover/lean4:v4.34.0-rc2"),
             "v4.34.0-rc2"
@@ -863,7 +859,8 @@ mod エンジンのバージョン {
     /// en: Returns a warning with both versions and the rebuild command for a self-built engine on another toolchain
     #[story("G4")]
     #[test]
-    fn 自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す() {
+    fn returns_a_warning_with_both_versions_and_the_rebuild_command_for_a_self_built_engine_on_another_toolchain()
+     {
         let got = pure::toolchain_warning(true, "v4.33.0", "v4.34.0", "/eng").expect("警告しない");
         assert!(
             got.contains("使うバージョン=v4.34.0 / エンジン=v4.33.0"),
@@ -876,7 +873,8 @@ mod エンジンのバージョン {
     /// en: Returns None if the toolchains match, leani set up the engine, or the engine toolchain is unreadable
     #[story("G4")]
     #[test]
-    fn toolchain_が同じか_leani_が用意したエンジンなら警告しない() {
+    fn returns_none_if_the_toolchains_match_leani_set_up_the_engine_or_the_engine_toolchain_is_unreadable()
+     {
         assert_eq!(
             pure::toolchain_warning(true, "v4.34.0", "v4.34.0", "/e"),
             None
@@ -893,7 +891,7 @@ mod エンジンのバージョン {
     /// en: Compares a toolchain that omits the default repository with a full one by version only
     #[story("G3", "G4")]
     #[test]
-    fn 既定の配布元を省いた_toolchain_も同じバージョンと見なす() {
+    fn compares_a_toolchain_that_omits_the_default_repository_with_a_full_one_by_version_only() {
         // elan は `v4.34.0` を `leanprover/lean4:v4.34.0` と同じ toolchain として扱う。
         let short = "v4.34.0";
         let full = "leanprover/lean4:v4.34.0";
@@ -906,7 +904,7 @@ mod エンジンのバージョン {
     /// en: Orders an rc before the release of the same version and after older releases
     #[story("G3")]
     #[test]
-    fn rc_は同じバージョンの正式リリースより前() {
+    fn orders_an_rc_before_the_release_of_the_same_version_and_after_older_releases() {
         assert!(pure::version_key("v4.33.0-rc1") < pure::version_key("v4.33.0"));
         assert!(pure::version_key("v4.33.0") < pure::version_key("v4.34.0-rc1"));
     }
@@ -915,7 +913,7 @@ mod エンジンのバージョン {
     /// en: Returns None for a version it cannot parse
     #[story("G3")]
     #[test]
-    fn 解釈できないバージョンは_None() {
+    fn returns_none_for_a_version_it_cannot_parse() {
         for tag in ["v4.33", "nightly-2026-01-01", "4.33.0"] {
             assert_eq!(pure::version_key(tag), None, "解釈できてしまう: {tag:?}");
         }
@@ -925,7 +923,7 @@ mod エンジンのバージョン {
     /// en: Returns the tag with the same name if there is one
     #[story("G3")]
     #[test]
-    fn 同名のタグがあればそれを使う() {
+    fn returns_the_tag_with_the_same_name_if_there_is_one() {
         assert_eq!(pure::pick_tag("v4.33.0", &TAGS).as_deref(), Some("v4.33.0"));
     }
 
@@ -933,7 +931,7 @@ mod エンジンのバージョン {
     /// en: Returns the previous tag for a patch release without a tag
     #[story("G3")]
     #[test]
-    fn タグの無い_patch_リリースは直前のタグを使う() {
+    fn returns_the_previous_tag_for_a_patch_release_without_a_tag() {
         // repl は v4.33.1 にタグを付けない。API は patch で変わらない。
         assert_eq!(pure::pick_tag("v4.33.1", &TAGS).as_deref(), Some("v4.33.0"));
     }
@@ -942,7 +940,7 @@ mod エンジンのバージョン {
     /// en: Returns no tag for a version older than every tag or one it cannot parse
     #[story("G3")]
     #[test]
-    fn どのタグより古いバージョンなら_None() {
+    fn returns_no_tag_for_a_version_older_than_every_tag_or_one_it_cannot_parse() {
         assert_eq!(pure::pick_tag("v4.0.0", &["v4.32.0", "v4.33.0"]), None);
         assert_eq!(pure::pick_tag("nightly", &["v4.33.0"]), None);
     }
@@ -951,7 +949,7 @@ mod エンジンのバージョン {
     /// en: Returns a path named after the version under the cache when no path is given
     #[story("G3")]
     #[test]
-    fn パスはバージョンごとに分かれる() {
+    fn returns_a_path_named_after_the_version_under_the_cache_when_no_path_is_given() {
         let got = pure::engine_dir(None, "leanprover/lean4:v4.33.0", "/cache");
         assert_eq!(got.as_deref(), Ok("/cache/v4.33.0"));
     }
@@ -960,7 +958,7 @@ mod エンジンのバージョン {
     /// en: Returns a given path unchanged
     #[story("G3")]
     #[test]
-    fn 明示されたパスはそのまま使う() {
+    fn returns_a_given_path_unchanged() {
         let got = pure::engine_dir(Some("/opt/repl"), "leanprover/lean4:v4.33.0", "/cache");
         assert_eq!(got.as_deref(), Ok("/opt/repl"));
     }
@@ -969,7 +967,7 @@ mod エンジンのバージョン {
     /// en: Returns an error for a version name such as .. or . that does not name one place in the cache
     #[story("G3")]
     #[test]
-    fn パスの外を指すバージョン名は受け付けない() {
+    fn returns_an_error_for_a_version_name_such_as_or_that_does_not_name_one_place_in_the_cache() {
         // build_engine はこの場所を消してから作り直す。`..` を含む名前を
         // 受け付けると、関係ないディレクトリを消してしまう。
         for tc in ["leanprover/lean4:..", "..", "."] {
@@ -1089,7 +1087,7 @@ fn hang_after(mark: &Path) -> String {
     format!(": > {}; sleep 30", path_str(mark))
 }
 
-mod 設定の値の型 {
+mod types_of_config_values {
     //! ja: 設定の値の型
     //! en: Types of config values
     //!
@@ -1106,7 +1104,7 @@ mod 設定の値の型 {
     /// en: Returns an error asking for an array when imports is a string
     #[story("G4")]
     #[test]
-    fn import_を文字列で書いたらエラーにする() {
+    fn returns_an_error_asking_for_an_array_when_imports_is_a_string() {
         // エラーにせず受け付けると 1 文字ずつの import になり、どれも解決できないので
         // ヘッダがすべて捨てられる (import Lean も消える)。
         let why = resolve_err("default = \"m\"\n[env.m]\nimports = \"Mathlib\"\n");
@@ -1117,7 +1115,7 @@ mod 設定の値の型 {
     /// en: Returns an error naming the key when a value that should be a string has another type
     #[story("G4")]
     #[test]
-    fn 文字列で書くべき値が別の型ならエラーにする() {
+    fn returns_an_error_naming_the_key_when_a_value_that_should_be_a_string_has_another_type() {
         for (key, value) in [("project", "3"), ("engine", "true"), ("prompt", "5")] {
             let why = resolve_err(&format!("default = \"m\"\n[env.m]\n{key} = {value}\n"));
             assert!(why.contains(key), "{why}");
@@ -1128,7 +1126,7 @@ mod 設定の値の型 {
     /// en: Returns an error asking for a table when env or env.m is not a table
     #[story("G4")]
     #[test]
-    fn 表で書くべき値が別の型ならエラーにする() {
+    fn returns_an_error_asking_for_a_table_when_env_or_env_m_is_not_a_table() {
         let why = resolve_err("default = \"m\"\nenv = 3\n");
         assert!(why.contains("env は表"), "{why}");
         let why = resolve_err("default = \"m\"\n[env]\nm = \"nope\"\n");
@@ -1139,7 +1137,7 @@ mod 設定の値の型 {
     /// en: Returns an error naming default when default is not a string
     #[story("G4")]
     #[test]
-    fn default_が文字列でなければエラーにする() {
+    fn returns_an_error_naming_default_when_default_is_not_a_string() {
         let why = resolve_err("default = 3\n[env.m]\n");
         assert!(why.contains("default"), "{why}");
     }
@@ -1148,7 +1146,7 @@ mod 設定の値の型 {
     /// en: Returns the name, imports and prompt unchanged from a correctly written config
     #[story("G4", "G5")]
     #[test]
-    fn 書き方が正しければ値をそのまま読み込む() {
+    fn returns_the_name_imports_and_prompt_unchanged_from_a_correctly_written_config() {
         let cfg = table("default = \"m\"\n[env.m]\nimports = [\"A\", \"B\"]\nprompt = \"> \"\n");
         let got = config::resolve(&ctx_at("/"), None, None, &[], &cfg).expect("resolve");
         assert_eq!(
@@ -1158,7 +1156,7 @@ mod 設定の値の型 {
     }
 }
 
-mod 起動する環境の決め方 {
+mod choosing_the_environment_to_start {
     //! ja: 起動する環境の決め方
     //! en: Choosing the environment to start
     //!
@@ -1192,7 +1190,7 @@ engine = "/m/engine"
     /// en: Chooses the named environment over default when a name is given
     #[story("G5")]
     #[test]
-    fn 名前を指定したら_default_より優先する() {
+    fn chooses_the_named_environment_over_default_when_a_name_is_given() {
         assert_eq!(resolve(&ctx_at("/"), Some("m"), None, &[]).name, "m");
     }
 
@@ -1200,7 +1198,8 @@ engine = "/m/engine"
     /// en: Replaces the project and imports of the environment when a name, project and imports are given
     #[story("G5")]
     #[test]
-    fn 名前と_import_を指定したら環境の_imports_を置き換える() {
+    fn replaces_the_project_and_imports_of_the_environment_when_a_name_project_and_imports_are_given()
+     {
         let got = resolve(&ctx_at("/"), Some("m"), Some("/p"), &["X"]);
         assert_eq!(
             (got.name.as_str(), got.imports, got.project.as_deref()),
@@ -1212,7 +1211,7 @@ engine = "/m/engine"
     /// en: Chooses the plain environment with the given imports when only imports are given
     #[story("G5", "G6")]
     #[test]
-    fn import_だけを指定したら_default_を使わない() {
+    fn chooses_the_plain_environment_with_the_given_imports_when_only_imports_are_given() {
         let dir = tmp();
         let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
         assert_eq!(
@@ -1225,7 +1224,7 @@ engine = "/m/engine"
     /// en: Uses the engine of the environment if it has one and the top-level engine otherwise
     #[story("G3", "G5")]
     #[test]
-    fn 環境の_engine_は最上位の_engine_より優先する() {
+    fn uses_the_engine_of_the_environment_if_it_has_one_and_the_top_level_engine_otherwise() {
         let ctx = ctx_at("/");
         let engine = |name| resolve(&ctx, name, None, &[]).engine;
         assert_eq!(engine(Some("m")).as_deref(), Some("/m/engine"));
@@ -1236,7 +1235,7 @@ engine = "/m/engine"
     /// en: Uses LEANI_ENGINE when the config has no engine
     #[story("G3")]
     #[test]
-    fn 設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
+    fn uses_leani_engine_when_the_config_has_no_engine() {
         let ctx = ctx_with(&[("LEANI_ENGINE", "/env/engine")], "/");
         let cfg = table("default = \"d\"\n[env.d]\n");
         let got = config::resolve(&ctx, None, None, &[], &cfg).expect("resolve");
@@ -1247,14 +1246,14 @@ engine = "/m/engine"
     /// en: Uses the top-level engine when only imports are given without a name
     #[story("G3", "G5")]
     #[test]
-    fn 名前を付けずに起動したら環境の_engine_は使わない() {
+    fn uses_the_top_level_engine_when_only_imports_are_given_without_a_name() {
         let dir = tmp();
         let got = resolve(&ctx_at(&path_str(dir.path())), None, None, &["X"]);
         assert_eq!(got.engine.as_deref(), Some("/top/engine"));
     }
 }
 
-mod 起動を中止する理由 {
+mod reasons_to_abort_startup {
     //! ja: 起動を中止する理由
     //! en: Reasons to abort startup
     use super::*;
@@ -1272,7 +1271,8 @@ mod 起動を中止する理由 {
     /// en: Returns the version mismatch and the lake build repl step when engine and project versions differ
     #[story("G3", "G4")]
     #[test]
-    fn エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
+    fn returns_the_version_mismatch_and_the_lake_build_repl_step_when_engine_and_project_versions_differ()
+     {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.34.0");
@@ -1286,7 +1286,7 @@ mod 起動を中止する理由 {
     /// en: Returns no reason when engine and project toolchains differ only in how they are written
     #[story("G4")]
     #[test]
-    fn 書き方だけが違う_toolchain_では起動を中止しない() {
+    fn returns_no_reason_when_engine_and_project_toolchains_differ_only_in_how_they_are_written() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.34.0");
         let proj = toolchain_dir(dir.path(), "proj", "v4.34.0");
@@ -1299,7 +1299,8 @@ mod 起動を中止する理由 {
     /// en: Returns a reason saying there is no Lake project when the project directory does not exist
     #[story("G4")]
     #[test]
-    fn Lake_プロジェクトが無ければ起動を中止する() {
+    fn returns_a_reason_saying_there_is_no_lake_project_when_the_project_directory_does_not_exist()
+    {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let no = path_str(&dir.path().join("no"));
@@ -1312,7 +1313,7 @@ mod 起動を中止する理由 {
     /// en: Returns a reason saying the given engine is missing or not built when it is
     #[story("G3", "G4")]
     #[test]
-    fn 指定されたエンジンが無いか未ビルドなら起動を中止する() {
+    fn returns_a_reason_saying_the_given_engine_is_missing_or_not_built_when_it_is() {
         let dir = tmp();
         let ctx = ctx(dir.path());
         let no = path_str(&dir.path().join("no"));
@@ -1327,7 +1328,7 @@ mod 起動を中止する理由 {
     /// en: Returns a reason naming the missing command when elan, lake or git is not on PATH
     #[story("G4")]
     #[test]
-    fn elan_lake_git_が_PATH_に無ければ起動を中止する() {
+    fn returns_a_reason_naming_the_missing_command_when_elan_lake_or_git_is_not_on_path() {
         // git はエンジンを leani が用意するときだけ必要になる。
         for tool in ["elan", "lake", "git"] {
             let dir = tmp();
@@ -1345,7 +1346,7 @@ mod 起動を中止する理由 {
     /// en: Returns no reason when the engine, project and commands are all in place
     #[story("G4")]
     #[test]
-    fn 設定がそろっていれば中止しない() {
+    fn returns_no_reason_when_the_engine_project_and_commands_are_all_in_place() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v4.33.0");
         let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.33.0");
@@ -1357,7 +1358,7 @@ mod 起動を中止する理由 {
     }
 }
 
-mod 設定ファイルの読み込み {
+mod loading_the_config_file {
     //! ja: 設定ファイルの読み込み
     //! en: Loading the config file
     use super::*;
@@ -1366,7 +1367,8 @@ mod 設定ファイルの読み込み {
     /// en: Returns a ConfigError saying the file cannot be read for a config file that is not valid TOML
     #[story("G4")]
     #[test]
-    fn TOML_として読めない設定ファイルは_ConfigError_にする() {
+    fn returns_a_configerror_saying_the_file_cannot_be_read_for_a_config_file_that_is_not_valid_toml()
+     {
         let dir = tmp();
         let path = dir.path().join("config.toml");
         fs::write(&path, "default = \n").expect("write");
@@ -1378,14 +1380,14 @@ mod 設定ファイルの読み込み {
     /// en: Returns an empty config when the config file does not exist
     #[story("G4", "G6")]
     #[test]
-    fn 設定ファイルが無ければ空の設定として読む() {
+    fn returns_an_empty_config_when_the_config_file_does_not_exist() {
         let dir = tmp();
         let got = config::load_config(&path_str(&dir.path().join("none.toml")));
         assert_eq!(got, Ok(toml::Table::new()));
     }
 }
 
-mod 使うバージョンの決め方 {
+mod choosing_the_version_to_use {
     //! ja: 使うバージョンの決め方
     //! en: Choosing the version to use
     //!
@@ -1398,7 +1400,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns the project toolchain when both the project and the engine have one
     #[story("G3")]
     #[test]
-    fn プロジェクトのバージョンが最優先() {
+    fn returns_the_project_toolchain_when_both_the_project_and_the_engine_have_one() {
         let dir = tmp();
         let ctx = ctx_at("/");
         let proj = toolchain_dir(dir.path(), "proj", "leanprover/lean4:v4.34.0-rc2");
@@ -1416,7 +1418,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns the engine toolchain when an engine is given without a project
     #[story("G3")]
     #[test]
-    fn 明示したエンジンのバージョンを使う() {
+    fn returns_the_engine_toolchain_when_an_engine_is_given_without_a_project() {
         // 自分でビルドしたエンジンは leani がビルドし直さないので、そのバージョンに
         // 合わせるしかない。
         // elan のデフォルトのバージョンを使うと、4.34 の .olean を 4.33 で
@@ -1437,7 +1439,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns an interrupt when Ctrl-C is pressed while checking the lean version
     #[story("G3")]
     #[test]
-    fn lean_のバージョンを調べている途中の_Ctrl__C_は中断を返す() {
+    fn returns_an_interrupt_when_ctrl_c_is_pressed_while_checking_the_lean_version() {
         let dir = tmp();
         let mark = dir.path().join("started");
         let path = fake_tools(dir.path(), &[("lean", &hang_after(&mark))]);
@@ -1455,7 +1457,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns the elan default version from lean --version when there is no project or engine
     #[story("G3")]
     #[test]
-    fn どちらも無ければ_elan_のデフォルト() {
+    fn returns_the_elan_default_version_from_lean_version_when_there_is_no_project_or_engine() {
         let dir = tmp();
         let lean = "echo 'Lean (version 4.9.0, x86_64-apple-darwin, commit abc, Release)'";
         let path = fake_tools(dir.path(), &[("lean", lean)]);
@@ -1483,7 +1485,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns a nightly toolchain when lean --version shows a nightly version
     #[story("G3")]
     #[test]
-    fn nightly_の_lean_は_nightly_の_toolchain_と読む() {
+    fn returns_a_nightly_toolchain_when_lean_version_shows_a_nightly_version() {
         // v4.24.0 と読むと、別のバージョンのエンジンをビルドして .olean を読めなくなる。
         let lean = "echo 'Lean (version 4.24.0-nightly-2025-10-01, arm64-apple-darwin, commit abc, Release)'";
         assert_eq!(
@@ -1496,7 +1498,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns None when lean --version shows a version with an unknown suffix
     #[story("G3")]
     #[test]
-    fn 知らない接尾辞のバージョンは分からないとする() {
+    fn returns_none_when_lean_version_shows_a_version_with_an_unknown_suffix() {
         let lean = "echo 'Lean (version 4.24.0-pre, arm64-apple-darwin, commit abc, Release)'";
         assert_eq!(guess_with_lean(lean, None), None);
     }
@@ -1505,7 +1507,8 @@ mod 使うバージョンの決め方 {
     /// en: Returns the toolchain of the version when lean --version takes longer than the setup timeout
     #[story("G3")]
     #[test]
-    fn lean_の_version_を調べるときは時間を区切らずに待つ() {
+    fn returns_the_toolchain_of_the_version_when_lean_version_takes_longer_than_the_setup_timeout()
+    {
         // elan は lean --version の中で toolchain を取得することがある。途中で止めると、
         // 取得が終わる前に「バージョンが分からない」と表示する。
         let dir = tmp();
@@ -1526,7 +1529,7 @@ mod 使うバージョンの決め方 {
     /// en: Shows a message only on a terminal while checking the lean version and clears it after
     #[story("G3")]
     #[test]
-    fn lean_の_version_を待つあいだは端末にだけ表示する() {
+    fn shows_a_message_only_on_a_terminal_while_checking_the_lean_version_and_clears_it_after() {
         // elan が toolchain を取得していると時間がかかる。何も表示しないと、leani が
         // 止まったように見える。終わったら表示を消す。
         let dir = tmp();
@@ -1550,7 +1553,7 @@ mod 使うバージョンの決め方 {
     /// en: Returns the current version for a stable project toolchain, or stable if it cannot get one
     #[story("G3")]
     #[test]
-    fn toolchain_が_stable_なら今のバージョンに置き換える() {
+    fn returns_the_current_version_for_a_stable_project_toolchain_or_stable_if_it_cannot_get_one() {
         // チャンネルの名前のままだと、stable が新しいバージョンに進んでも、前の
         // バージョンでビルドしたエンジンを使い続ける。
         let lean = r#"case "$1" in
@@ -1572,7 +1575,7 @@ esac"#;
     /// en: Returns stable unchanged when a given engine has the stable toolchain
     #[story("G3")]
     #[test]
-    fn エンジンを自分で指定したら_stable_を置き換えない() {
+    fn returns_stable_unchanged_when_a_given_engine_has_the_stable_toolchain() {
         // 自分でビルドしたエンジンの lean-toolchain は stable のままなので、置き換えると
         // toolchain が違うという警告を起動のたびに表示する。
         let dir = tmp();
@@ -1590,7 +1593,7 @@ esac"#;
     }
 }
 
-mod 手動でエンジンを用意する手順 {
+mod steps_to_set_up_the_engine_by_hand {
     //! ja: 手動でエンジンを用意する手順
     //! en: Steps to set up the engine by hand
     //!
@@ -1602,7 +1605,7 @@ mod 手動でエンジンを用意する手順 {
     /// en: Includes cloning the tag and writing the version to lean-toolchain if the tag is known
     #[story("G3")]
     #[test]
-    fn タグとバージョンの書き換えまで含む() {
+    fn includes_cloning_the_tag_and_writing_the_version_to_lean_toolchain_if_the_tag_is_known() {
         let out = boot::manual_setup("/x/e", "leanprover/lean4:v4.33.1", Some("v4.33.0"));
         assert!(out.contains("--branch v4.33.0"), "{out}");
         assert!(
@@ -1615,7 +1618,7 @@ mod 手動でエンジンを用意する手順 {
     /// en: Describes the tag to clone as the newest one up to the version if the tag is unknown
     #[story("G3")]
     #[test]
-    fn タグが分からなければ選び方を書く() {
+    fn describes_the_tag_to_clone_as_the_newest_one_up_to_the_version_if_the_tag_is_unknown() {
         let out = boot::manual_setup("/x/e", "leanprover/lean4:v4.33.1", None);
         assert!(out.contains("v4.33.1 以下で一番新しいタグ"), "{out}");
     }
@@ -1668,7 +1671,7 @@ fn git_log(dir: &Path) -> String {
     fs::read_to_string(dir.join("git.log")).unwrap_or_default()
 }
 
-mod エンジンを用意するときの安全対策 {
+mod safety_measures_in_setting_up_the_engine {
     //! ja: エンジンを用意するときの安全対策
     //! en: Safety measures in setting up the engine
     //!
@@ -1680,7 +1683,7 @@ mod エンジンを用意するときの安全対策 {
     /// en: Reports an unbuilt engine as unbuilt without rebuilding it if the user specifies it
     #[story("G3")]
     #[test]
-    fn 明示されたエンジンは作り直さない() {
+    fn reports_an_unbuilt_engine_as_unbuilt_without_rebuilding_it_if_the_user_specifies_it() {
         // build_engine は置き場所を作り直すので、ユーザーが指定した場所に対して
         // 実行してはならない。git も lake も無い PATH なので、作ろうとすれば失敗する。
         let dir = tmp();
@@ -1701,7 +1704,7 @@ mod エンジンを用意するときの安全対策 {
     /// en: Returns an abort reason mentioning lean-toolchain if the specified engine has none
     #[story("G3", "G4")]
     #[test]
-    fn 明示されたエンジンにバージョンが無ければ起動を中止する() {
+    fn returns_an_abort_reason_mentioning_lean_toolchain_if_the_specified_engine_has_none() {
         // 合わせられるバージョンはこのエンジンのものしかない。何も表示せずに elan の
         // デフォルトを使うと .olean を読み込めない。
         let dir = tmp();
@@ -1721,7 +1724,8 @@ mod エンジンを用意するときの安全対策 {
     /// en: Builds in a work directory, moves the engine into place, and deletes the work directory on setup
     #[story("G3")]
     #[test]
-    fn 作業中の置き場所はプロセスごとに分かれる() {
+    fn builds_in_a_work_directory_moves_the_engine_into_place_and_deletes_the_work_directory_on_setup()
+     {
         // leani を 2 つ同時に起動したとき、同じ作業用のディレクトリを使うと片方が
         // 起動できない。置き場所とは別の名前で作業して、終わったら消す。
         let dir = tmp();
@@ -1743,7 +1747,8 @@ mod エンジンを用意するときの安全対策 {
     /// en: Keeps the engine another leani placed and deletes the work directory when the build finishes
     #[story("G3")]
     #[test]
-    fn 待っているあいだに別の_leani_が置いたエンジンは消さない() {
+    fn keeps_the_engine_another_leani_placed_and_deletes_the_work_directory_when_the_build_finishes()
+     {
         // 消すと、そのエンジンを使っている別の leani がエンジンを起動できなくなる。
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[]);
@@ -1761,7 +1766,7 @@ mod エンジンを用意するときの安全対策 {
     }
 }
 
-mod エンジンを自動で用意できないとき {
+mod when_the_engine_cannot_be_set_up_automatically {
     //! ja: エンジンを自動で用意できないとき
     //! en: When the engine cannot be set up automatically
     //!
@@ -1772,7 +1777,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Returns an abort reason with the manual setup steps if the repl tags cannot be fetched
     #[story("G3")]
     #[test]
-    fn タグを取得できなければ手動の手順を表示する() {
+    fn returns_an_abort_reason_with_the_manual_setup_steps_if_the_repl_tags_cannot_be_fetched() {
         // 終わらない、git が無い、失敗する、の 3 つ。exec で sh ごと sleep にするのは、
         // kill したあとに sleep だけが残ってパイプを閉じないため。
         let dir = tmp();
@@ -1793,7 +1798,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Interrupts without the manual steps when Ctrl-C is pressed while fetching tags
     #[story("G3")]
     #[test]
-    fn Ctrl__C_で止めたら手順を付けずに中断を返す() {
+    fn interrupts_without_the_manual_steps_when_ctrl_c_is_pressed_while_fetching_tags() {
         // 利用者が止めたので、手動で用意する手順は要らない。
         let dir = tmp();
         let mark = dir.path().join("started");
@@ -1809,7 +1814,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Stops a command with its grandchild process and interrupts when Ctrl-C is pressed
     #[story("G3")]
     #[test]
-    fn 止めたコマンドは孫プロセスごと止める() {
+    fn stops_a_command_with_its_grandchild_process_and_interrupts_when_ctrl_c_is_pressed() {
         // 偽の git が起動した孫プロセス (sleep) の pid を記録しておき、止めたあとに
         // 残っていないことを確かめる。孫が残ると出力のパイプを閉じないので、
         // 出力をためる読み取りが孫の終了まで待ち続ける。
@@ -1869,7 +1874,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Returns only the tag names from the refs/tags lines of the tag list
     #[story("G3")]
     #[test]
-    fn タグの一覧から_refs_tags_の名前だけを取り出す() {
+    fn returns_only_the_tag_names_from_the_refs_tags_lines_of_the_tag_list() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.33.0", "v4.34.0-rc1"], &[]);
         assert_eq!(
@@ -1882,7 +1887,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Clones the master branch of repl if the toolchain cannot be parsed as a version
     #[story("G3")]
     #[test]
-    fn バージョンとして解釈できなければ_master_で試す() {
+    fn clones_the_master_branch_of_repl_if_the_toolchain_cannot_be_parsed_as_a_version() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.33.0"], &[]);
         boot::ensure_engine(&ctx, &mut sink(), None, "leanprover/lean4:nightly", false)
@@ -1895,7 +1900,8 @@ mod エンジンを自動で用意できないとき {
     /// en: Reports the missing tag and the manual steps without cloning if repl has no tag for the version
     #[story("G3", "G4")]
     #[test]
-    fn 対応するタグが無ければ起動を中止する() {
+    fn reports_the_missing_tag_and_the_manual_steps_without_cloning_if_repl_has_no_tag_for_the_version()
+     {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.40.0"], &[]);
         let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
@@ -1908,7 +1914,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Sets up the engine only with --setup if LEANI_NO_SETUP is set
     #[story("G3")]
     #[test]
-    fn LEANI_NO_SETUP_のときはエンジンを用意しない() {
+    fn sets_up_the_engine_only_with_setup_if_leani_no_setup_is_set() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.33.0"], &[("LEANI_NO_SETUP", "1")]);
         let why = setup_why(boot::ensure_engine(&ctx, &mut sink(), None, TC, false));
@@ -1924,7 +1930,7 @@ mod エンジンを自動で用意できないとき {
     /// en: Returns an abort reason with manual steps naming the chosen tag if the build fails
     #[story("G3")]
     #[test]
-    fn ビルドに失敗したら手動の手順にタグを含める() {
+    fn returns_an_abort_reason_with_manual_steps_naming_the_chosen_tag_if_the_build_fails() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &["v4.32.0"], &[]);
         let git = fake_git(&dir.path().join("git.log"), &["v4.32.0"]);
@@ -1934,7 +1940,7 @@ mod エンジンを自動で用意できないとき {
     }
 }
 
-mod lake_env_の取得 {
+mod getting_lake_env {
     //! ja: lake env の取得
     //! en: Getting lake env
     //!
@@ -1958,7 +1964,7 @@ mod lake_env_の取得 {
     /// en: Returns no variables without running lake env if there is no project
     #[story("G1")]
     #[test]
-    fn プロジェクトが無ければ_lake_env_を実行しない() {
+    fn returns_no_variables_without_running_lake_env_if_there_is_no_project() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[]);
         assert_eq!(
@@ -1972,7 +1978,8 @@ mod lake_env_の取得 {
     /// en: Prepends the engine olean path to LEAN_PATH from lake env, or the inherited one without a project
     #[story("G3", "G6")]
     #[test]
-    fn エンジンの_olean_の場所を_LEAN_PATH_の先頭に足す() {
+    fn prepends_the_engine_olean_path_to_lean_path_from_lake_env_or_the_inherited_one_without_a_project()
+     {
         // lake env に LEAN_PATH があればそれに、無ければ起動時の環境変数に足す。
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[("LEAN_PATH", "/inherited")]);
@@ -1991,7 +1998,7 @@ mod lake_env_の取得 {
     /// en: Returns the cache without running lake env when getting it twice for the same project
     #[story("G1", "G6")]
     #[test]
-    fn キャッシュが新しければ_lake_env_を実行しない() {
+    fn returns_the_cache_without_running_lake_env_when_getting_it_twice_for_the_same_project() {
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[]);
         let proj = project(dir.path());
@@ -2010,7 +2017,7 @@ mod lake_env_の取得 {
     /// en: Reports the reason if lake is missing or lake env fails
     #[story("G4", "G6")]
     #[test]
-    fn lake_env_を実行できなければ理由を知らせる() {
+    fn reports_the_reason_if_lake_is_missing_or_lake_env_fails() {
         let dir = tmp();
         let proj = project(dir.path());
         let fails = [
@@ -2033,7 +2040,7 @@ mod lake_env_の取得 {
     /// en: Shows that Ctrl-C can interrupt lake env when it runs
     #[story("G6")]
     #[test]
-    fn lake_env_を実行する前に案内を表示する() {
+    fn shows_that_ctrl_c_can_interrupt_lake_env_when_it_runs() {
         // 初回の lake env は依存パッケージを取得することがあり、何も表示しないと
         // 止まったように見える。
         let dir = tmp();
@@ -2049,7 +2056,7 @@ mod lake_env_の取得 {
     /// en: Returns the result of lake env when it takes longer than the setup timeout
     #[story("G6")]
     #[test]
-    fn lake_env_は時間を区切らずに待つ() {
+    fn returns_the_result_of_lake_env_when_it_takes_longer_than_the_setup_timeout() {
         // 依存パッケージの取得は、外部との通信のタイムアウトより長くかかることがある。
         let dir = tmp();
         let proj = project(dir.path());
@@ -2066,7 +2073,7 @@ mod lake_env_の取得 {
     /// en: Interrupts when Ctrl-C is pressed while lake env runs
     #[story("G6")]
     #[test]
-    fn lake_env_を_Ctrl__C_で止めたら中断を返す() {
+    fn interrupts_when_ctrl_c_is_pressed_while_lake_env_runs() {
         let dir = tmp();
         let proj = project(dir.path());
         let mark = dir.path().join("started");
@@ -2083,7 +2090,7 @@ mod lake_env_の取得 {
     /// en: Reports the failure and leaves no temp file if the lake env result cannot be saved
     #[story("G6")]
     #[test]
-    fn lake_env_の結果を保存できなければ知らせる() {
+    fn reports_the_failure_and_leaves_no_temp_file_if_the_lake_env_result_cannot_be_saved() {
         // キャッシュの置き場所にディレクトリがあると rename できない。
         let dir = tmp();
         let ctx = setup_ctx(dir.path(), &[], &[]);
@@ -2124,7 +2131,7 @@ fn mark(src: &str, word: &str, nth: usize) -> Json {
     })
 }
 
-mod 証明モードのタクティクの記録 {
+mod recording_tactics_in_proof_mode {
     //! ja: 証明モードのタクティクの記録
     //! en: Recording tactics in proof mode
     use super::*;
@@ -2141,7 +2148,8 @@ mod 証明モードのタクティクの記録 {
     /// en: Pushes the previous state and goals and adds the tactic to the script when a tactic is applied
     #[story("E1")]
     #[test]
-    fn タクティクを進めると前の状態とゴールを積む() {
+    fn pushes_the_previous_state_and_goals_and_adds_the_tactic_to_the_script_when_a_tactic_is_applied()
+     {
         let got = pure::tactic_step(&start(), 3, &strings(&["⊢ p", "⊢ q"]), "constructor");
         assert_eq!(
             (got.state, &got.goals, got.generation),
@@ -2155,14 +2163,14 @@ mod 証明モードのタクティクの記録 {
     /// en: Restores the state, goals, and script when undone, and returns None with nothing to undo
     #[story("E1")]
     #[test]
-    fn 取り消すと状態とゴールとスクリプトがそろって戻る() {
+    fn restores_the_state_goals_and_script_when_undone_and_returns_none_with_nothing_to_undo() {
         let step = pure::tactic_step(&start(), 3, &strings(&["⊢ p", "⊢ q"]), "constructor");
         assert_eq!(pure::tactic_undo(&step), Some(start()));
         assert_eq!(pure::tactic_undo(&start()), None);
     }
 }
 
-mod 証明モードで送るタクティク {
+mod tactics_sent_in_proof_mode {
     //! ja: 証明モードで送るタクティク
     //! en: Tactics sent in proof mode
     use super::*;
@@ -2171,7 +2179,7 @@ mod 証明モードで送るタクティク {
     /// en: Wraps the tactic in parentheses placed on their own lines
     #[story("E1")]
     #[test]
-    fn タクティクを括弧で囲み括弧は別の行に置く() {
+    fn wraps_the_tactic_in_parentheses_placed_on_their_own_lines() {
         assert_eq!(
             pure::grouped_tactic("constructor; rfl -- c"),
             "(\nconstructor; rfl -- c\n)"
@@ -2182,7 +2190,7 @@ mod 証明モードで送るタクティク {
     /// en: Takes the parse error position and message from the completeness check if it has an error
     #[story("E1")]
     #[test]
-    fn パースエラーは完結判定で読んだ位置とメッセージで表示する() {
+    fn takes_the_parse_error_position_and_message_from_the_completeness_check_if_it_has_an_error() {
         let probe = json!({"tac": {"ok": false, "err": "<input>:2:6: expected end of input"}});
         assert_eq!(
             pure::tactic_parse_error("Lean error:\n<input>:1:4: expected ')'", Some(&probe)),
@@ -2194,7 +2202,8 @@ mod 証明モードで送るタクティク {
     /// en: Moves the parse error line back by the parenthesis line if the completeness check has no error
     #[story("E1")]
     #[test]
-    fn 完結判定のエラーが無ければパースエラーの行を括弧の行の分だけ戻す() {
+    fn moves_the_parse_error_line_back_by_the_parenthesis_line_if_the_completeness_check_has_no_error()
+     {
         assert_eq!(
             pure::tactic_parse_error("Lean error:\n<input>:2:17: expected ')'", None),
             "Lean error:\n<input>:1:17: expected ')'"
@@ -2207,7 +2216,7 @@ mod 証明モードで送るタクティク {
     }
 }
 
-mod sorry_の置き換え {
+mod replacing_sorry {
     //! ja: sorry の置き換え
     //! en: Replacing sorry
     //!
@@ -2223,7 +2232,7 @@ mod sorry_の置き換え {
     /// en: Replaces sorry at its position with Japanese text before it
     #[story("E3")]
     #[test]
-    fn 日本語を含んでも位置で切り出せる() {
+    fn replaces_sorry_at_its_position_with_japanese_text_before_it() {
         let src = "theorem a : True := by /- あいう -/ sorry";
         assert_eq!(
             splice(src, "sorry", "trivial").as_deref(),
@@ -2235,7 +2244,7 @@ mod sorry_の置き換え {
     /// en: Replaces sorry on its own line without changing the indentation
     #[story("E3")]
     #[test]
-    fn 単独の行にある_sorry_のインデントを変えない() {
+    fn replaces_sorry_on_its_own_line_without_changing_the_indentation() {
         // 空白を詰めるとインデントが浅くなり、内側の by ブロックの外に出てしまう。
         let src = "example : True := by\n  have h : True := by\n    sorry\n  exact h";
         assert_eq!(
@@ -2248,7 +2257,7 @@ mod sorry_の置き換え {
     /// en: Aligns every line of a multi-line script to the sorry column
     #[story("E3")]
     #[test]
-    fn 複数行のスクリプトは_sorry_の桁にそろえる() {
+    fn aligns_every_line_of_a_multi_line_script_to_the_sorry_column() {
         let src = "example : True := by\n  have h : True := by\n    sorry\n  exact h";
         assert_eq!(
             splice(src, "sorry", "constructor\n-- おわり").as_deref(),
@@ -2266,7 +2275,8 @@ mod sorry_の置き換え {
     /// en: Moves a multi-line script to the line after by when it replaces a sorry in the middle of a line
     #[story("E3")]
     #[test]
-    fn 行の途中の_sorry_を複数行のスクリプトにするときは_by_の次の行に下げる() {
+    fn moves_a_multi_line_script_to_the_line_after_by_when_it_replaces_a_sorry_in_the_middle_of_a_line()
+     {
         let src = "theorem t (n : Nat) : n + 0 = n := by sorry";
         assert_eq!(
             splice(src, "sorry", "induction n with\n| zero => rfl").as_deref(),
@@ -2278,7 +2288,7 @@ mod sorry_の置き換え {
     /// en: Replaces sorry inside an anonymous constructor without adding spaces
     #[story("E3")]
     #[test]
-    fn 匿名コンストラクタの中の_sorry_に空白を足さない() {
+    fn replaces_sorry_inside_an_anonymous_constructor_without_adding_spaces() {
         let src = "example : True ∧ True := ⟨by sorry, by trivial⟩";
         assert_eq!(
             splice(src, "sorry", "trivial").as_deref(),
@@ -2290,7 +2300,7 @@ mod sorry_の置き換え {
     /// en: Indents only the lines outside strings in a script with a multi-line string
     #[story("E3")]
     #[test]
-    fn 複数行の文字列を含むスクリプトは文字列の途中の行に空白を足さない() {
+    fn indents_only_the_lines_outside_strings_in_a_script_with_a_multi_line_string() {
         // 文字列の 2 行目に空白を足すと、文字列の値が変わる。
         let src = "def s : String := by\n  sorry";
         assert_eq!(
@@ -2308,7 +2318,7 @@ mod sorry_の置き換え {
     /// en: Indents every line except those that start inside a string
     #[story("A1", "E3")]
     #[test]
-    fn 文字列の中で始まる行には空白を足さない() {
+    fn indents_every_line_except_those_that_start_inside_a_string() {
         let src = "f \"a\\\"\nb\" r#\"c\n\"d\"#\nx";
         assert_eq!(pure::outside_strings(src), [true, false, false, true]);
         assert_eq!(
@@ -2321,7 +2331,7 @@ mod sorry_の置き換え {
     /// en: Judges the line after a quote in a comment as outside strings
     #[story("A1", "E3")]
     #[test]
-    fn コメントの中の引用符では文字列を始めない() {
+    fn judges_the_line_after_a_quote_in_a_comment_as_outside_strings() {
         let src = "/- \" -/ -- \"\nx";
         assert_eq!(pure::outside_strings(src), [true, true]);
     }
@@ -2330,7 +2340,7 @@ mod sorry_の置き換え {
     /// en: Judges the line after a quote in a char literal or a name escape as outside strings
     #[story("A1", "E3")]
     #[test]
-    fn 文字のリテラルと名前のエスケープの中の引用符では文字列を始めない() {
+    fn judges_the_line_after_a_quote_in_a_char_literal_or_a_name_escape_as_outside_strings() {
         let src = "'\"' «x\"»\nx";
         assert_eq!(pure::outside_strings(src), [true, true]);
     }
@@ -2339,7 +2349,7 @@ mod sorry_の置き換え {
     /// en: Judges the outer string as still open after a string in an interpolation closes
     #[story("A1", "E3")]
     #[test]
-    fn 補間の中の文字列が閉じても外側の文字列は続く() {
+    fn judges_the_outer_string_as_still_open_after_a_string_in_an_interpolation_closes() {
         let src = "s!\"{\"e\nf\"}\ng\"\nx";
         assert_eq!(pure::outside_strings(src), [true, false, false, true]);
     }
@@ -2348,7 +2358,7 @@ mod sorry_の置き換え {
     /// en: Judges a name escape that does not close on its line as ended at the line end
     #[story("A1", "E3")]
     #[test]
-    fn 行の中で閉じない名前のエスケープは行末で終わる() {
+    fn judges_a_name_escape_that_does_not_close_on_its_line_as_ended_at_the_line_end() {
         let src = "«y\n\"a\nb\"";
         assert_eq!(pure::outside_strings(src), [true, true, false]);
     }
@@ -2357,7 +2367,7 @@ mod sorry_の置き換え {
     /// en: Returns one judgment per line for any input
     #[story("A1", "E3")]
     #[proptest]
-    fn 行ごとの判定は行の数だけ返す(
+    fn returns_one_judgment_per_line_for_any_input(
         #[strategy("[a\"'r#«»{}!/\\\\\\- \n]{0,40}")] src: String,
     ) {
         // `outside_strings` の返す値が行の数より少ないと、`indent_code` の出力から
@@ -2370,7 +2380,7 @@ mod sorry_の置き換え {
     /// en: Returns None without replacing if the position does not point at sorry
     #[story("E3")]
     #[test]
-    fn 位置が_sorry_を指していなければ置き換えない() {
+    fn returns_none_without_replacing_if_the_position_does_not_point_at_sorry() {
         let src = "example : True := by trivial";
         // 位置は合っているが指しているのは sorry ではない / 行が無い。
         assert_eq!(splice(src, "trivial", "rfl"), None);
@@ -2384,7 +2394,7 @@ mod sorry_の置き換え {
     /// en: Returns the byte offset of the character for any line and column
     #[story("E3")]
     #[proptest]
-    fn 行と桁を文字のインデックスに変換できる(
+    fn returns_the_byte_offset_of_the_character_for_any_line_and_column(
         #[strategy(prop::collection::vec("[ab \tあ]{0,4}", 1..=5))] lines: Vec<String>,
         #[strategy(0..100usize)] n: usize,
         #[strategy(0..100usize)] col: usize,
@@ -2405,7 +2415,7 @@ mod sorry_の置き換え {
     /// en: Replaces only sorry and leaves the text around it unchanged for any surrounding lines
     #[story("E3")]
     #[proptest]
-    fn sorry_の前後は書き換えない(
+    fn replaces_only_sorry_and_leaves_the_text_around_it_unchanged_for_any_surrounding_lines(
         #[strategy(decoys())] before: Vec<&'static str>,
         #[strategy(prop::sample::select(vec!["", "  ", "    ", "  exact ⟨"]))] pad: &'static str,
         #[strategy(decoys())] after: Vec<&'static str>,
@@ -2438,7 +2448,7 @@ mod sorry_の置き換え {
     }
 }
 
-mod ファイルの_import {
+mod imports_of_a_file {
     //! ja: ファイルの import
     //! en: Imports of a file
     //!
@@ -2449,7 +2459,7 @@ mod ファイルの_import {
     /// en: Returns only the module names from the import lines
     #[story("B3", "B4")]
     #[test]
-    fn import_の行だけを取り出す() {
+    fn returns_only_the_module_names_from_the_import_lines() {
         let src = "import Lean.Elab\nimport  Std\n\ndef a := 1\n-- import Nope\n";
         assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std"]);
     }
@@ -2458,7 +2468,7 @@ mod ファイルの_import {
     /// en: Returns nothing for a declaration and an import without a module name
     #[story("B3")]
     #[test]
-    fn import_が無ければ空() {
+    fn returns_nothing_for_a_declaration_and_an_import_without_a_module_name() {
         assert!(pure::import_lines("def a := 1\nimport\n").is_empty());
     }
 
@@ -2466,7 +2476,7 @@ mod ファイルの_import {
     /// en: Skips imports in comments and keeps them when stripping imports
     #[story("B3", "B4")]
     #[test]
-    fn コメントの中の_import_は数えない() {
+    fn skips_imports_in_comments_and_keeps_them_when_stripping_imports() {
         // ヘッダに書くと repl はヘッダ全体を捨てて起動するので、書き出したファイルは
         // :l でも lean でもエラーになる。import 行を取り除く処理も doc コメントの
         // 中身を変える。
@@ -2480,7 +2490,7 @@ mod ファイルの_import {
     /// en: Returns nothing for an import after a declaration
     #[story("B3")]
     #[test]
-    fn 宣言のあとの_import_は数えない() {
+    fn returns_nothing_for_an_import_after_a_declaration() {
         // Lean も先頭以外の import を認めない。数えると :save のヘッダが増える。
         assert!(pure::import_lines("def a := 1\nimport Std\n").is_empty());
     }
@@ -2489,7 +2499,7 @@ mod ファイルの_import {
     /// en: Returns only the import after a nested comment closes
     #[story("B4")]
     #[test]
-    fn 入れ子のコメントの終わりを正しく判定する() {
+    fn returns_only_the_import_after_a_nested_comment_closes() {
         let src = "/- /- import In.Nest -/ import Still.In -/\nimport Real\n";
         assert_eq!(pure::import_lines(src), ["Real"]);
     }
@@ -2498,7 +2508,7 @@ mod ファイルの_import {
     /// en: Returns the module names of imports with block comments on the same line
     #[story("B4")]
     #[test]
-    fn 行の中のブロックコメントを除いて_import_を読む() {
+    fn returns_the_module_names_of_imports_with_block_comments_on_the_same_line() {
         let src = "import A /- c -/\n/- c -/ import B\n/- c -/\nimport C -- m\ndef x := 1";
         assert_eq!(pure::import_lines(src), ["A", "B", "C"]);
         assert_eq!(pure::strip_imports(src).trim(), "/- c -/\ndef x := 1");
@@ -2508,7 +2518,7 @@ mod ファイルの_import {
     /// en: Returns names in name escapes that contain -- or /-
     #[story("B4")]
     #[test]
-    fn 名前のエスケープの中の記号をコメントと読まない() {
+    fn returns_names_in_name_escapes_that_contain_or() {
         let src = "import «A--B»\nimport «C/-D» -- m\ndef x := 1";
         assert_eq!(pure::import_lines(src), ["«A--B»", "«C/-D»"]);
         assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
@@ -2518,7 +2528,7 @@ mod ファイルの_import {
     /// en: Returns the module names of imports with public, meta, or all
     #[story("B4")]
     #[test]
-    fn 修飾子の付いた_import_も読む() {
+    fn returns_the_module_names_of_imports_with_public_meta_or_all() {
         let src = "module\n\npublic import Lean.Elab\nmeta import all Std\nimport all Foo\n\
                    public meta import Bar\ndef x := 1";
         assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std", "Foo", "Bar"]);
@@ -2539,7 +2549,7 @@ mod ファイルの_import {
     /// en: Judges a module line with a comment as a module declaration
     #[story("B4")]
     #[test]
-    fn コメントの付いた_module_の行も読む() {
+    fn judges_a_module_line_with_a_comment_as_a_module_declaration() {
         let src = "module -- メモ\nimport Std\ndef x := 1";
         assert!(pure::scan_header(src).0.module);
         assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
@@ -2550,7 +2560,7 @@ mod ファイルの_import {
     /// en: Puts the added import after the module line as public in a module file
     #[story("B4")]
     #[test]
-    fn module_の後ろに_import_を足す() {
+    fn puts_the_added_import_after_the_module_line_as_public_in_a_module_file() {
         let probe = "import Lean\n";
         let cfg = "import Foo\n";
         let got = pure::with_header("-- メモ\nmodule\nimport Std\ndef a := 1", probe, cfg);
@@ -2581,7 +2591,7 @@ mod ファイルの_import {
     /// en: Counts only real import lines in any header and leaves no imports after stripping
     #[story("B3", "B4")]
     #[proptest]
-    fn 取り除くのは本物の_import_行だけ(
+    fn counts_only_real_import_lines_in_any_header_and_leaves_no_imports_after_stripping(
         #[strategy(prop::collection::vec(prop::sample::select(HEADERS.to_vec()), 0..=12))]
         lines: Vec<&'static str>,
     ) {
@@ -2604,7 +2614,7 @@ mod ファイルの_import {
     }
 }
 
-mod 履歴ファイルの形式 {
+mod history_file_format {
     //! ja: 履歴ファイルの形式
     //! en: History file format
     //!
@@ -2616,7 +2626,7 @@ mod 履歴ファイルの形式 {
     /// en: Returns inputs without the trailing CR from a history file with CRLF
     #[story("F3")]
     #[test]
-    fn 行末の_CR_を外して読む() {
+    fn returns_inputs_without_the_trailing_cr_from_a_history_file_with_crlf() {
         // CRLF で書かれた履歴をそのまま読むと、呼び出した入力の各行の末尾に \r が
         // 付いたままエンジンに送られる。
         let text = "\r\n# 2026-10-26 12:34:56\r\n+def f : Nat -> Nat\r\n+  | 0 => 1\r\n";
@@ -2624,7 +2634,7 @@ mod 履歴ファイルの形式 {
     }
 }
 
-mod 略記の展開 {
+mod expanding_abbreviations {
     //! ja: 略記の展開
     //! en: Expanding abbreviations
     //!
@@ -2636,7 +2646,7 @@ mod 略記の展開 {
     /// en: Converts the abbreviation name at the end to a symbol
     #[story("C5")]
     #[test]
-    fn 名前を記号に変換する() {
+    fn converts_the_abbreviation_name_at_the_end_to_a_symbol() {
         assert_eq!(expand_abbrev("a \\to"), Some(("→", 3)));
         assert_eq!(expand_abbrev("x\\dot"), Some(("·", 4)));
     }
@@ -2645,7 +2655,7 @@ mod 略記の展開 {
     /// en: Converts a long abbreviation that starts with a shorter one as the long one
     #[story("C5")]
     #[test]
-    fn 長い略記が短い略記として変換されない() {
+    fn converts_a_long_abbreviation_that_starts_with_a_shorter_one_as_the_long_one() {
         // `\a` も `\all` も `\alpha` も表にある。キー入力のたびに確定すると `\a` の
         // 時点で変換されてしまい、長いほうを入力できなくなる。
         assert_eq!(expand_abbrev("\\a"), Some(("α", 2)));
@@ -2657,7 +2667,7 @@ mod 略記の展開 {
     /// en: Converts rarely used abbreviations
     #[story("C5")]
     #[test]
-    fn めったに使わない略記も変換できる() {
+    fn converts_rarely_used_abbreviations() {
         // 表には VS Code の Lean 拡張の略記をほぼすべて (1829 件) 含めている。
         assert_eq!(expand_abbrev("\\frown"), Some(("⌢", 6)));
         assert_eq!(expand_abbrev("\\Gangia"), Some(("Ϫ", 7)));
@@ -2667,7 +2677,7 @@ mod 略記の展開 {
     /// en: Returns None for a name not in the table or input without an abbreviation
     #[story("C5")]
     #[test]
-    fn 表に無い名前は変えない() {
+    fn returns_none_for_a_name_not_in_the_table_or_input_without_an_abbreviation() {
         assert_eq!(expand_abbrev("\\nosuch"), None);
         assert_eq!(expand_abbrev("1 + 1"), None);
     }
@@ -2676,7 +2686,7 @@ mod 略記の展開 {
     /// en: Returns None if a symbol follows the abbreviation name
     #[story("C5")]
     #[test]
-    fn 略記のあとに記号が続く場合は変換しない() {
+    fn returns_none_if_a_symbol_follows_the_abbreviation_name() {
         // `\to)` 全体で表を検索する。`"\t"` のような文字列を ▸ に変換しない。
         assert_eq!(expand_abbrev("(\\to)"), None);
         assert_eq!(expand_abbrev("\"\\t\""), None);
@@ -2686,7 +2696,7 @@ mod 略記の展開 {
     /// en: Converts every abbreviation in the table whatever precedes it
     #[story("C5")]
     #[proptest]
-    fn 表のどの略記も変換できる(
+    fn converts_every_abbreviation_in_the_table_whatever_precedes_it(
         #[strategy(abbrev_keys())] key: &'static str,
         #[strategy("[^\\\\]{0,8}")] head: String,
     ) {
@@ -2697,7 +2707,7 @@ mod 略記の展開 {
     }
 }
 
-mod 略記の候補 {
+mod abbreviation_candidates {
     //! ja: 略記の候補
     //! en: Abbreviation candidates
     //!
@@ -2708,7 +2718,7 @@ mod 略記の候補 {
     /// en: Returns the abbreviation name before the cursor
     #[story("C8", "J2")]
     #[test]
-    fn カーソルの手前の略記の名前を取り出す() {
+    fn returns_the_abbreviation_name_before_the_cursor() {
         assert_eq!(abbrev_head("theorem x : p \\to"), Some("to"));
         assert_eq!(abbrev_head("(\\."), Some("."));
         assert_eq!(abbrev_head("\\"), Some(""));
@@ -2718,7 +2728,7 @@ mod 略記の候補 {
     /// en: Returns None outside an abbreviation
     #[story("C8", "J2")]
     #[test]
-    fn 略記の途中でなければ名前を取り出さない() {
+    fn returns_none_outside_an_abbreviation() {
         assert_eq!(abbrev_head("Nat.suc"), None);
         assert_eq!(abbrev_head("\\to x"), None, "空白のあとは略記ではない");
     }
@@ -2727,7 +2737,7 @@ mod 略記の候補 {
     /// en: Returns a name, not an abbreviation, as the completion target after an escape in a string
     #[story("D1")]
     #[test]
-    fn 文字列のエスケープの後ろで補完すると名前を候補に出す() {
+    fn returns_a_name_not_an_abbreviation_as_the_completion_target_after_an_escape_in_a_string() {
         // `\n",Nat.su` で始まる略記は無いので、`\` から後ろは略記ではない。
         let text = r#"#eval ("a\n",Nat.su"#;
         assert_eq!(
@@ -2743,7 +2753,8 @@ mod 略記の候補 {
     /// en: Puts the exact match symbol first and includes those of abbreviations starting with the name
     #[story("C8", "J2")]
     #[test]
-    fn 一致する略記の記号を先頭に置く() {
+    fn puts_the_exact_match_symbol_first_and_includes_those_of_abbreviations_starting_with_the_name()
+     {
         // `\a` は α になる。`\all` の ∀ などはそのあとに続く。
         let got = abbrev_candidates("a");
         assert_eq!(got.first(), Some(&"α"), "{got:?}");
@@ -2751,7 +2762,7 @@ mod 略記の候補 {
     }
 }
 
-mod 定理検索 {
+mod theorem_search {
     //! ja: 定理検索
     //! en: Theorem search
     //!
@@ -2783,7 +2794,7 @@ mod 定理検索 {
     /// en: Shows the count, the name with its type, and the defining module
     #[story("D4")]
     #[test]
-    fn 名前と型と定義されている_module_を表示する() {
+    fn shows_the_count_the_name_with_its_type_and_the_defining_module() {
         let out = text(&json!({"count": 2, "hits": hits()}));
         let out: Vec<&str> = out.split('\n').collect();
         assert_eq!(out[0], "2 件");
@@ -2798,7 +2809,7 @@ mod 定理検索 {
     /// en: Shows the total and the shown count when the results are limited
     #[story("D4")]
     #[test]
-    fn 件数を絞ったときは全体の件数も表示する() {
+    fn shows_the_total_and_the_shown_count_when_the_results_are_limited() {
         // loogle は結果を 200 件で打ち切って返すので、count は hits より多いことがある。
         let got = json!({"count": 360, "hits": hits()});
         let head = pure::loogle_text(&got, 1, 100, Style::PLAIN);
@@ -2811,7 +2822,7 @@ mod 定理検索 {
     /// en: Truncates a line longer than the terminal width with an ellipsis
     #[story("D4")]
     #[test]
-    fn 長い行は端末の幅で切り詰める() {
+    fn truncates_a_line_longer_than_the_terminal_width_with_an_ellipsis() {
         // 折り返すと 1 件 2 行の並びが崩れて、どの型がどの名前のものか分からない。
         let got = json!({
             "count": 1,
@@ -2827,7 +2838,7 @@ mod 定理検索 {
     /// en: Shows that nothing was found for zero results
     #[story("D4")]
     #[test]
-    fn 見つからなければ見つからなかったと表示する() {
+    fn shows_that_nothing_was_found_for_zero_results() {
         assert_eq!(text(&json!({"count": 0, "hits": []})), "見つからなかった");
     }
 
@@ -2835,7 +2846,7 @@ mod 定理検索 {
     /// en: Shows a loogle error untranslated with its suggestions
     #[story("D4")]
     #[test]
-    fn エラーは翻訳せずに候補を添える() {
+    fn shows_a_loogle_error_untranslated_with_its_suggestions() {
         // loogle の文言は Lean のパーサのもの。日本語にすると元の位置情報が消える。
         let got = json!({"error": "unknown identifier 'Nope'", "suggestions": ["\"Nope\""]});
         let out = text(&got);
@@ -2878,7 +2889,7 @@ mod 定理検索 {
     /// en: Sends the query with its symbols URL-encoded
     #[story("D4")]
     #[test]
-    fn 記号を含むクエリも_URL_エンコードして送る() {
+    fn sends_the_query_with_its_symbols_url_encoded() {
         // `?a + ?b` の `+` をそのまま URL に含めると、loogle 側では空白として
         // 解釈される。
         let (url, got) = serve("200 OK", r#"{"count": 0, "hits": []}"#);
@@ -2891,7 +2902,7 @@ mod 定理検索 {
     /// en: Returns a SearchError if the server does not respond
     #[story("D4")]
     #[test]
-    fn 応答が無ければ_SearchError() {
+    fn returns_a_searcherror_if_the_server_does_not_respond() {
         // ネットワークの問題で REPL を終了させない。呼び出し側がエラーを受け取って
         // 1 行で報告する。
         let closed = TcpListener::bind("127.0.0.1:0").expect("bind");
@@ -2904,7 +2915,7 @@ mod 定理検索 {
     /// en: Returns an HTTP error as a SearchError with its code and reason
     #[story("D4", "F4")]
     #[test]
-    fn HTTP_のエラーはコードと理由を_SearchError_にする() {
+    fn returns_an_http_error_as_a_searcherror_with_its_code_and_reason() {
         let (url, _) = serve("503 Service Unavailable", "");
         let err = ask(&url, "Nat").expect_err("503");
         assert_eq!(err.to_string(), "503 Service Unavailable");
@@ -2914,14 +2925,14 @@ mod 定理検索 {
     /// en: Returns a SearchError if the response is not a JSON object
     #[story("D4", "F4")]
     #[test]
-    fn 応答がオブジェクトでなければ_SearchError() {
+    fn returns_a_searcherror_if_the_response_is_not_a_json_object() {
         let (url, _) = serve("200 OK", "[1, 2]");
         let err = ask(&url, "Nat").expect_err("配列");
         assert!(err.to_string().contains("オブジェクトではない"), "{err}");
     }
 }
 
-mod 性質一覧 {
+mod property_list {
     //! ja: 性質一覧
     //! en: Property list
     //!
@@ -2933,7 +2944,7 @@ mod 性質一覧 {
     /// en: Generates the same content as SPEC.ja.md from the ja lines of the tests and stories
     #[story("X1")]
     #[test]
-    fn SPEC_ja_md_がテストとそろっている() {
+    fn generates_the_same_content_as_spec_ja_md_from_the_ja_lines_of_the_tests_and_stories() {
         if let Err(why) = spec::check(&spec::root(), spec::Lang::Ja) {
             panic!("{why}");
         }
@@ -2950,7 +2961,7 @@ mod 性質一覧 {
     }
 }
 
-mod Lake_プロジェクトの判定 {
+mod detecting_lake_projects {
     //! ja: Lake プロジェクトの判定
     //! en: Detecting Lake projects
     //!
@@ -2966,7 +2977,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Returns the parent directory with a lakefile when searching from a subdirectory
     #[story("G6")]
     #[test]
-    fn lakefile_を持つ一番近い親ディレクトリを返す() {
+    fn returns_the_parent_directory_with_a_lakefile_when_searching_from_a_subdirectory() {
         let dir = tmp();
         fs::write(dir.path().join("lakefile.toml"), "").expect("write");
         let sub = dir.path().join("A").join("B");
@@ -2981,7 +2992,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Returns None without a lakefile
     #[story("G3", "G6")]
     #[test]
-    fn lakefile_が無ければ_None_を返す() {
+    fn returns_none_without_a_lakefile() {
         let dir = tmp();
         assert_eq!(config::lake_root(&path_str(dir.path())), None);
     }
@@ -2990,7 +3001,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Returns the lean_lib names from lakefile.toml
     #[story("G6")]
     #[test]
-    fn lakefile_toml_の_lean_lib_を返す() {
+    fn returns_the_lean_lib_names_from_lakefile_toml() {
         let dir = tmp();
         let text = "name = \"p\"\n[[lean_lib]]\nname = \"Foo\"\n[[lean_lib]]\nname = \"Bar\"\n";
         assert_eq!(libs(dir.path(), "lakefile.toml", text), ["Foo", "Bar"]);
@@ -3000,7 +3011,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Returns the lean_lib names from lakefile.lean
     #[story("G6")]
     #[test]
-    fn lakefile_lean_の_lean_lib_を返す() {
+    fn returns_the_lean_lib_names_from_lakefile_lean() {
         let dir = tmp();
         let text = "import Lake\nopen Lake DSL\n\nlean_lib Foo where\nlean_lib «Bar.Baz»\n";
         assert_eq!(libs(dir.path(), "lakefile.lean", text), ["Foo", "Bar.Baz"]);
@@ -3010,7 +3021,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Returns nothing from a lakefile.toml that is not valid TOML
     #[story("G4", "G6")]
     #[test]
-    fn TOML_として読めない_lakefile_toml_からは空を返す() {
+    fn returns_nothing_from_a_lakefile_toml_that_is_not_valid_toml() {
         let dir = tmp();
         assert!(libs(dir.path(), "lakefile.toml", "[[lean_lib]\n").is_empty());
     }
@@ -3019,7 +3030,8 @@ mod Lake_プロジェクトの判定 {
     /// en: Names the environment after the enclosing Lake project and imports its lean_lib without a config
     #[story("G6")]
     #[test]
-    fn 設定が無ければ_Lake_プロジェクトの環境で起動する() {
+    fn names_the_environment_after_the_enclosing_lake_project_and_imports_its_lean_lib_without_a_config()
+     {
         let dir = tmp();
         let proj = dir.path().join("myproj");
         fs::create_dir_all(proj.join("sub")).expect("mkdir");
@@ -3040,7 +3052,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Names the environment after the project directory for any form of the -p path
     #[story("G6")]
     #[test]
-    fn dash_p_の書き方によらずディレクトリ名を環境の名前にする() {
+    fn names_the_environment_after_the_project_directory_for_any_form_of_the_p_path() {
         let dir = tmp();
         let proj = dir.path().join("myproj");
         fs::create_dir_all(dir.path().join("other")).expect("mkdir");
@@ -3071,7 +3083,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Uses the plain environment with no project outside a Lake project
     #[story("G3", "G6")]
     #[test]
-    fn Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
+    fn uses_the_plain_environment_with_no_project_outside_a_lake_project() {
         let dir = tmp();
         let ctx = ctx_at(&path_str(dir.path()));
         let got = config::resolve(&ctx, None, None, &[], &table("")).expect("resolve");
@@ -3082,7 +3094,7 @@ mod Lake_プロジェクトの判定 {
     /// en: Uses the given imports instead of lean_lib
     #[story("G6")]
     #[test]
-    fn import_を指定したら_lean_lib_の代わりにそれを使う() {
+    fn uses_the_given_imports_instead_of_lean_lib() {
         let dir = tmp();
         fs::write(
             dir.path().join("lakefile.toml"),
@@ -3096,7 +3108,7 @@ mod Lake_プロジェクトの判定 {
     }
 }
 
-mod 起動オプション {
+mod command_line_options {
     //! ja: 起動オプション
     //! en: Command-line options
     use super::*;
@@ -3109,7 +3121,7 @@ mod 起動オプション {
     /// en: Returns every import in order for repeated -i and --import
     #[story("G6")]
     #[test]
-    fn dash_i_を繰り返すと_import_がすべて残る() {
+    fn returns_every_import_in_order_for_repeated_i_and_import() {
         assert_eq!(parse(&["-i", "A", "--import", "B"]).imports, ["A", "B"]);
     }
 
@@ -3117,7 +3129,7 @@ mod 起動オプション {
     /// en: Takes the value of -e or --env as the environment name
     #[story("G5")]
     #[test]
-    fn dash_e_で環境の名前を受け取る() {
+    fn takes_the_value_of_e_or_env_as_the_environment_name() {
         assert_eq!(parse(&["-e", "m"]).name.as_deref(), Some("m"));
         assert_eq!(parse(&["--env", "m"]).name.as_deref(), Some("m"));
     }
@@ -3126,7 +3138,7 @@ mod 起動オプション {
     /// en: Returns an error naming the option for -e, -i, or -p without a value
     #[story("G5", "G6")]
     #[test]
-    fn 値の無いオプションはエラーで終了する() {
+    fn returns_an_error_naming_the_option_for_e_i_or_p_without_a_value() {
         // 終了コードは bin が決める。ここではメッセージだけを確かめる。
         for flag in ["-e", "-i", "-p"] {
             let why = parse_args(&[flag]).expect_err("エラーにならない");
@@ -3138,7 +3150,7 @@ mod 起動オプション {
     /// en: Returns an error naming an unknown option
     #[story("H1")]
     #[test]
-    fn 不明なオプションはエラーで終了する() {
+    fn returns_an_error_naming_an_unknown_option() {
         let why = parse_args(&["--nosuch"]).expect_err("エラーにならない");
         assert!(why.contains("不明なオプション: --nosuch"), "{why}");
     }
@@ -3147,7 +3159,7 @@ mod 起動オプション {
     /// en: Takes a file name as the file to load
     #[story("B4")]
     #[test]
-    fn ファイル名は読み込むファイルとして受け取る() {
+    fn takes_a_file_name_as_the_file_to_load() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
     }
 
@@ -3155,14 +3167,14 @@ mod 起動オプション {
     /// en: Returns an error that only one file is allowed for two file names
     #[story("B4")]
     #[test]
-    fn ファイルを_2_つ指定するとエラーで終了する() {
+    fn returns_an_error_that_only_one_file_is_allowed_for_two_file_names() {
         // 後のファイルだけを読み込むと、前のファイルを読み込んでいないことに気づけない。
         let why = parse_args(&["a.lean", "b.lean"]).expect_err("エラーにならない");
         assert!(why.contains("ファイルは 1 つだけ"), "{why}");
     }
 }
 
-mod 起動 {
+mod startup {
     //! ja: 起動
     //! en: Startup
     //!
@@ -3241,7 +3253,8 @@ mod 起動 {
     /// en: Shows that the engine is ready without setting it up when leani --setup runs with a built engine
     #[story("G3")]
     #[test]
-    fn dash_dash_setup_は用意済みならエンジンを用意しない() {
+    fn shows_that_the_engine_is_ready_without_setting_it_up_when_leani_setup_runs_with_a_built_engine()
+     {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v1");
         config(dir.path(), &with_engine(&eng));
@@ -3259,7 +3272,7 @@ mod 起動 {
     /// en: Sets up the engine when leani --setup runs without one, even with LEANI_NO_SETUP
     #[story("G3")]
     #[test]
-    fn dash_dash_setup_は未用意ならエンジンを用意する() {
+    fn sets_up_the_engine_when_leani_setup_runs_without_one_even_with_leani_no_setup() {
         let dir = tmp();
         config(dir.path(), NO_ENGINE);
         let git = fake_git(&dir.path().join("git.log"), &["v4.1.0"]);
@@ -3289,7 +3302,7 @@ mod 起動 {
     /// en: Shows that the engine did not start and exits with 1 if the engine fails to start
     #[story("G4")]
     #[test]
-    fn エンジンが起動しなければメッセージを表示して_exit_1_で終わる() {
+    fn shows_that_the_engine_did_not_start_and_exits_with_1_if_the_engine_fails_to_start() {
         let dir = tmp();
         let eng = built_engine(dir.path(), "leanprover/lean4:v1");
         config(dir.path(), &with_engine(&eng));
@@ -3306,7 +3319,8 @@ mod 起動 {
     /// en: Shows why and exits with 1 without starting if the config is unreadable or startup is blocked
     #[story("G4")]
     #[test]
-    fn 設定のエラーでは起動せずに知らせる() {
+    fn shows_why_and_exits_with_1_without_starting_if_the_config_is_unreadable_or_startup_is_blocked()
+     {
         let dir = tmp();
         config(dir.path(), "default = \n");
         let got = run(&mut isolated(dir.path(), &[]), "");
@@ -3330,7 +3344,7 @@ mod 起動 {
     /// en: Evaluates input that uses declarations from the file when leani runs with a file
     #[story("B4")]
     #[test]
-    fn 指定したファイルを_Repl_に渡す() {
+    fn evaluates_input_that_uses_declarations_from_the_file_when_leani_runs_with_a_file() {
         let dir = tmp();
         config(dir.path(), NO_ENGINE);
         let file = dir.path().join("given.lean");
@@ -3348,7 +3362,7 @@ mod 起動 {
     /// en: Exits with 0 without panicking when the output is closed
     #[story("F4")]
     #[test]
-    fn 出力先が閉じたら_panic_せずに終了コード_0_で終わる() {
+    fn exits_with_0_without_panicking_when_the_output_is_closed() {
         // `leani < file | head -1` で head が先に終了したとき。書けないまま続けても
         // 誰も読まないので、入力の残りは実行せずに終わる。
         let dir = tmp();
@@ -3378,7 +3392,7 @@ mod 起動 {
     /// en: Exits with 130 without the manual steps when Ctrl-C is pressed during engine setup
     #[story("G3")]
     #[test]
-    fn 用意の途中の_Ctrl__C_は_exit_130_で終わる() {
+    fn exits_with_130_without_the_manual_steps_when_ctrl_c_is_pressed_during_engine_setup() {
         let dir = tmp();
         config(dir.path(), NO_ENGINE);
         let lean = "echo 'Lean (version 4.1.0, arm64-apple-darwin, commit 0, Release)'";
@@ -3402,7 +3416,7 @@ mod 起動 {
     /// en: Exits with 130 when Ctrl-C is pressed while checking the version
     #[story("G3")]
     #[test]
-    fn バージョンを調べている途中の_Ctrl__C_も中断を返す() {
+    fn exits_with_130_when_ctrl_c_is_pressed_while_checking_the_version() {
         // elan は lean --version の中で toolchain を取得することがあるので、ここでも
         // 時間がかかる。中断を「バージョンが分からない」にすると exit 1 で終わる。
         let dir = tmp();
@@ -3426,7 +3440,7 @@ mod 起動 {
     /// en: Shows the environment, the Lean version, and the config file path when leani -V runs
     #[story("G7")]
     #[test]
-    fn dash_V_は環境とバージョンと設定ファイルの場所を表示して終わる() {
+    fn shows_the_environment_the_lean_version_and_the_config_file_path_when_leani_v_runs() {
         let dir = tmp();
         let eng = toolchain_dir(dir.path(), "eng", "leanprover/lean4:v1");
         let conf = config(dir.path(), &with_engine(&eng));
@@ -3444,7 +3458,7 @@ mod 起動 {
     }
 }
 
-mod 略記の一覧 {
+mod abbreviation_list {
     //! ja: 略記の一覧
     //! en: Abbreviation list
     //!
@@ -3455,7 +3469,7 @@ mod 略記の一覧 {
     /// en: Returns abbreviations whose keys start with the input, with or without a leading backslash
     #[story("C7")]
     #[test]
-    fn キーの先頭で絞り込む() {
+    fn returns_abbreviations_whose_keys_start_with_the_input_with_or_without_a_leading_backslash() {
         let got = abbrev_lookup("le");
         assert!(got.contains(&("le", "≤")), "{got:?}");
         assert!(got.iter().all(|(k, _)| k.starts_with("le")), "{got:?}");
@@ -3466,7 +3480,7 @@ mod 略記の一覧 {
     /// en: Returns the abbreviations that convert to a given symbol
     #[story("C7")]
     #[test]
-    fn 記号からその記号を入力する略記を調べる() {
+    fn returns_the_abbreviations_that_convert_to_a_given_symbol() {
         let keys: Vec<&str> = abbrev_lookup("→").into_iter().map(|(k, _)| k).collect();
         assert_eq!(keys, ["->", "imp", "r", "r-", "rightarrow", "to"]);
     }
@@ -3475,7 +3489,7 @@ mod 略記の一覧 {
     /// en: Continues in the next column after filling a column to the bottom
     #[story("C7")]
     #[test]
-    fn 列の下まで並べたら右の列に続ける() {
+    fn continues_in_the_next_column_after_filling_a_column_to_the_bottom() {
         let pairs = [("a", "α"), ("b", "β"), ("c", "γ")];
         let got = abbrev_table(&pairs, 13);
         assert_eq!(
@@ -3488,7 +3502,7 @@ mod 略記の一覧 {
     /// en: Aligns columns counting a full-width character as two cells wide
     #[story("C7")]
     #[test]
-    fn 全角の文字は_2_文字分の幅で列をそろえる() {
+    fn aligns_columns_counting_a_full_width_character_as_two_cells_wide() {
         let pairs = [("x", "あ"), ("y", "b"), ("z", "c"), ("w", "d")];
         let got = abbrev_table(&pairs, 12);
         assert_eq!(
@@ -3501,7 +3515,7 @@ mod 略記の一覧 {
     /// en: Adds as many columns as the width allows
     #[story("C7")]
     #[test]
-    fn 幅に収まる範囲で列を増やす() {
+    fn adds_as_many_columns_as_the_width_allows() {
         let pairs = abbrev_lookup("");
         let rows: Vec<usize> = [40, 80, 120]
             .into_iter()
