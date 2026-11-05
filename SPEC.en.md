@@ -661,7 +661,7 @@ Not built yet.
 - Keeps the :time setting and the declarations of the loaded file when :env switches the environment (engine / Switching environments)
 - Says the name is not in the config and evaluates the next expression when :env gets an unknown name (engine / Switching environments)
 - Says startup failed and goes back to the original environment when :env picks one that cannot start (engine / Switching environments)
-- Shows the list of target environments when :env runs without arguments (engine / Switching environments)
+- Shows the current environment and the list of target environments when :env runs without arguments (engine / Switching environments)
 - Says the environment is already in use and does not restart the engine when :env names the current one (engine / Switching environments)
 - Keeps the entered declarations in the original environment when :env targets one that cannot start (engine / When switching fails)
 - Keeps the current engine and shows the lake env failure when :env targets an environment it cannot set up (engine / When switching fails)

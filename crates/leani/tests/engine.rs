@@ -3533,14 +3533,17 @@ mod switching_environments {
         assert!(repl.feed(&["1 + 1"]).contains('2'), "使えなくなっている");
     }
 
-    /// ja: 引数なしで :env を実行すると、切り替え先の環境の一覧を表示する
-    /// en: Shows the list of target environments when :env runs without arguments
+    /// ja: 引数なしで :env を実行すると、今の環境と、切り替え先の環境の一覧を表示する
+    /// en: Shows the current environment and the list of target environments when :env runs without arguments
     #[story("G5")]
     #[test]
-    fn shows_the_list_of_target_environments_when_env_runs_without_arguments() {
+    fn shows_the_current_environment_and_the_list_of_target_environments_when_env_runs_without_arguments()
+     {
         let mut repl = Driver::new();
         let out = repl.feed(&[":env"]);
-        assert!(out.contains("core"), "{out}");
+        // 切り替え先の行にも core があるので、名前だけでなく import まで含めて比べる。
+        let current = format!("{}: ", repl.repl.eng().cfg());
+        assert!(out.contains(&current), "{current:?} が無い: {out}");
         assert!(out.contains("切り替え先: core wide"), "{out}");
     }
 
