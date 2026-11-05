@@ -1856,12 +1856,11 @@ mod pending_declarations_and_engine_generations {
     //! 取り消した宣言の中身は env id を持つ。再起動したエンジンにその id は無い。
     use super::*;
 
-    /// ja: 書き直しの途中で :restart してから書き直しをやめると、取り消した宣言を使う式を評価する
-    /// en: Evaluates an expression using the undone declaration when rewriting is abandoned after :restart
+    /// ja: 書き直しの途中で :restart を実行してから書き直しをやめると、取り消した宣言を戻す
+    /// en: Restores the undone declaration when rewriting is abandoned after :restart
     #[story("F1", "C2")]
     #[test]
-    fn evaluates_an_expression_using_the_undone_declaration_when_rewriting_is_abandoned_after_restart()
-     {
+    fn restores_the_undone_declaration_when_rewriting_is_abandoned_after_restart() {
         let mut repl = Driver::new();
         repl.feed(&["def held := 1"]);
         // 前の宣言を書き直している途中
@@ -1978,8 +1977,12 @@ mod declarations_missing_from_the_environment {
         assert!(out.contains("捨てた"), "{out}");
         assert!(repl.repl.eng().unplayed().is_empty());
 
-        // 残すと、:reset で消したはずの宣言が次の :restart で戻ってくる。
+        // 残すと、:reset で消したはずの宣言が次の :restart で戻ってくる。libD を
+        // ファイルに戻しておく。戻さないと、保留が残っていても usesD の再実行は失敗し、
+        // 下の assert は何も確かめない。
+        std::fs::write(&path, "def libD := 10\n").expect("write");
         repl.feed(&[":restart"]);
+        assert!(repl.feed(&["#check libD"]).contains("libD : Nat"));
         assert!(!repl.feed(&["#check @usesD"]).contains("usesD : Nat"));
     }
 }

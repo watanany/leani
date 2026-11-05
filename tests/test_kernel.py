@@ -679,12 +679,12 @@ def describe_startup_and_restart_failures():
             leani.types.EnvLost("main にも戻れなくなった"),
         ],
     )
-    def fails_the_cell_and_starts_the_engine_again_in_the_next_cell_when_a_restart_fails(
+    def fails_the_cell_and_starts_the_engine_again_in_the_next_cell_when_a_restart_fails_or_env_cannot_return_to_the_original_environment(
         direct, capsys, exc
     ):
         """
-        ja: エンジンの再起動に失敗すると、セルを失敗させ、次のセルでエンジンを起動し直す
-        en: Fails the cell and starts the engine again in the next cell when a restart fails
+        ja: エンジンの再起動に失敗するか、:env で元の環境にも戻れなくなると、セルを失敗させ、次のセルでエンジンを起動し直す
+        en: Fails the cell and starts the engine again in the next cell when a restart fails or :env cannot return to the original environment
         """
         k, make, fake = direct
         execute(k)

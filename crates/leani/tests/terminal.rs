@@ -102,11 +102,12 @@ mod line_editing {
         assert!(shows(&out, "2"), "Ctrl-D のあとに入力を読まない: {out}");
     }
 
-    /// ja: 評価中に Ctrl-C を押すと、評価を中断し、それまでの宣言を残す
-    /// en: Interrupts the evaluation and keeps earlier declarations when Ctrl-C is pressed during it
+    /// ja: 評価中に Ctrl-C を押すと、評価を中断し、そのあとの入力でもそれまでの宣言の値を表示する
+    /// en: Interrupts the evaluation and still shows the values of earlier declarations when Ctrl-C is pressed during it
     #[story("A4")]
     #[test]
-    fn interrupts_the_evaluation_and_keeps_earlier_declarations_when_ctrl_c_is_pressed_during_it() {
+    fn interrupts_the_evaluation_and_still_shows_the_values_of_earlier_declarations_when_ctrl_c_is_pressed_during_it()
+     {
         let mut term = Terminal::start();
         term.line("def before := 5");
         // 評価が始まってから中断する。評価の前 (完結判定の途中など) に中断すると、

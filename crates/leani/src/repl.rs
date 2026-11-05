@@ -1864,8 +1864,8 @@ impl Repl {
         let mut hook = self.eng.take_hook();
         self.eng.kill();
 
-        // どの順に起動し、起動の結果ごとに次に何をするかは switch::on_boot が決める。
-        // ここでは、決まったことを実行して表示するだけにする。
+        // 最初に切り替え先を起動する。起動の結果ごとに次に何をするかは switch::on_boot が
+        // 決める。ここでは、決まったことを実行して表示するだけにする。
         let mut now = Switch::Target { to: target, back };
         let eng = loop {
             let name = now.booting().name.clone();

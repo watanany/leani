@@ -1254,11 +1254,11 @@ engine = "/m/engine"
     }
 }
 
-mod steps_to_switch_environments_with_env {
-    //! ja: :env で環境を切り替える手順
-    //! en: Steps to switch environments with env
+mod choosing_the_next_step_after_a_startup_result_in_env {
+    //! ja: :env で起動の結果を受けたあとにすることの決め方
+    //! en: Choosing the next step after a startup result in :env
     //!
-    //! 環境は名前で表す。切り替え先は wide、元の環境は core にする。起動したエンジンと、
+    //! `switch::on_boot` の返り値を確かめる。環境は名前で表す。切り替え先は wide、元の環境は core にする。起動したエンジンと、
     //! 起動に失敗したエンジンは `()` で表す。
     use super::*;
 
@@ -1275,8 +1275,10 @@ mod steps_to_switch_environments_with_env {
         Switch::Back { back: "core" }
     }
 
-    /// 切り替えを、`results` の順に起動の結果を受けながら最後まで進める。起動した環境の
-    /// 順と、最後に決まったことを返す。結果が足りなくなったら失敗する。
+    /// `on_boot` の返り値に従って、`results` の順に起動の結果を渡していく。`GoBack` なら
+    /// 次の結果を渡し、ほかの返り値で止める。起動した環境の順と、最後の返り値を返す。
+    /// 結果が足りなくなったら失敗する。`Repl::cmd_env` のループを書き写したもので、
+    /// `cmd_env` そのものは確かめない。
     fn run(results: Vec<Booted<(), ()>>) -> (Vec<&'static str>, Step) {
         let mut now = target();
         let mut started = Vec::new();
@@ -1290,19 +1292,19 @@ mod steps_to_switch_environments_with_env {
         panic!("起動の結果が足りない: {started:?}")
     }
 
-    /// ja: 切り替え先の起動に成功すると、起動したエンジンを今のエンジンにする
-    /// en: Installs the started engine when the target environment starts
+    /// ja: 切り替え先の起動に成功した結果には Install を返す
+    /// en: Returns Install for a successful startup of the target environment
     #[story("G5")]
     #[test]
-    fn installs_the_started_engine_when_the_target_environment_starts() {
+    fn returns_install_for_a_successful_startup_of_the_target_environment() {
         assert_eq!(switch::on_boot(target(), Booted::Ok(())), Step::Install(()));
     }
 
-    /// ja: 切り替え先の起動が失敗しても中断しても、起動に失敗したエンジンを捨てて、元の環境でエンジンを起動する
-    /// en: Discards the failed engine and starts the original environment when the target environment fails or is interrupted
+    /// ja: 切り替え先の起動に失敗した結果と中断した結果には、元の環境を起動する GoBack を返す
+    /// en: Returns GoBack to the original environment for a failed or interrupted startup of the target environment
     #[story("G4", "G5")]
     #[test]
-    fn discards_the_failed_engine_and_starts_the_original_environment_when_the_target_environment_fails_or_is_interrupted()
+    fn returns_goback_to_the_original_environment_for_a_failed_or_interrupted_startup_of_the_target_environment()
      {
         for got in [Booted::Failed(()), Booted::Interrupted(())] {
             let next = switch::on_boot(target(), got);
@@ -1314,41 +1316,40 @@ mod steps_to_switch_environments_with_env {
                 }
             );
         }
-        assert_eq!(*back().booting(), "core");
     }
 
-    /// ja: 元の環境に戻る起動に成功すると、起動したエンジンを今のエンジンにする
-    /// en: Installs the started engine when the original environment starts again
+    /// ja: 元の環境の起動に成功した結果には Install を返す
+    /// en: Returns Install for a successful startup of the original environment
     #[story("G4", "G5")]
     #[test]
-    fn installs_the_started_engine_when_the_original_environment_starts_again() {
+    fn returns_install_for_a_successful_startup_of_the_original_environment() {
         assert_eq!(switch::on_boot(back(), Booted::Ok(())), Step::Install(()));
     }
 
-    /// ja: 元の環境に戻る起動を中断すると、エンジンが無いまま続ける
-    /// en: Goes on without an engine when starting the original environment again is interrupted
+    /// ja: 元の環境の起動を中断した結果には Suspend を返す
+    /// en: Returns Suspend for an interrupted startup of the original environment
     #[story("G4", "G5")]
     #[test]
-    fn goes_on_without_an_engine_when_starting_the_original_environment_again_is_interrupted() {
+    fn returns_suspend_for_an_interrupted_startup_of_the_original_environment() {
         assert_eq!(
             switch::on_boot(back(), Booted::Interrupted(())),
             Step::Suspend(())
         );
     }
 
-    /// ja: 元の環境に戻る起動に失敗すると、環境を失う
-    /// en: Loses the environment when starting the original environment again fails
+    /// ja: 元の環境の起動に失敗した結果には Lose を返す
+    /// en: Returns Lose for a failed startup of the original environment
     #[story("G4", "G5")]
     #[test]
-    fn loses_the_environment_when_starting_the_original_environment_again_fails() {
+    fn returns_lose_for_a_failed_startup_of_the_original_environment() {
         assert_eq!(switch::on_boot(back(), Booted::Failed(())), Step::Lose(()));
     }
 
-    /// ja: どの起動の結果の組み合わせでも、切り替え先、元の環境の順に 2 回までしか起動せず、どちらかの起動に成功したときだけエンジンを今のエンジンにする
-    /// en: Starts only the target and then the original environment and installs an engine only when one starts for any startup results
+    /// ja: どの起動の結果の組み合わせでも、返り値に従うと切り替え先、元の環境の順に 2 回までしか起動せず、どちらかの起動に成功したときだけ Install を返す
+    /// en: Leads to at most two startups, the target and then the original environment, and returns Install only when one succeeds for any startup results
     #[story("G4", "G5")]
     #[test]
-    fn starts_only_the_target_and_then_the_original_environment_and_installs_an_engine_only_when_one_starts_for_any_startup_results()
+    fn leads_to_at_most_two_startups_the_target_and_then_the_original_environment_and_returns_install_only_when_one_succeeds_for_any_startup_results()
      {
         let all = || [Booted::Ok(()), Booted::Interrupted(()), Booted::Failed(())];
         for first in all() {
@@ -2303,11 +2304,12 @@ mod tactics_sent_in_proof_mode {
         );
     }
 
-    /// ja: 完結判定にエラーがあれば、パースエラーを完結判定で読んだ位置とメッセージにする
-    /// en: Takes the parse error position and message from the completeness check if it has an error
+    /// ja: 完結判定にエラーがあれば、パースエラーを完結判定のエラーに置き換え、位置を by の行と字下げの分だけ戻す
+    /// en: Replaces the parse error with the completeness check error moved back by the by line and the indent if the check has an error
     #[story("E1")]
     #[test]
-    fn takes_the_parse_error_position_and_message_from_the_completeness_check_if_it_has_an_error() {
+    fn replaces_the_parse_error_with_the_completeness_check_error_moved_back_by_the_by_line_and_the_indent_if_the_check_has_an_error()
+     {
         let probe = json!({"tac": {"ok": false, "err": "<input>:2:6: expected end of input"}});
         assert_eq!(
             pure::tactic_parse_error("Lean error:\n<input>:1:4: expected ')'", Some(&probe)),
