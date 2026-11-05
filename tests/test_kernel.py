@@ -227,6 +227,15 @@ def fib : Nat → Nat
         _, out, err = run(kernel, "constructor; rfl; rfl")
         assert "証明完了" in out, out + err
 
+    @story("J1", "E1")
+    def it_タクティクのパースエラーに送るときに付けた括弧の話を出さない(kernel):
+        run(kernel, "theorem cell_paren : 1 = 1 := by sorry")
+        run(kernel, ":prove")
+        _, out, err = run(kernel, "rfl rfl")
+        assert "<input>:1:4: expected end of input" in out + err, out + err
+        _, out, err = run(kernel, "constructor )")
+        assert "<input>:1:12" in out + err, out + err
+
     @story("J1")
     def it_閉じていない_raw_文字列は次の行に続ける(kernel):
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')

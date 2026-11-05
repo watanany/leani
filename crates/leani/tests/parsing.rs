@@ -1863,12 +1863,26 @@ mod 証明モードで送るタクティク {
 
     #[story("E1")]
     #[test]
-    fn パースエラーの行は括弧の行の分だけ戻す() {
+    fn パースエラーは完結判定で読んだ位置とメッセージで表示する() {
+        let probe = json!({"tac": {"ok": false, "err": "<input>:2:6: expected end of input"}});
         assert_eq!(
-            pure::ungroup_error("Lean error:\n<input>:2:17: expected ')'"),
+            pure::tactic_parse_error("Lean error:\n<input>:1:4: expected ')'", Some(&probe)),
+            "Lean error:\n<input>:1:4: expected end of input"
+        );
+    }
+
+    #[story("E1")]
+    #[test]
+    fn 完結判定のエラーが無ければパースエラーの行を括弧の行の分だけ戻す() {
+        assert_eq!(
+            pure::tactic_parse_error("Lean error:\n<input>:2:17: expected ')'", None),
             "Lean error:\n<input>:1:17: expected ')'"
         );
-        assert_eq!(pure::ungroup_error("Type mismatch"), "Type mismatch");
+        let ok = json!({"tac": {"ok": true}});
+        assert_eq!(
+            pure::tactic_parse_error("Unknown proof state", Some(&ok)),
+            "Unknown proof state"
+        );
     }
 }
 

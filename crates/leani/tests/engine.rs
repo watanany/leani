@@ -2069,6 +2069,17 @@ mod 証明モード {
 
     #[story("E1")]
     #[test]
+    fn タクティクのパースエラーに送るときに付けた括弧の話を出さない() {
+        let mut repl = Driver::new();
+        repl.feed(&["theorem paren : 1 = 1 := by sorry", ":prove"]);
+        let out = repl.feed(&["rfl rfl"]);
+        assert!(out.contains("<input>:1:4: expected end of input"), "{out}");
+        let out = repl.feed(&["constructor )"]);
+        assert!(out.contains("<input>:1:12"), "{out}");
+    }
+
+    #[story("E1")]
+    #[test]
     fn 複数のタクティクを使う証明でゴールとスクリプトを確認できる() {
         let mut repl = Driver::new();
         repl.feed(&[

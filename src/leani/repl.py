@@ -73,10 +73,10 @@ from leani.pure import (
     sorries,
     splice_sorry,
     strip_imports,
+    tactic_parse_error,
     tactic_step,
     tactic_undo,
     try_this,
-    ungroup_error,
     yellow,
 )
 from leani.queries import (
@@ -1047,7 +1047,8 @@ class Repl:
         self.last = Last(src, advanced=False, proof=True)
 
         if resp.get("message"):  # エンジンが直接返すエラー
-            self.out.fail(red(ungroup_error(resp["message"]).rstrip()))
+            shown = tactic_parse_error(resp["message"], self.parse(src))
+            self.out.fail(red(shown.rstrip()))
             return
         elif has_error(resp):
             render(self.out, resp, src, 1)

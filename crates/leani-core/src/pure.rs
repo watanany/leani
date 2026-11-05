@@ -1362,15 +1362,31 @@ pub fn grouped_tactic(src: &str) -> String {
     format!("(\n{src}\n)")
 }
 
-/// `grouped_tactic` で送ったタクティクのパースエラーの位置を、入力した行に合わせる。
-/// `(` の行の分だけ、行の番号を 1 つ戻す。
-pub fn ungroup_error(msg: &str) -> String {
+/// `grouped_tactic` で送ったタクティクのパースエラーを、括弧で囲む前の入力に合わせる。
+///
+/// エンジンは括弧で囲んだものを読むので、`expected ')'` や閉じ括弧の行の位置を返す。
+/// 完結判定 (`probe` の `tac`) は括弧で囲まずに読んでいるので、そのエラーがあれば
+/// エンジンのエラーと置き換える。完結判定は各行を 2 文字字下げして `by` の次の行から
+/// 置いて読むので、行を 1 つ、桁を 2 つ戻す。完結判定のエラーが無ければ、エンジンの
+/// エラーの行を `(` の行の分だけ戻す。
+pub fn tactic_parse_error(msg: &str, probe: Option<&Json>) -> String {
+    let probed = probe
+        .and_then(|p| p.get("tac"))
+        .and_then(|t| text(t, "err"));
+    match (ERR_POS.find(msg), probed) {
+        (Some(at), Some(err)) => format!("{}{}", &msg[..at.start()], shift_pos(err, 1, 2)),
+        _ => shift_pos(msg, 1, 0),
+    }
+}
+
+/// メッセージの中の位置を、行は `lines`、桁は `cols` だけ戻す。行は 1 より前にしない。
+fn shift_pos(msg: &str, lines: u64, cols: u64) -> String {
     ERR_POS
         .replace_all(msg, |m: &regex::Captures| {
-            let line = m[1]
-                .parse::<u64>()
-                .map_or(1, |n| n.saturating_sub(1).max(1));
-            format!("<input>:{line}:{}:", &m[2])
+            let num = |s: &str| s.parse::<u64>().unwrap_or(0);
+            let line = num(&m[1]).saturating_sub(lines).max(1);
+            let col = num(&m[2]).saturating_sub(cols);
+            format!("<input>:{line}:{col}:")
         })
         .into_owned()
 }

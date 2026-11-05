@@ -26,7 +26,7 @@ use leani_core::pure::{
     continues, errors, expand_home, full_names, grouped_tactic, has_error, head_line, indent,
     indent_code, int, last_json, lean_str, lean_strs, list, loogle_text, messages, meta_names,
     name_chunk, nested_action, not_evaluable_reason, own_names, save_body, scope_of, sorries,
-    splice_sorry, strip_imports, tactic_step, tactic_undo, text, try_this, ungroup_error,
+    splice_sorry, strip_imports, tactic_parse_error, tactic_step, tactic_undo, text, try_this,
 };
 use leani_core::queries::{COMPLETE_QUERY, DOC_QUERY, META_LINE, PARSE_PROBE, SCOPE_QUERY, fill};
 use leani_core::types::{Candidate, EngineFault, Json, Kind, Output, Proof, Scope, State};
@@ -1350,9 +1350,11 @@ impl Repl {
         self.last = Some(last_tactic(src, false));
 
         if let Some(message) = text(&resp, "message").filter(|m| !m.is_empty()) {
-            // エンジンが直接返すエラー
-            self.out
-                .fail(&self.style.red(ungroup_error(message).trim_end()));
+            // エンジンが直接返すエラー。パースエラーなら、括弧で囲まずに読み直したエラーを
+            // 表示する。読み直せなければ (probe が None)、エンジンのエラーの位置だけを直す。
+            let probe = self.parse(src).flatten();
+            let shown = tactic_parse_error(message, probe.as_ref());
+            self.out.fail(&self.style.red(shown.trim_end()));
             return;
         }
         if has_error(&resp) {

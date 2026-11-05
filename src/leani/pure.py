@@ -785,13 +785,21 @@ def grouped_tactic(src: str) -> str:
     return f"(\n{src}\n)"
 
 
-def ungroup_error(msg: str) -> str:
-    """
-    `grouped_tactic` で送ったタクティクのパースエラーの位置を、入力した行に合わせる。
-    `(` の行の分だけ、行の番号を 1 つ戻す。
-    """
+def tactic_parse_error(msg: str, probe: Probe | None) -> str:
+    match ERR_POS.search(msg), probe:
+        case re.Match() as at, {"tac": {"err": str(err)}}:
+            return msg[: at.start()] + _shift_pos(err, 1, 2)
+        case _:
+            return _shift_pos(msg, 1, 0)
+
+
+def _shift_pos(msg: str, lines: int, cols: int) -> str:
     return ERR_POS.sub(
-        lambda m: f"<input>:{max(int(m.group(1)) - 1, 1)}:{m.group(2)}:", msg
+        lambda m: (
+            f"<input>:{max(int(m.group(1)) - lines, 1)}:"
+            f"{max(int(m.group(2)) - cols, 0)}:"
+        ),
+        msg,
     )
 
 
