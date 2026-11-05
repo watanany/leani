@@ -111,7 +111,7 @@ mod 端末の_Tab_補完 {
     //! ja: 端末の Tab 補完
     use super::*;
 
-    /// ja: Tab で置き換える範囲はカーソルの前の名前だけ
+    /// ja: #check Nat.suc には、カーソルの前の名前 Nat.suc だけを置き換える候補を返す
     #[story("D1")]
     #[test]
     fn Tab_で置き換える範囲はカーソルの前の名前だけ() {
@@ -129,7 +129,7 @@ mod 略記の_Tab_補完 {
     //! ja: 略記の Tab 補完
     use super::*;
 
-    /// ja: 略記の途中なら記号を補完する
+    /// ja: 略記の途中で終わる入力には、その略記を記号に置き換える候補だけを返す
     #[story("C8")]
     #[test]
     fn 略記の途中なら記号を補完する() {
@@ -138,7 +138,7 @@ mod 略記の_Tab_補完 {
         assert_eq!(got, [("α".to_string(), text.len() - "\\alp".len())]);
     }
 
-    /// ja: 略記の途中なら定数名を問い合わせない
+    /// ja: 略記の途中で終わる入力では、定数名を問い合わせない
     #[story("C8")]
     #[test]
     fn 略記の途中なら定数名を問い合わせない() {
@@ -146,7 +146,7 @@ mod 略記の_Tab_補完 {
         assert!(prefixes.is_empty(), "{prefixes:?}");
     }
 
-    /// ja: コマンドの引数の中でも略記を補完する
+    /// ja: :t と :! の引数の末尾にある略記には、記号の候補を返す
     #[story("C8")]
     #[test]
     fn コマンドの引数の中でも略記を補完する() {
@@ -160,7 +160,7 @@ mod shell_コマンドの_Tab_補完 {
     //! ja: shell コマンドの Tab 補完
     use super::*;
 
-    /// ja: 1 語目は PATH にある実行できるコマンドを補完する
+    /// ja: 1 語目には、PATH にある実行できるコマンドを候補に返す
     #[story("B5")]
     #[test]
     fn _1_語目は_PATH_にある実行できるコマンドを補完する() {
@@ -168,7 +168,7 @@ mod shell_コマンドの_Tab_補完 {
         assert_eq!(completions(":!lean"), ["bar", "foo"]);
     }
 
-    /// ja: 2 語目からはファイルのパスを補完する
+    /// ja: 2 語目からは、ファイルのパスを候補に返す
     #[story("B5")]
     #[test]
     fn _2_語目からはファイルのパスを補完する() {
@@ -176,14 +176,14 @@ mod shell_コマンドの_Tab_補完 {
         assert_eq!(completions(":! cat bin/leanf"), ["oo"]);
     }
 
-    /// ja: 1 語目でも slash を含めばパスを補完する
+    /// ja: slash を含む 1 語目には、ファイルのパスを候補に返す
     #[story("B5")]
     #[test]
     fn _1_語目でも_slash_を含めばパスを補完する() {
         assert_eq!(completions(":! ./notes.l"), ["ean"]);
     }
 
-    /// ja: shell コマンドの中では定数名を補完しない
+    /// ja: 定数名の形をした shell コマンドの引数には、定数名の候補を返さない
     #[story("B5")]
     #[test]
     fn shell_コマンドの中では定数名を補完しない() {
@@ -195,7 +195,7 @@ mod コマンドの_Tab_補完 {
     //! ja: コマンドの Tab 補完
     use super::*;
 
-    /// ja: コマンド名は HELP に載っているものを補完する
+    /// ja: : で始まる語には、HELP に載っているコマンド名を候補に返す
     #[story("H1")]
     #[test]
     fn コマンド名は_HELP_に載っているものを補完する() {
@@ -203,7 +203,7 @@ mod コマンドの_Tab_補完 {
         assert_eq!(completions(":"), *META_NAMES);
     }
 
-    /// ja: HELP からコマンド名だけを取り出す
+    /// ja: HELP の文字列からは、英字のコマンド名だけを取り出す
     #[story("H1")]
     #[test]
     fn HELP_から_コマンド名だけを取り出す() {
@@ -211,7 +211,7 @@ mod コマンドの_Tab_補完 {
         assert_eq!(meta_names(help_text), ["l", "t", "type"]);
     }
 
-    /// ja: :l の後は lean ファイルとディレクトリだけを補完する
+    /// ja: :l の後には、lean ファイルとディレクトリだけを候補に返す
     #[story("B4")]
     #[test]
     fn colon_l_の後は_lean_ファイルとディレクトリだけを補完する() {
@@ -219,14 +219,14 @@ mod コマンドの_Tab_補完 {
         assert_eq!(completions(":load "), ["bin", "notes.lean"]);
     }
 
-    /// ja: :save の後も lean ファイルのパスを補完する
+    /// ja: :save の後には、lean ファイルのパスだけを候補に返す
     #[story("B3")]
     #[test]
     fn colon_save_の後も_lean_ファイルのパスを補完する() {
         assert_eq!(completions(":save no"), ["tes.lean"]);
     }
 
-    /// ja: :env の後は設定ファイルに書いた環境の名前を補完する
+    /// ja: :env の後には、環境の名前を候補に返す
     #[story("G5")]
     #[test]
     fn colon_env_の後は設定ファイルに書いた環境の名前を補完する() {
@@ -236,7 +236,7 @@ mod コマンドの_Tab_補完 {
         assert_eq!(completions_in(&ctx, ":env ma", &envs), ["mathlib"]);
     }
 
-    /// ja: 設定ファイルを読めなければ環境の名前を補完しない
+    /// ja: 設定ファイルを TOML として読めなければ、環境の名前を 1 つも返さない
     #[story("G5")]
     #[test]
     fn 設定ファイルを読めなければ環境の名前を補完しない() {
@@ -245,7 +245,7 @@ mod コマンドの_Tab_補完 {
         assert!(config_envs(&sb.ctx).is_empty());
     }
 
-    /// ja: :t の後は定数名を補完する
+    /// ja: :t の後には、定数名を候補に返す
     #[story("D1")]
     #[test]
     fn colon_t_の後は定数名を補完する() {
@@ -257,7 +257,7 @@ mod 名前空間ごとのキャッシュ {
     //! ja: 名前空間ごとのキャッシュ
     use super::*;
 
-    /// ja: 同じ名前空間なら 1 回しか問い合わせない
+    /// ja: 同じ名前空間の名前を続けて補完すると、定数を 1 回だけ問い合わせる
     #[story("D1")]
     #[test]
     fn 同じ名前空間なら_1_回しか問い合わせない() {
@@ -274,7 +274,7 @@ mod 名前空間ごとのキャッシュ {
         assert_eq!(asked.load(SeqCst), 1, "同じ単位の候補を取得し直している");
     }
 
-    /// ja: 別の名前空間なら取得し直す
+    /// ja: 別の名前空間の名前を補完すると、定数を問い合わせ直す
     #[story("D1")]
     #[test]
     fn 別の名前空間なら取得し直す() {
@@ -285,7 +285,7 @@ mod 名前空間ごとのキャッシュ {
         assert_eq!(asked.load(SeqCst), 2);
     }
 
-    /// ja: 宣言を実行してもキャッシュを捨てない
+    /// ja: 宣言を実行したあとに同じ名前を補完すると、定数を問い合わせ直さない
     #[story("D1")]
     #[test]
     fn 宣言を実行してもキャッシュを捨てない() {
@@ -300,7 +300,7 @@ mod 名前空間ごとのキャッシュ {
         assert_eq!(asked.load(SeqCst), 0, "宣言のたびに取得し直している");
     }
 
-    /// ja: open した名前空間の名前も一度に取得する
+    /// ja: 2 つの名前空間を open したあとに補完すると、定数を 1 回だけ問い合わせる
     #[story("D1", "D5")]
     #[test]
     fn open_した名前空間の名前も一度に取得する() {
@@ -316,7 +316,7 @@ mod 候補 {
     //! ja: 候補
     use super::*;
 
-    /// ja: :undo で宣言を取り消すとその名前は候補に出ない
+    /// ja: :undo で宣言を取り消すと、その宣言の名前を候補から外す
     #[story("D1", "F2")]
     #[test]
     fn colon_undo_で宣言を取り消すとその名前は候補に出ない() {
@@ -329,7 +329,7 @@ mod 候補 {
         assert!(repl.repl.complete_names("myUndone.he").is_empty());
     }
 
-    /// ja: :undo のあとに同じ数の宣言を足しても取り消した名前は候補に出ない
+    /// ja: :undo のあとに同じ数の宣言を足すと、取り消した名前を外して足した名前を返す
     #[story("D1", "F2")]
     #[test]
     fn colon_undo_のあとに同じ数の宣言を足しても取り消した名前は候補に出ない() {
@@ -342,7 +342,7 @@ mod 候補 {
         assert_eq!(repl.repl.complete_names("myKep"), ["myKept"]);
     }
 
-    /// ja: 問い合わせ直しに失敗しても :undo で取り消した名前は候補に出ない
+    /// ja: :undo のあとに定数の問い合わせが失敗すると、取り消した名前を候補に返さない
     #[story("D1", "F2")]
     #[test]
     fn 問い合わせ直しに失敗しても_colon_undo_で取り消した名前は候補に出ない() {
@@ -359,7 +359,7 @@ mod 候補 {
         assert!(repl.repl.complete_names("myLost.he").is_empty());
     }
 
-    /// ja: :reset で取り消した宣言は候補に出ない
+    /// ja: 宣言のあとに :reset を実行すると、その宣言の名前を候補に返さない
     #[story("D1", "F2")]
     #[test]
     fn colon_reset_で取り消した宣言は候補に出ない() {
@@ -371,7 +371,7 @@ mod 候補 {
         assert!(repl.repl.complete_names("myReset.he").is_empty());
     }
 
-    /// ja: 自分で実行した宣言も候補に表示される
+    /// ja: 宣言を実行したあとに補完すると、その宣言の名前を返す
     #[story("D1")]
     #[test]
     fn 自分で実行した宣言も候補に表示される() {
@@ -380,7 +380,7 @@ mod 候補 {
         assert_eq!(repl.repl.complete_names("myOwnH"), ["myOwnHelper"]);
     }
 
-    /// ja: 1 文字では候補を表示しない
+    /// ja: 1 文字の名前を補完すると、エンジンに問い合わせずに空の一覧を返す
     #[story("D1")]
     #[test]
     fn _1_文字では候補を表示しない() {
@@ -403,7 +403,7 @@ mod エンジンが異常終了したあとの_Tab_補完 {
     //! ja: エンジンが異常終了したあとの Tab 補完
     use super::*;
 
-    /// ja: 補完ではエンジンを再起動せず次の入力で再起動する
+    /// ja: 補完するとエンジンを再起動せずに空の候補を返し、次の入力で再起動して宣言を残す
     #[story("D1", "F1")]
     #[test]
     fn 補完ではエンジンを再起動せず次の入力で再起動する() {
@@ -431,7 +431,7 @@ mod open_した名前空間 {
     //! ja: open した名前空間
     use super::*;
 
-    /// ja: open すると短い名前で補完される
+    /// ja: 名前空間を open すると、その名前空間を省いた名前を候補に返す
     #[story("D5")]
     #[test]
     fn open_すると短い名前で補完される() {
@@ -444,7 +444,7 @@ mod open_した名前空間 {
         );
     }
 
-    /// ja: open しなければ短い名前では補完されない
+    /// ja: 名前空間を open していなければ、名前空間を省いた名前を候補に返さない
     #[story("D5")]
     #[test]
     fn open_しなければ短い名前では補完されない() {
@@ -452,7 +452,7 @@ mod open_した名前空間 {
         assert!(repl.repl.complete_names("Json.pa").is_empty());
     }
 
-    /// ja: open X in の効果は次の入力に残らない
+    /// ja: open X in を実行したあとは、名前空間を省いた名前を候補に返さない
     #[story("D5")]
     #[test]
     fn open_X_in_の効果は次の入力に残らない() {
@@ -461,7 +461,7 @@ mod open_した名前空間 {
         assert!(repl.repl.complete_names("Json.pa").is_empty());
     }
 
-    /// ja: hiding した名前は補完されない
+    /// ja: hiding を付けて open すると、隠した名前を外し、ほかの名前を返す
     #[story("D5")]
     #[test]
     fn hiding_した名前は補完されない() {
@@ -472,7 +472,7 @@ mod open_した名前空間 {
         assert!(names.contains(&"JsonNumber".to_string()), "{names:?}");
     }
 
-    /// ja: もう一度 open して hiding を外した名前は補完される
+    /// ja: 別の名前を隠して 2 回 open すると、どちらの名前も返す
     #[story("D5")]
     #[test]
     fn もう一度_open_して_hiding_を外した名前は補完される() {
@@ -484,7 +484,7 @@ mod open_した名前空間 {
         assert!(names.contains(&"JsonNumber".to_string()), "{names:?}");
     }
 
-    /// ja: 名前を指定して open したものだけが補完される
+    /// ja: 名前を指定して open すると、指定した名前だけを名前空間を省いて返す
     #[story("D5")]
     #[test]
     fn 名前を指定して_open_したものだけが補完される() {
@@ -495,7 +495,7 @@ mod open_した名前空間 {
         assert!(!names.contains(&"succ_le_of_lt".to_string()), "{names:?}");
     }
 
-    /// ja: protected な名前は最後の部分だけでは補完されない
+    /// ja: open すると、protected でない名前だけを名前空間を省いて返す
     #[story("D5")]
     #[test]
     fn protected_な名前は最後の部分だけでは補完されない() {
@@ -515,7 +515,7 @@ mod open_した名前空間 {
         );
     }
 
-    /// ja: namespace の中ではその名前空間の名前も短い名前で補完される
+    /// ja: namespace を実行すると、その名前空間の名前を、名前空間を省いて返す
     #[story("D5")]
     #[test]
     fn namespace_の中ではその名前空間の名前も短い名前で補完される() {

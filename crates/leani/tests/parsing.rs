@@ -95,7 +95,7 @@ mod 継続行の判定 {
     //! 単独では入力になりえない行を見分ける。
     use super::*;
 
-    /// ja: インデントした行は前の行の続き
+    /// ja: インデントした行を前の行の続きと判定する
     #[story("C1")]
     #[test]
     fn インデントした行は前の行の続き() {
@@ -104,7 +104,7 @@ mod 継続行の判定 {
         }
     }
 
-    /// ja: 行頭のパイプは前の行の続き
+    /// ja: 行頭がパイプの行を前の行の続きと判定する
     #[story("C1")]
     #[test]
     fn 行頭のパイプは前の行の続き() {
@@ -112,7 +112,7 @@ mod 継続行の判定 {
         assert!(pure::continues("| zero => rfl"));
     }
 
-    /// ja: ふつうの行は単独の入力
+    /// ja: インデントもパイプも無い行を単独の入力と判定する
     #[story("A1", "C1")]
     #[test]
     fn ふつうの行は単独の入力() {
@@ -128,7 +128,7 @@ mod 続きを待つ行 {
     //! 完結していても次の行がありうる構文。
     use super::*;
 
-    /// ja: where with do by で終わる行は空行を待つ
+    /// ja: where、with、do、by で終わる行を、続きを待つ行と判定する
     #[story("C1")]
     #[test]
     fn where_with_do_by_で終わる行は空行を待つ() {
@@ -142,7 +142,7 @@ mod 続きを待つ行 {
         }
     }
 
-    /// ja: 語の一部として含むだけなら待たない
+    /// ja: where や by を語の一部として含むだけの行は、待たない行と判定する
     #[story("C1")]
     #[test]
     fn 語の一部として含むだけなら待たない() {
@@ -158,7 +158,7 @@ mod パーサからの応答 {
     //! 「まだ途中」という応答だけを継続とみなす。
     use super::*;
 
-    /// ja: 入力の途中なら次の行を待つ
+    /// ja: 入力途中だという応答を、次の行を待つと判定する
     #[story("C1")]
     #[test]
     fn 入力の途中なら次の行を待つ() {
@@ -166,7 +166,7 @@ mod パーサからの応答 {
         assert!(INCOMPLETE.is_match("unterminated comment"));
     }
 
-    /// ja: 閉じていない raw 文字列と名前のエスケープは続きを待つ
+    /// ja: 閉じていない raw 文字列か名前のエスケープの応答を、次の行を待つと判定する
     #[story("C6")]
     #[test]
     fn 閉じていない_raw_文字列と名前のエスケープは続きを待つ() {
@@ -174,7 +174,7 @@ mod パーサからの応答 {
         assert!(INCOMPLETE.is_match("<input>:1:8: unterminated identifier escape"));
     }
 
-    /// ja: ただのエラーは待たずに送る
+    /// ja: 入力途中ではないエラーの応答を、待たずに送ると判定する
     #[story("C1")]
     #[test]
     fn ただのエラーは待たずに送る() {
@@ -188,7 +188,7 @@ mod タクティクの提案 {
     //! exact? や simp? は結果を "Try this:" として返す。
     use super::*;
 
-    /// ja: 提案から項だけを取り出す
+    /// ja: 提案から [apply] の印を除いたタクティクを返す
     #[story("E2")]
     #[test]
     fn 提案から項だけを取り出す() {
@@ -198,7 +198,7 @@ mod タクティクの提案 {
         assert_eq!(found.as_deref(), Some("exact Nat.le_refl n"));
     }
 
-    /// ja: 折り返した提案をすべて取り出す
+    /// ja: 折り返した提案から、すべての行を返す
     #[story("E2")]
     #[test]
     fn 折り返した提案をすべて取り出す() {
@@ -211,7 +211,7 @@ mod タクティクの提案 {
         assert_eq!(found.as_deref(), Some("simp only [aaa, bbb,\n  ccc, ddd]"));
     }
 
-    /// ja: Try this と同じ行に書かれた提案も取り出す
+    /// ja: Try this と同じ行に書いた提案を返す
     #[story("E2")]
     #[test]
     fn Try_this_と同じ行に書かれた提案も取り出す() {
@@ -219,7 +219,7 @@ mod タクティクの提案 {
         assert_eq!(found.as_deref(), Some("exact Nat.le_refl n"));
     }
 
-    /// ja: 括弧が合わない提案は途中で切れていると判定する
+    /// ja: 括弧が合わない提案を途中で切れていると判定し、合う提案を切れていないと判定する
     #[story("E2")]
     #[test]
     fn 括弧が合わない提案は途中で切れていると判定する() {
@@ -231,7 +231,7 @@ mod タクティクの提案 {
         assert!(!pure::balanced("exact ⟨foo]"));
     }
 
-    /// ja: 閉じた文字列同士を連結しても閉じている
+    /// ja: 括弧が閉じた文字列をどう 2 つ連結しても閉じていると判定する
     #[story("E2")]
     #[proptest]
     fn 閉じた文字列同士を連結しても閉じている(
@@ -248,7 +248,7 @@ mod タクティクの提案 {
         prop_assert!(!pure::balanced(&extra));
     }
 
-    /// ja: 提案でなければ何も返さない
+    /// ja: 提案の無いメッセージにも空の一覧にも None を返す
     #[story("E2")]
     #[test]
     fn 提案でなければ何も返さない() {
@@ -271,7 +271,7 @@ mod 宣言の名前の取り出し {
             .collect()
     }
 
-    /// ja: 修飾子や属性が付いていても名前を取り出せる
+    /// ja: 修飾子や属性が付いた宣言でも、その名前を返す
     #[story("D1")]
     #[test]
     fn 修飾子や属性が付いていても名前を取り出せる() {
@@ -286,7 +286,7 @@ mod 宣言の名前の取り出し {
         }
     }
 
-    /// ja: 宣言でないものからは名前を取り出さない
+    /// ja: 宣言でない入力には名前を返さない
     #[story("D1")]
     #[test]
     fn 宣言でないものからは名前を取り出さない() {
@@ -298,7 +298,7 @@ mod 補完する名前の切り出し {
     //! ja: 補完する名前の切り出し
     use super::*;
 
-    /// ja: 区切り文字の直後から名前を切り出す
+    /// ja: 区切り文字の直後から名前を切り出し、. では区切らない
     #[story("D1")]
     #[test]
     fn 区切り文字の直後から名前を切り出す() {
@@ -306,7 +306,7 @@ mod 補完する名前の切り出し {
         assert_eq!(pure::name_start("Nat.suc"), 0, "`.` で区切った");
     }
 
-    /// ja: 名前の前に記号があれば記号の後ろから名前を補完する
+    /// ja: 名前の前に記号があれば、記号の後ろから名前を切り出す
     #[story("D1")]
     #[test]
     fn 名前の前に記号があれば記号の後ろから名前を補完する() {
@@ -331,7 +331,7 @@ mod 補完する名前の切り出し {
         assert_eq!(pure::name_start("(Foo.«a b».ba"), "(".len());
     }
 
-    /// ja: 名前の前に Lean の名前に使えない文字があればその後ろから名前を補完する
+    /// ja: 名前の前に Lean の名前に使えない文字があれば、その文字の後ろから名前を切り出す
     #[story("D1")]
     #[test]
     fn 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する() {
@@ -345,7 +345,7 @@ mod 補完する名前の切り出し {
         }
     }
 
-    /// ja: 長い名前でもスタックを使い切らない
+    /// ja: とても長い名前でも、スタックを使い切らずに名前の先頭を返す
     #[story("D1")]
     #[test]
     fn 長い名前でもスタックを使い切らない() {
@@ -353,7 +353,7 @@ mod 補完する名前の切り出し {
         assert_eq!(pure::name_start(&"«a»".repeat(300_000)), 0);
     }
 
-    /// ja: 記号のあとの名前をそのまま切り出す
+    /// ja: どの区切りの記号のあとに置いたどの名前も、そのまま切り出す
     #[story("D1")]
     #[proptest]
     fn 記号のあとの名前をそのまま切り出す(
@@ -372,7 +372,7 @@ mod 補完の候補をまとめて取得する単位 {
     //! 名前空間があればそこまで、無ければ先頭 2 文字。
     use super::*;
 
-    /// ja: 名前空間の区切りで分ける
+    /// ja: 名前空間のある名前には、名前空間の . までを返す
     #[story("D1")]
     #[test]
     fn 名前空間の区切りで分ける() {
@@ -383,7 +383,7 @@ mod 補完の候補をまとめて取得する単位 {
         );
     }
 
-    /// ja: 名前空間が無ければ先頭 2 文字
+    /// ja: 名前空間の無い名前には先頭 2 文字を返す
     #[story("D1")]
     #[test]
     fn 名前空間が無ければ先頭_2_文字() {
@@ -396,7 +396,7 @@ mod Lean_の文字列リテラル {
     //! ja: Lean の文字列リテラル
     use super::*;
 
-    /// ja: バックスラッシュの後ろには Lean が読む文字だけを書く
+    /// ja: どの文字列からも、Lean が読めるエスケープだけを使ったリテラルを作る
     #[story("C1")]
     #[proptest]
     fn バックスラッシュの後ろには_Lean_が読む文字だけを書く(
@@ -424,7 +424,7 @@ mod エンジンの出力の_JSON {
     //! 問い合わせの結果はエンジンの出力の最後の行にある。
     use super::*;
 
-    /// ja: 出力の最後の行を JSON として読む
+    /// ja: 出力の最後の行を JSON として読んで返す
     #[story("D1", "C1")]
     #[test]
     fn 出力の最後の行を_JSON_として読む() {
@@ -432,7 +432,7 @@ mod エンジンの出力の_JSON {
         assert_eq!(got, Some(json!({"a": [1]})));
     }
 
-    /// ja: 出力が空か最後の行が JSON でなければ None を返す
+    /// ja: 出力が無いか、空白だけか、最後の行が JSON でなければ None を返す
     #[story("D1", "C1")]
     #[test]
     fn 出力が空か最後の行が_JSON_でなければ_None_を返す() {
@@ -453,7 +453,7 @@ mod 入力が完結したかの判定 {
     //! パーサの応答 (JSON) だけを見て、送り方と状態を決める。
     use super::*;
 
-    /// ja: command として読めたらそのまま送る
+    /// ja: command として読める入力を、完結した command と判定する
     #[story("A1", "C1")]
     #[test]
     fn command_として読めたらそのまま送る() {
@@ -461,7 +461,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Cmd));
     }
 
-    /// ja: term としてしか読めなければ eval に包む
+    /// ja: term としてしか読めない入力を、完結した term と判定する
     #[story("A1")]
     #[test]
     fn term_としてしか読めなければ_eval_に包む() {
@@ -469,7 +469,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify(Some(&probe)), (State::Complete, Kind::Term));
     }
 
-    /// ja: 途中なら次の行を待つ
+    /// ja: command として読むと途中で終わる入力は、続きを待つと判定する
     #[story("C1")]
     #[test]
     fn 途中なら次の行を待つ() {
@@ -480,7 +480,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify(Some(&probe)), (State::More, Kind::Cmd));
     }
 
-    /// ja: より先まで解析できたほうをユーザーの意図とみなす
+    /// ja: command としても term としても読めない入力は、より先まで読めたほうのエラーと判定する
     #[story("C1")]
     #[test]
     fn より先まで解析できたほうをユーザーの意図とみなす() {
@@ -491,7 +491,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify(Some(&probe)), (State::Err, Kind::Term));
     }
 
-    /// ja: 判定できなければ Lean に本当のエラーを出させる
+    /// ja: パーサの応答が無ければ、command のエラーと判定する
     #[story("C1")]
     #[test]
     fn 判定できなければ_Lean_に本当のエラーを出させる() {
@@ -499,7 +499,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify(None), (State::Err, Kind::Cmd));
     }
 
-    /// ja: 証明モードではタクティクの列として読めるかだけを見る
+    /// ja: 証明モードでは、タクティクの列として読めるかで完結、途中、エラーを判定する
     #[story("E1")]
     #[test]
     fn 証明モードではタクティクの列として読めるかだけを見る() {
@@ -510,7 +510,7 @@ mod 入力が完結したかの判定 {
         assert_eq!(pure::classify_tac(None), (State::Err, Kind::Tac));
     }
 
-    /// ja: インデントで続いたブロックは空行まで待つ
+    /// ja: インデントした行で終わるブロックは空行を待ち、1 行の入力は待たないと判定する
     #[story("C1")]
     #[test]
     fn インデントで続いたブロックは空行まで待つ() {
@@ -528,7 +528,7 @@ mod 評価できない理由 {
     //! #eval のエラー文から、評価できない理由を取り出す。
     use super::*;
 
-    /// ja: Repr が無いという理由を取り出す
+    /// ja: Repr のインスタンスが無いというエラーには、Repr を含む理由を返す
     #[story("A2")]
     #[test]
     fn Repr_が無いという理由を取り出す() {
@@ -536,7 +536,7 @@ mod 評価できない理由 {
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("Repr")));
     }
 
-    /// ja: noncomputable という理由を取り出す
+    /// ja: noncomputable にするよう勧めるエラーには、noncomputable を含む理由を返す
     #[story("A2")]
     #[test]
     fn noncomputable_という理由を取り出す() {
@@ -544,7 +544,7 @@ mod 評価できない理由 {
         assert!(pure::not_evaluable_reason(blob).is_some_and(|why| why.contains("noncomputable")));
     }
 
-    /// ja: 評価できないエラーでなければ None を返す
+    /// ja: 評価できないことを表すエラーでなければ None を返す
     #[story("A2")]
     #[test]
     fn 評価できないエラーでなければ_None_を返す() {
@@ -556,7 +556,7 @@ mod do_の外の_action {
     //! ja: do の外の action
     use super::*;
 
-    /// ja: do の外に書いた action のエラーを見分ける
+    /// ja: do の外に action を書いたというエラーを、do の外の action と判定する
     #[story("A1")]
     #[test]
     fn do_の外に書いた_action_のエラーを見分ける() {
@@ -564,7 +564,7 @@ mod do_の外の_action {
         assert!(pure::nested_action(blob));
     }
 
-    /// ja: ほかのエラーは do の外の action と見なさない
+    /// ja: ほかのエラーを、do の外の action ではないと判定する
     #[story("A1")]
     #[test]
     fn ほかのエラーは_do_の外の_action_と見なさない() {
@@ -578,7 +578,7 @@ mod エラー位置の範囲 {
     //! メッセージの位置を、送ったソースの座標からその行の中に収める。
     use super::*;
 
-    /// ja: eval で包んだ分だけ位置を戻す
+    /// ja: eval で包んでずれた行と桁を戻した範囲を返す
     #[story("A5")]
     #[test]
     fn eval_で包んだ分だけ位置を戻す() {
@@ -587,7 +587,7 @@ mod エラー位置の範囲 {
         assert_eq!(pure::span(&m, &["foo bar"], 1, 2), Some((1, 4, 3)));
     }
 
-    /// ja: 文字列の中で始まる行は桁を戻さない
+    /// ja: 文字列の中で始まる行では、行だけを戻し、桁は戻さない
     #[story("A5")]
     #[test]
     fn 文字列の中で始まる行は桁を戻さない() {
@@ -597,7 +597,7 @@ mod エラー位置の範囲 {
         assert_eq!(pure::span(&m, &["f \"a", "b\".xy"], 1, 2), Some((2, 3, 2)));
     }
 
-    /// ja: 位置が行の外なら範囲を返さない
+    /// ja: 位置が行の外なら None を返す
     #[story("A5")]
     #[test]
     fn 位置が行の外なら範囲を返さない() {
@@ -605,7 +605,7 @@ mod エラー位置の範囲 {
         assert_eq!(pure::span(&m, &["foo"], 0, 0), None);
     }
 
-    /// ja: 範囲の幅は行の長さに収める
+    /// ja: 範囲の幅を行の長さに収めて返す
     #[story("A5")]
     #[test]
     fn 範囲の幅は行の長さに収める() {
@@ -613,7 +613,7 @@ mod エラー位置の範囲 {
         assert_eq!(pure::span(&m, &["abc"], 0, 0), Some((1, 1, 2)));
     }
 
-    /// ja: 全角文字の幅だけキャレットをずらす
+    /// ja: 全角文字を 2 桁と数えて、キャレットの位置と長さを決める
     #[story("A5")]
     #[test]
     fn 全角文字の幅だけキャレットをずらす() {
@@ -624,7 +624,7 @@ mod エラー位置の範囲 {
         assert_eq!(pure::caret_len("abc", 1, 2), 2);
     }
 
-    /// ja: タブはタブのまま残す
+    /// ja: キャレットの前のタブを、空白にせずタブのまま残す
     #[story("A5")]
     #[test]
     fn タブはタブのまま残す() {
@@ -639,14 +639,14 @@ mod レスポンスの切り出し {
     //! 空行で区切られた JSON を、受信し終えた分だけ取り出す。
     use super::*;
 
-    /// ja: 受信し終えるまでは何も返さない
+    /// ja: 空行が届く前は None を返す
     #[story("A1")]
     #[test]
     fn 受信し終えるまでは何も返さない() {
         assert_eq!(pure::first_response("{\"env\": 1}"), None);
     }
 
-    /// ja: 空行を受け取ったら読み込む
+    /// ja: 空行が届いたら、その前の JSON を読んで返す
     #[story("A1")]
     #[test]
     fn 空行を受け取ったら読み込む() {
@@ -656,7 +656,7 @@ mod レスポンスの切り出し {
         );
     }
 
-    /// ja: JSON の中の空行では区切らない
+    /// ja: 文字列の値に空行を含む JSON を、その値のまま読む
     #[story("A1")]
     #[test]
     fn JSON_の中の空行では区切らない() {
@@ -672,7 +672,7 @@ mod エンジンの_PANIC {
     //! エンジンが PANIC したかを、レスポンスのメッセージから判定する。
     use super::*;
 
-    /// ja: PANIC の行を返す
+    /// ja: PANIC したレスポンスには、バックトレースを除いた PANIC の行を返す
     #[story("F1")]
     #[test]
     fn PANIC_の行を返す() {
@@ -686,7 +686,7 @@ mod エンジンの_PANIC {
         );
     }
 
-    /// ja: PANIC の前に出力があっても PANIC の行を返す
+    /// ja: 同じメッセージの中で PANIC の前に出力があっても、PANIC の行を返す
     #[story("F1")]
     #[test]
     fn PANIC_の前に出力があっても_PANIC_の行を返す() {
@@ -697,7 +697,7 @@ mod エンジンの_PANIC {
         );
     }
 
-    /// ja: PANIC していなければ None を返す
+    /// ja: PANIC の無いレスポンスにも、メッセージの無いレスポンスにも None を返す
     #[story("F1")]
     #[test]
     fn PANIC_していなければ_None_を返す() {
@@ -713,7 +713,7 @@ mod 起動前の準備 {
     //! import を追加したり取り除いたりする処理。
     use super::*;
 
-    /// ja: init ファイルの import 行は取り除く
+    /// ja: init ファイルの中身から import の行を取り除いて返す
     #[story("G2")]
     #[test]
     fn init_ファイルの_import_行は取り除く() {
@@ -721,7 +721,7 @@ mod 起動前の準備 {
         assert_eq!(pure::strip_imports("import Foo\ndef x := 1"), "def x := 1");
     }
 
-    /// ja: import を含むファイルには import を追加しない
+    /// ja: import の行があるファイルだけを import を含むと判定し、コメントの中の import は見ない
     #[story("G2")]
     #[test]
     fn import_を含むファイルには_import_を追加しない() {
@@ -729,7 +729,7 @@ mod 起動前の準備 {
         assert!(!pure::has_import("def f := 1  -- import ではない"));
     }
 
-    /// ja: lake env のキャッシュを読む
+    /// ja: lake env のキャッシュの行から、変数の名前と値の組を返す
     #[story("G1")]
     #[test]
     fn lake_env_のキャッシュを読む() {
@@ -740,7 +740,7 @@ mod 起動前の準備 {
         assert_eq!(env, want);
     }
 
-    /// ja: toolchain が変わったらキャッシュを作り直す
+    /// ja: キャッシュより新しい lean-toolchain があれば、キャッシュが古いと判定する
     #[story("G4", "G6")]
     #[test]
     fn toolchain_が変わったらキャッシュを作り直す() {
@@ -776,7 +776,7 @@ mod エンジンのバージョン {
 
     const TAGS: [&str; 3] = ["v4.32.0", "v4.33.0", "v4.34.0-rc2"];
 
-    /// ja: toolchain からバージョンだけ取る
+    /// ja: toolchain の名前からバージョンの部分だけを返す
     #[story("G3")]
     #[test]
     fn toolchain_からバージョンだけ取る() {
@@ -787,7 +787,7 @@ mod エンジンのバージョン {
         assert_eq!(pure::toolchain_version("v4.33.0"), "v4.33.0");
     }
 
-    /// ja: 自分でビルドしたエンジンの toolchain が違えば警告の文を返す
+    /// ja: 自分でビルドしたエンジンの toolchain が違えば、両方のバージョンとビルドし直すコマンドを含む警告を返す
     #[story("G4")]
     #[test]
     fn 自分でビルドしたエンジンの_toolchain_が違えば警告の文を返す() {
@@ -799,7 +799,7 @@ mod エンジンのバージョン {
         assert!(got.contains("cd /eng && lake build repl"), "{got}");
     }
 
-    /// ja: toolchain が同じか leani が用意したエンジンなら警告しない
+    /// ja: toolchain が同じか、leani が用意したエンジンか、toolchain を読めなければ None を返す
     #[story("G4")]
     #[test]
     fn toolchain_が同じか_leani_が用意したエンジンなら警告しない() {
@@ -815,7 +815,7 @@ mod エンジンのバージョン {
         assert_eq!(pure::toolchain_warning(true, "", "v4.34.0", "/e"), None);
     }
 
-    /// ja: 既定の配布元を省いた toolchain も同じバージョンと見なす
+    /// ja: 既定の配布元を省いた toolchain を、省かない toolchain とバージョンだけで比べる
     #[story("G3", "G4")]
     #[test]
     fn 既定の配布元を省いた_toolchain_も同じバージョンと見なす() {
@@ -827,7 +827,7 @@ mod エンジンのバージョン {
         assert!(pure::toolchain_warning(true, "v4.33.0", full, "/e").is_some());
     }
 
-    /// ja: rc は同じバージョンの正式リリースより前
+    /// ja: rc を、同じバージョンの正式リリースより前で、古いバージョンより後に並べる
     #[story("G3")]
     #[test]
     fn rc_は同じバージョンの正式リリースより前() {
@@ -835,7 +835,7 @@ mod エンジンのバージョン {
         assert!(pure::version_key("v4.33.0") < pure::version_key("v4.34.0-rc1"));
     }
 
-    /// ja: 解釈できないバージョンは None
+    /// ja: 解釈できないバージョンには None を返す
     #[story("G3")]
     #[test]
     fn 解釈できないバージョンは_None() {
@@ -844,14 +844,14 @@ mod エンジンのバージョン {
         }
     }
 
-    /// ja: 同名のタグがあればそれを使う
+    /// ja: 同じ名前のタグがあれば、そのタグを返す
     #[story("G3")]
     #[test]
     fn 同名のタグがあればそれを使う() {
         assert_eq!(pure::pick_tag("v4.33.0", &TAGS).as_deref(), Some("v4.33.0"));
     }
 
-    /// ja: タグの無い patch リリースは直前のタグを使う
+    /// ja: タグの無い patch リリースには、その前のタグを返す
     #[story("G3")]
     #[test]
     fn タグの無い_patch_リリースは直前のタグを使う() {
@@ -859,7 +859,7 @@ mod エンジンのバージョン {
         assert_eq!(pure::pick_tag("v4.33.1", &TAGS).as_deref(), Some("v4.33.0"));
     }
 
-    /// ja: どのタグより古いバージョンなら None
+    /// ja: どのタグより古いバージョンか、解釈できないバージョンには、タグを返さない
     #[story("G3")]
     #[test]
     fn どのタグより古いバージョンなら_None() {
@@ -867,7 +867,7 @@ mod エンジンのバージョン {
         assert_eq!(pure::pick_tag("nightly", &["v4.33.0"]), None);
     }
 
-    /// ja: パスはバージョンごとに分かれる
+    /// ja: パスの指定が無ければ、キャッシュの下のバージョンの名前のパスを返す
     #[story("G3")]
     #[test]
     fn パスはバージョンごとに分かれる() {
@@ -875,7 +875,7 @@ mod エンジンのバージョン {
         assert_eq!(got.as_deref(), Ok("/cache/v4.33.0"));
     }
 
-    /// ja: 明示されたパスはそのまま使う
+    /// ja: 指定されたパスはそのまま返す
     #[story("G3")]
     #[test]
     fn 明示されたパスはそのまま使う() {
@@ -883,7 +883,7 @@ mod エンジンのバージョン {
         assert_eq!(got.as_deref(), Ok("/opt/repl"));
     }
 
-    /// ja: パスの外を指すバージョン名は受け付けない
+    /// ja: .. や . のように、キャッシュの下の 1 つの場所を指さないバージョン名にはエラーを返す
     #[story("G3")]
     #[test]
     fn パスの外を指すバージョン名は受け付けない() {
@@ -1018,7 +1018,7 @@ mod 設定の値の型 {
             .0
     }
 
-    /// ja: import を文字列で書いたらエラーにする
+    /// ja: imports を文字列で書くと、配列を求めるエラーを返す
     #[story("G4")]
     #[test]
     fn import_を文字列で書いたらエラーにする() {
@@ -1028,7 +1028,7 @@ mod 設定の値の型 {
         assert!(why.contains("配列"), "{why}");
     }
 
-    /// ja: 文字列で書くべき値が別の型ならエラーにする
+    /// ja: 文字列で書くべき値が別の型なら、そのキーの名前を含むエラーを返す
     #[story("G4")]
     #[test]
     fn 文字列で書くべき値が別の型ならエラーにする() {
@@ -1038,7 +1038,7 @@ mod 設定の値の型 {
         }
     }
 
-    /// ja: 表で書くべき値が別の型ならエラーにする
+    /// ja: 表で書くべき env や env.m が別の型なら、表を求めるエラーを返す
     #[story("G4")]
     #[test]
     fn 表で書くべき値が別の型ならエラーにする() {
@@ -1048,7 +1048,7 @@ mod 設定の値の型 {
         assert!(why.contains("env.m は表"), "{why}");
     }
 
-    /// ja: default が文字列でなければエラーにする
+    /// ja: default が文字列でなければ、default を含むエラーを返す
     #[story("G4")]
     #[test]
     fn default_が文字列でなければエラーにする() {
@@ -1056,7 +1056,7 @@ mod 設定の値の型 {
         assert!(why.contains("default"), "{why}");
     }
 
-    /// ja: 書き方が正しければ値をそのまま読み込む
+    /// ja: 正しく書いた設定からは、名前と imports と prompt をそのまま返す
     #[story("G4", "G5")]
     #[test]
     fn 書き方が正しければ値をそのまま読み込む() {
@@ -1098,14 +1098,14 @@ engine = "/m/engine"
         config::resolve(ctx, name, project, &imports, &table(CFG)).expect("resolve")
     }
 
-    /// ja: 名前を指定したら default より優先する
+    /// ja: 環境の名前を指定したら、default ではなくその環境を選ぶ
     #[story("G5")]
     #[test]
     fn 名前を指定したら_default_より優先する() {
         assert_eq!(resolve(&ctx_at("/"), Some("m"), None, &[]).name, "m");
     }
 
-    /// ja: 名前と import を指定したら環境の imports を置き換える
+    /// ja: 名前と project と import を指定したら、環境の project と imports を置き換える
     #[story("G5")]
     #[test]
     fn 名前と_import_を指定したら環境の_imports_を置き換える() {
@@ -1116,7 +1116,7 @@ engine = "/m/engine"
         );
     }
 
-    /// ja: import だけを指定したら default を使わない
+    /// ja: import だけを指定したら、default でなく、その import の plain の環境を選ぶ
     #[story("G5", "G6")]
     #[test]
     fn import_だけを指定したら_default_を使わない() {
@@ -1128,7 +1128,7 @@ engine = "/m/engine"
         );
     }
 
-    /// ja: 環境の engine は最上位の engine より優先する
+    /// ja: 環境に engine があればそれを使い、無ければ最上位の engine を使う
     #[story("G3", "G5")]
     #[test]
     fn 環境の_engine_は最上位の_engine_より優先する() {
@@ -1138,7 +1138,7 @@ engine = "/m/engine"
         assert_eq!(engine(None).as_deref(), Some("/top/engine"));
     }
 
-    /// ja: 設定に engine が無ければ LEANI ENGINE を使う
+    /// ja: 設定に engine が無ければ LEANI_ENGINE の値を使う
     #[story("G3")]
     #[test]
     fn 設定に_engine_が無ければ_LEANI_ENGINE_を使う() {
@@ -1148,7 +1148,7 @@ engine = "/m/engine"
         assert_eq!(got.engine.as_deref(), Some("/env/engine"));
     }
 
-    /// ja: 名前を付けずに起動したら環境の engine は使わない
+    /// ja: 名前を付けずに import だけを指定したら、最上位の engine を使う
     #[story("G3", "G5")]
     #[test]
     fn 名前を付けずに起動したら環境の_engine_は使わない() {
@@ -1171,7 +1171,7 @@ mod 起動を中止する理由 {
         EnvConfig::make(ctx, "t", project, &[], None, engine)
     }
 
-    /// ja: エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する
+    /// ja: エンジンとプロジェクトのバージョンが違えば、そのことと lake build repl の手順を理由として返す
     #[story("G3", "G4")]
     #[test]
     fn エンジンとプロジェクトのバージョンが違えば手順を示して起動を中止する() {
@@ -1184,7 +1184,7 @@ mod 起動を中止する理由 {
         assert!(why.contains("lake build repl"), "{why}");
     }
 
-    /// ja: 書き方だけが違う toolchain では起動を中止しない
+    /// ja: エンジンとプロジェクトの toolchain が書き方だけ違うなら、理由を返さない
     #[story("G4")]
     #[test]
     fn 書き方だけが違う_toolchain_では起動を中止しない() {
@@ -1196,7 +1196,7 @@ mod 起動を中止する理由 {
         assert_eq!(got, None);
     }
 
-    /// ja: Lake プロジェクトが無ければ起動を中止する
+    /// ja: プロジェクトの場所が無ければ、Lake プロジェクトが無いという理由を返す
     #[story("G4")]
     #[test]
     fn Lake_プロジェクトが無ければ起動を中止する() {
@@ -1208,7 +1208,7 @@ mod 起動を中止する理由 {
         assert!(why.contains("Lake プロジェクトが無い"), "{why}");
     }
 
-    /// ja: 指定されたエンジンが無いか未ビルドなら起動を中止する
+    /// ja: 指定したエンジンが無いか未ビルドなら、無いか未ビルドだという理由を返す
     #[story("G3", "G4")]
     #[test]
     fn 指定されたエンジンが無いか未ビルドなら起動を中止する() {
@@ -1222,7 +1222,7 @@ mod 起動を中止する理由 {
         assert!(why.contains("未ビルド"), "{why}");
     }
 
-    /// ja: elan lake git が PATH に無ければ起動を中止する
+    /// ja: elan、lake、git のどれかが PATH に無ければ、無いコマンドの名前を含む理由を返す
     #[story("G4")]
     #[test]
     fn elan_lake_git_が_PATH_に無ければ起動を中止する() {
@@ -1239,7 +1239,7 @@ mod 起動を中止する理由 {
         }
     }
 
-    /// ja: 設定がそろっていれば中止しない
+    /// ja: エンジン、プロジェクト、コマンドがそろっていれば、理由を返さない
     #[story("G4")]
     #[test]
     fn 設定がそろっていれば中止しない() {
@@ -1258,7 +1258,7 @@ mod 設定ファイルの読み込み {
     //! ja: 設定ファイルの読み込み
     use super::*;
 
-    /// ja: TOML として読めない設定ファイルは ConfigError にする
+    /// ja: TOML として読めない設定ファイルには、読めないという ConfigError を返す
     #[story("G4")]
     #[test]
     fn TOML_として読めない設定ファイルは_ConfigError_にする() {
@@ -1269,7 +1269,7 @@ mod 設定ファイルの読み込み {
         assert!(why.0.contains("設定ファイルを読めない"), "{why}");
     }
 
-    /// ja: 設定ファイルが無ければ空の設定として読む
+    /// ja: 設定ファイルが無ければ空の設定を返す
     #[story("G4", "G6")]
     #[test]
     fn 設定ファイルが無ければ空の設定として読む() {
@@ -1287,7 +1287,7 @@ mod 使うバージョンの決め方 {
     //! エンジンをビルドしたバージョンと合わないと .olean を読み込めない。
     use super::*;
 
-    /// ja: プロジェクトのバージョンが最優先
+    /// ja: プロジェクトとエンジンの両方に toolchain があれば、プロジェクトの toolchain を返す
     #[story("G3")]
     #[test]
     fn プロジェクトのバージョンが最優先() {
@@ -1304,7 +1304,7 @@ mod 使うバージョンの決め方 {
         );
     }
 
-    /// ja: 明示したエンジンのバージョンを使う
+    /// ja: プロジェクトが無く、エンジンを指定していれば、エンジンの toolchain を返す
     #[story("G3")]
     #[test]
     fn 明示したエンジンのバージョンを使う() {
@@ -1324,7 +1324,7 @@ mod 使うバージョンの決め方 {
         );
     }
 
-    /// ja: lean のバージョンを調べている途中の Ctrl-C は中断を返す
+    /// ja: lean のバージョンを調べている途中で Ctrl-C を押すと、中断を返す
     #[story("G3")]
     #[test]
     fn lean_のバージョンを調べている途中の_Ctrl__C_は中断を返す() {
@@ -1341,7 +1341,7 @@ mod 使うバージョンの決め方 {
         pressed.join().expect("join");
     }
 
-    /// ja: どちらも無ければ elan のデフォルト
+    /// ja: プロジェクトもエンジンも無ければ、lean --version が示す elan の既定のバージョンを返す
     #[story("G3")]
     #[test]
     fn どちらも無ければ_elan_のデフォルト() {
@@ -1368,7 +1368,7 @@ mod 使うバージョンの決め方 {
         boot::guess_toolchain(&ctx, &mut io::sink(), &cfg).expect("guess")
     }
 
-    /// ja: nightly の lean は nightly の toolchain と読む
+    /// ja: lean --version が nightly のバージョンを示せば、nightly の toolchain を返す
     #[story("G3")]
     #[test]
     fn nightly_の_lean_は_nightly_の_toolchain_と読む() {
@@ -1380,7 +1380,7 @@ mod 使うバージョンの決め方 {
         );
     }
 
-    /// ja: 知らない接尾辞のバージョンは分からないとする
+    /// ja: lean --version が知らない接尾辞のバージョンを示せば、None を返す
     #[story("G3")]
     #[test]
     fn 知らない接尾辞のバージョンは分からないとする() {
@@ -1388,7 +1388,7 @@ mod 使うバージョンの決め方 {
         assert_eq!(guess_with_lean(lean, None), None);
     }
 
-    /// ja: lean の version を調べるときは時間を区切らずに待つ
+    /// ja: lean --version がエンジンを用意するときの時間の上限より長くかかっても、待ってそのバージョンの toolchain を返す
     #[story("G3")]
     #[test]
     fn lean_の_version_を調べるときは時間を区切らずに待つ() {
@@ -1408,7 +1408,7 @@ mod 使うバージョンの決め方 {
         );
     }
 
-    /// ja: lean の version を待つあいだは端末にだけ表示する
+    /// ja: lean のバージョンを調べるあいだ、端末にだけ表示し、終わったら消す
     #[story("G3")]
     #[test]
     fn lean_の_version_を待つあいだは端末にだけ表示する() {
@@ -1431,7 +1431,7 @@ mod 使うバージョンの決め方 {
         assert!(got.ends_with("\r\x1b[K"), "{got:?}");
     }
 
-    /// ja: toolchain が stable なら今のバージョンに置き換える
+    /// ja: プロジェクトの toolchain が stable なら今のバージョンを返し、取得できなければ stable を返す
     #[story("G3")]
     #[test]
     fn toolchain_が_stable_なら今のバージョンに置き換える() {
@@ -1452,7 +1452,7 @@ esac"#;
         );
     }
 
-    /// ja: エンジンを自分で指定したら stable を置き換えない
+    /// ja: 指定したエンジンの toolchain が stable なら、置き換えずに stable を返す
     #[story("G3")]
     #[test]
     fn エンジンを自分で指定したら_stable_を置き換えない() {
@@ -1480,7 +1480,7 @@ mod 手動でエンジンを用意する手順 {
     //! 自動で用意したものと同じものができる。
     use super::*;
 
-    /// ja: タグとバージョンの書き換えまで含む
+    /// ja: タグが分かれば、そのタグの clone と lean-toolchain へのバージョンの書き込みを手順に含める
     #[story("G3")]
     #[test]
     fn タグとバージョンの書き換えまで含む() {
@@ -1492,7 +1492,7 @@ mod 手動でエンジンを用意する手順 {
         );
     }
 
-    /// ja: タグが分からなければ選び方を書く
+    /// ja: タグが分からなければ、clone するタグをバージョン以下で一番新しいタグと書く
     #[story("G3")]
     #[test]
     fn タグが分からなければ選び方を書く() {
@@ -1555,7 +1555,7 @@ mod エンジンを用意するときの安全対策 {
     //! leani を 2 つ同時に実行してもよい。
     use super::*;
 
-    /// ja: 明示されたエンジンは作り直さない
+    /// ja: ビルドしていないエンジンを指定すると、作り直さずに未ビルドだと知らせる
     #[story("G3")]
     #[test]
     fn 明示されたエンジンは作り直さない() {
@@ -1575,7 +1575,7 @@ mod エンジンを用意するときの安全対策 {
         assert!(Path::new(&eng).join("lean-toolchain").is_file());
     }
 
-    /// ja: 明示されたエンジンにバージョンが無ければ起動を中止する
+    /// ja: lean-toolchain の無いエンジンを指定すると、lean-toolchain を含む中止の理由を返す
     #[story("G3", "G4")]
     #[test]
     fn 明示されたエンジンにバージョンが無ければ起動を中止する() {
@@ -1594,7 +1594,7 @@ mod エンジンを用意するときの安全対策 {
         assert!(why.contains("lean-toolchain"), "{why}");
     }
 
-    /// ja: 作業中の置き場所はプロセスごとに分かれる
+    /// ja: エンジンを用意すると、別の作業用のディレクトリでビルドしてから置き場所に移し、作業用のディレクトリを消す
     #[story("G3")]
     #[test]
     fn 作業中の置き場所はプロセスごとに分かれる() {
@@ -1615,7 +1615,7 @@ mod エンジンを用意するときの安全対策 {
         assert!(!Path::new(work).exists(), "作業中の置き場所が残っている");
     }
 
-    /// ja: 待っているあいだに別の leani が置いたエンジンは消さない
+    /// ja: ビルドを終えたとき置き場所に別の leani のエンジンがあれば、それを残して作業用のディレクトリを消す
     #[story("G3")]
     #[test]
     fn 待っているあいだに別の_leani_が置いたエンジンは消さない() {
@@ -1642,7 +1642,7 @@ mod エンジンを自動で用意できないとき {
     //! 初回の起動で通る処理。失敗しても、手動で用意する手順を表示する。
     use super::*;
 
-    /// ja: タグを取得できなければ手動の手順を表示する
+    /// ja: repl のタグを取得できなければ、手動で用意する手順を含む中止の理由を返す
     #[story("G3")]
     #[test]
     fn タグを取得できなければ手動の手順を表示する() {
@@ -1662,7 +1662,7 @@ mod エンジンを自動で用意できないとき {
         }
     }
 
-    /// ja: Ctrl-C で止めたら手順を付けずに中断を返す
+    /// ja: タグの取得中に Ctrl-C を押すと、手動の手順を付けずに中断する
     #[story("G3")]
     #[test]
     fn Ctrl__C_で止めたら手順を付けずに中断を返す() {
@@ -1677,7 +1677,7 @@ mod エンジンを自動で用意できないとき {
         assert_eq!(got, Err(EngineFault::Interrupted));
     }
 
-    /// ja: 止めたコマンドは孫プロセスごと止める
+    /// ja: コマンドが孫プロセスを起動していても、Ctrl-C を押すと孫プロセスごと止めて中断する
     #[story("G3")]
     #[test]
     fn 止めたコマンドは孫プロセスごと止める() {
@@ -1736,7 +1736,7 @@ mod エンジンを自動で用意できないとき {
         }
     }
 
-    /// ja: タグの一覧から refs tags の名前だけを取り出す
+    /// ja: タグの一覧の refs/tags/ の行から、タグの名前だけを返す
     #[story("G3")]
     #[test]
     fn タグの一覧から_refs_tags_の名前だけを取り出す() {
@@ -1748,7 +1748,7 @@ mod エンジンを自動で用意できないとき {
         );
     }
 
-    /// ja: バージョンとして解釈できなければ master で試す
+    /// ja: toolchain をバージョンとして解釈できなければ、repl の master を clone する
     #[story("G3")]
     #[test]
     fn バージョンとして解釈できなければ_master_で試す() {
@@ -1760,7 +1760,7 @@ mod エンジンを自動で用意できないとき {
         assert!(log.contains("--branch master"), "{log}");
     }
 
-    /// ja: 対応するタグが無ければ起動を中止する
+    /// ja: repl にバージョンのタグが無ければ、clone せずにタグが無いことと手動の手順を知らせる
     #[story("G3", "G4")]
     #[test]
     fn 対応するタグが無ければ起動を中止する() {
@@ -1772,7 +1772,7 @@ mod エンジンを自動で用意できないとき {
         assert!(!git_log(dir.path()).contains("clone"), "ビルドしてしまった");
     }
 
-    /// ja: LEANI NO SETUP のときはエンジンを用意しない
+    /// ja: LEANI_NO_SETUP があれば、--setup のときだけエンジンを用意する
     #[story("G3")]
     #[test]
     fn LEANI_NO_SETUP_のときはエンジンを用意しない() {
@@ -1787,7 +1787,7 @@ mod エンジンを自動で用意できないとき {
         assert!(Path::new(&path).join(".lake/build/bin/repl").is_file());
     }
 
-    /// ja: ビルドに失敗したら手動の手順にタグを含める
+    /// ja: ビルドに失敗したら、選んだタグを書いた手動の手順を含む中止の理由を返す
     #[story("G3")]
     #[test]
     fn ビルドに失敗したら手動の手順にタグを含める() {
@@ -1819,7 +1819,7 @@ mod lake_env_の取得 {
             .count()
     }
 
-    /// ja: プロジェクトが無ければ lake env を実行しない
+    /// ja: Lake プロジェクトが無ければ、lake env を実行せずに空の環境変数を返す
     #[story("G1")]
     #[test]
     fn プロジェクトが無ければ_lake_env_を実行しない() {
@@ -1832,7 +1832,7 @@ mod lake_env_の取得 {
         assert_eq!(lake_count(dir.path()), 0);
     }
 
-    /// ja: エンジンの olean の場所を LEAN PATH の先頭に足す
+    /// ja: エンジンの olean の場所を、lake env の LEAN_PATH か、プロジェクトが無ければ起動時の LEAN_PATH の先頭に足す
     #[story("G3", "G6")]
     #[test]
     fn エンジンの_olean_の場所を_LEAN_PATH_の先頭に足す() {
@@ -1850,7 +1850,7 @@ mod lake_env_の取得 {
         assert_eq!(lean_path(Some(&proj)), "/eng/.lake/build/lib/lean:/a");
     }
 
-    /// ja: キャッシュが新しければ lake env を実行しない
+    /// ja: 同じプロジェクトで 2 回取得すると、2 回目は lake env を実行せずにキャッシュを返す
     #[story("G1", "G6")]
     #[test]
     fn キャッシュが新しければ_lake_env_を実行しない() {
@@ -1868,7 +1868,7 @@ mod lake_env_の取得 {
         assert_eq!(lake_count(dir.path()), 1);
     }
 
-    /// ja: lake env を実行できなければ理由を知らせる
+    /// ja: lake が無いか lake env が失敗したら、そのことを理由として知らせる
     #[story("G4", "G6")]
     #[test]
     fn lake_env_を実行できなければ理由を知らせる() {
@@ -1890,7 +1890,7 @@ mod lake_env_の取得 {
         }
     }
 
-    /// ja: lake env を実行する前に案内を表示する
+    /// ja: lake env を実行すると、Ctrl-C で中断できると表示する
     #[story("G6")]
     #[test]
     fn lake_env_を実行する前に案内を表示する() {
@@ -1905,7 +1905,7 @@ mod lake_env_の取得 {
         assert!(shown.contains("Ctrl-C で中断できる"), "{shown}");
     }
 
-    /// ja: lake env は時間を区切らずに待つ
+    /// ja: lake env がエンジンを用意するときの時間の上限より長くかかっても、待って結果を返す
     #[story("G6")]
     #[test]
     fn lake_env_は時間を区切らずに待つ() {
@@ -1921,7 +1921,7 @@ mod lake_env_の取得 {
         assert_eq!(got.get("LEAN_PATH").map(String::as_str), Some("/a"));
     }
 
-    /// ja: lake env を Ctrl-C で止めたら中断を返す
+    /// ja: lake env の実行中に Ctrl-C を押すと、中断する
     #[story("G6")]
     #[test]
     fn lake_env_を_Ctrl__C_で止めたら中断を返す() {
@@ -1937,7 +1937,7 @@ mod lake_env_の取得 {
         assert_eq!(got, Err(EngineFault::Interrupted));
     }
 
-    /// ja: lake env の結果を保存できなければ知らせる
+    /// ja: lake env の結果を保存できなければ、保存できなかったと知らせて一時ファイルを残さない
     #[story("G6")]
     #[test]
     fn lake_env_の結果を保存できなければ知らせる() {
@@ -1993,7 +1993,7 @@ mod 証明モードのタクティクの記録 {
         xs.iter().map(|x| x.to_string()).collect()
     }
 
-    /// ja: タクティクを進めると前の状態とゴールを積む
+    /// ja: タクティクを進めると、前の状態とゴールを積み、スクリプトにタクティクを足す
     #[story("E1")]
     #[test]
     fn タクティクを進めると前の状態とゴールを積む() {
@@ -2006,7 +2006,7 @@ mod 証明モードのタクティクの記録 {
         assert_eq!(got.stack, [(0, strings(&["⊢ p ∧ q"]))]);
     }
 
-    /// ja: 取り消すと状態とゴールとスクリプトがそろって戻る
+    /// ja: 取り消すと状態とゴールとスクリプトを前に戻し、戻す先が無ければ None を返す
     #[story("E1")]
     #[test]
     fn 取り消すと状態とゴールとスクリプトがそろって戻る() {
@@ -2020,7 +2020,7 @@ mod 証明モードで送るタクティク {
     //! ja: 証明モードで送るタクティク
     use super::*;
 
-    /// ja: タクティクを括弧で囲み括弧は別の行に置く
+    /// ja: タクティクを括弧で囲み、括弧はそれぞれ別の行に置く
     #[story("E1")]
     #[test]
     fn タクティクを括弧で囲み括弧は別の行に置く() {
@@ -2030,7 +2030,7 @@ mod 証明モードで送るタクティク {
         );
     }
 
-    /// ja: パースエラーは完結判定で読んだ位置とメッセージで表示する
+    /// ja: 完結判定にエラーがあれば、パースエラーを完結判定で読んだ位置とメッセージにする
     #[story("E1")]
     #[test]
     fn パースエラーは完結判定で読んだ位置とメッセージで表示する() {
@@ -2041,7 +2041,7 @@ mod 証明モードで送るタクティク {
         );
     }
 
-    /// ja: 完結判定のエラーが無ければパースエラーの行を括弧の行の分だけ戻す
+    /// ja: 完結判定にエラーが無ければ、パースエラーの行を括弧の行の分だけ戻す
     #[story("E1")]
     #[test]
     fn 完結判定のエラーが無ければパースエラーの行を括弧の行の分だけ戻す() {
@@ -2068,7 +2068,7 @@ mod sorry_の置き換え {
         pure::splice_sorry(src, &mark(src, word, 0), script)
     }
 
-    /// ja: 日本語を含んでも位置で切り出せる
+    /// ja: sorry の前に日本語があっても、位置どおりに sorry を置き換える
     #[story("E3")]
     #[test]
     fn 日本語を含んでも位置で切り出せる() {
@@ -2079,7 +2079,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 単独の行にある sorry のインデントを変えない
+    /// ja: 単独の行にある sorry は、インデントを変えずに置き換える
     #[story("E3")]
     #[test]
     fn 単独の行にある_sorry_のインデントを変えない() {
@@ -2091,7 +2091,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 複数行のスクリプトは sorry の桁にそろえる
+    /// ja: 複数行のスクリプトは、各行を sorry の桁にそろえる
     #[story("E3")]
     #[test]
     fn 複数行のスクリプトは_sorry_の桁にそろえる() {
@@ -2108,7 +2108,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 行の途中の sorry を複数行のスクリプトにするときは by の次の行に下げる
+    /// ja: 行の途中の sorry を複数行のスクリプトにすると、スクリプトを by の次の行に下げる
     #[story("E3")]
     #[test]
     fn 行の途中の_sorry_を複数行のスクリプトにするときは_by_の次の行に下げる() {
@@ -2119,7 +2119,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 匿名コンストラクタの中の sorry に空白を足さない
+    /// ja: 匿名コンストラクタの中の sorry は、空白を足さずに置き換える
     #[story("E3")]
     #[test]
     fn 匿名コンストラクタの中の_sorry_に空白を足さない() {
@@ -2130,7 +2130,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 複数行の文字列を含むスクリプトは文字列の途中の行に空白を足さない
+    /// ja: 複数行の文字列を含むスクリプトでは、文字列の外の行だけにインデントを付ける
     #[story("E3")]
     #[test]
     fn 複数行の文字列を含むスクリプトは文字列の途中の行に空白を足さない() {
@@ -2147,7 +2147,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: 文字列の中で始まる行には空白を足さない
+    /// ja: 文字列の中で始まる行を除いて、各行にインデントを付ける
     #[story("A1", "E3")]
     #[test]
     fn 文字列の中で始まる行には空白を足さない() {
@@ -2159,7 +2159,7 @@ mod sorry_の置き換え {
         );
     }
 
-    /// ja: コメントの中の引用符では文字列を始めない
+    /// ja: コメントの中の引用符のあとの行を、文字列の外と判定する
     #[story("A1", "E3")]
     #[test]
     fn コメントの中の引用符では文字列を始めない() {
@@ -2167,7 +2167,7 @@ mod sorry_の置き換え {
         assert_eq!(pure::outside_strings(src), [true, true]);
     }
 
-    /// ja: 文字のリテラルと名前のエスケープの中の引用符では文字列を始めない
+    /// ja: 文字のリテラルと名前のエスケープの中の引用符のあとの行を、文字列の外と判定する
     #[story("A1", "E3")]
     #[test]
     fn 文字のリテラルと名前のエスケープの中の引用符では文字列を始めない() {
@@ -2175,7 +2175,7 @@ mod sorry_の置き換え {
         assert_eq!(pure::outside_strings(src), [true, true]);
     }
 
-    /// ja: 補間の中の文字列が閉じても外側の文字列は続く
+    /// ja: 補間の中の文字列が閉じても、外側の文字列はまだ閉じていないと判定する
     #[story("A1", "E3")]
     #[test]
     fn 補間の中の文字列が閉じても外側の文字列は続く() {
@@ -2183,7 +2183,7 @@ mod sorry_の置き換え {
         assert_eq!(pure::outside_strings(src), [true, false, false, true]);
     }
 
-    /// ja: 行の中で閉じない名前のエスケープは行末で終わる
+    /// ja: 行の中で閉じない名前のエスケープは、行末で終わったと判定する
     #[story("A1", "E3")]
     #[test]
     fn 行の中で閉じない名前のエスケープは行末で終わる() {
@@ -2191,7 +2191,7 @@ mod sorry_の置き換え {
         assert_eq!(pure::outside_strings(src), [true, true, false]);
     }
 
-    /// ja: 行ごとの判定は行の数だけ返す
+    /// ja: どの入力でも、行の数と同じ数の判定を返す
     #[story("A1", "E3")]
     #[proptest]
     fn 行ごとの判定は行の数だけ返す(
@@ -2203,7 +2203,7 @@ mod sorry_の置き換え {
         prop_assert_eq!(pure::indent_code(&src, ""), src);
     }
 
-    /// ja: 位置が sorry を指していなければ置き換えない
+    /// ja: 位置が sorry を指していなければ、置き換えずに None を返す
     #[story("E3")]
     #[test]
     fn 位置が_sorry_を指していなければ置き換えない() {
@@ -2216,7 +2216,7 @@ mod sorry_の置き換え {
         assert_eq!(pure::splice_sorry(src, &none, "trivial"), None);
     }
 
-    /// ja: 行と桁を文字のインデックスに変換できる
+    /// ja: どの行と桁でも、その文字の byte の位置を返す
     #[story("E3")]
     #[proptest]
     fn 行と桁を文字のインデックスに変換できる(
@@ -2236,7 +2236,7 @@ mod sorry_の置き換え {
         prop_assert_eq!(rest, want);
     }
 
-    /// ja: sorry の前後は書き換えない
+    /// ja: sorry の前後がどんな行でも、前後を書き換えずに sorry だけを置き換える
     #[story("E3")]
     #[proptest]
     fn sorry_の前後は書き換えない(
@@ -2278,7 +2278,7 @@ mod ファイルの_import {
     //! :save のヘッダに書き戻すため、読み込んだファイルの import を記録する。
     use super::*;
 
-    /// ja: import の行だけを取り出す
+    /// ja: import の行から module の名前だけを返す
     #[story("B3", "B4")]
     #[test]
     fn import_の行だけを取り出す() {
@@ -2286,14 +2286,14 @@ mod ファイルの_import {
         assert_eq!(pure::import_lines(src), ["Lean.Elab", "Std"]);
     }
 
-    /// ja: import が無ければ空
+    /// ja: 宣言と、module の名前の無い import しか無ければ、空を返す
     #[story("B3")]
     #[test]
     fn import_が無ければ空() {
         assert!(pure::import_lines("def a := 1\nimport\n").is_empty());
     }
 
-    /// ja: コメントの中の import は数えない
+    /// ja: コメントの中の import は数えず、import を取り除くときも残す
     #[story("B3", "B4")]
     #[test]
     fn コメントの中の_import_は数えない() {
@@ -2306,7 +2306,7 @@ mod ファイルの_import {
         assert!(!pure::strip_imports(src).contains("import Std"));
     }
 
-    /// ja: 宣言のあとの import は数えない
+    /// ja: 宣言のあとの import しか無ければ、空を返す
     #[story("B3")]
     #[test]
     fn 宣言のあとの_import_は数えない() {
@@ -2314,7 +2314,7 @@ mod ファイルの_import {
         assert!(pure::import_lines("def a := 1\nimport Std\n").is_empty());
     }
 
-    /// ja: 入れ子のコメントの終わりを正しく判定する
+    /// ja: 入れ子のコメントが閉じたあとの import だけを返す
     #[story("B4")]
     #[test]
     fn 入れ子のコメントの終わりを正しく判定する() {
@@ -2322,7 +2322,7 @@ mod ファイルの_import {
         assert_eq!(pure::import_lines(src), ["Real"]);
     }
 
-    /// ja: 行の中のブロックコメントを除いて import を読む
+    /// ja: 行の中にブロックコメントがあっても、import の module の名前を返す
     #[story("B4")]
     #[test]
     fn 行の中のブロックコメントを除いて_import_を読む() {
@@ -2331,7 +2331,7 @@ mod ファイルの_import {
         assert_eq!(pure::strip_imports(src).trim(), "/- c -/\ndef x := 1");
     }
 
-    /// ja: 名前のエスケープの中の記号をコメントと読まない
+    /// ja: 名前のエスケープの中に -- や /- があっても、その名前を返す
     #[story("B4")]
     #[test]
     fn 名前のエスケープの中の記号をコメントと読まない() {
@@ -2340,7 +2340,7 @@ mod ファイルの_import {
         assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
     }
 
-    /// ja: 修飾子の付いた import も読む
+    /// ja: public や meta や all の付いた import から module の名前を返す
     #[story("B4")]
     #[test]
     fn 修飾子の付いた_import_も読む() {
@@ -2360,7 +2360,7 @@ mod ファイルの_import {
         assert_eq!(pure::strip_imports(src).trim(), "def x := 1");
     }
 
-    /// ja: コメントの付いた module の行も読む
+    /// ja: コメントの付いた module の行を module の宣言と判定する
     #[story("B4")]
     #[test]
     fn コメントの付いた_module_の行も読む() {
@@ -2370,7 +2370,7 @@ mod ファイルの_import {
         assert!(!pure::scan_header("modules\ndef x := 1").0.module);
     }
 
-    /// ja: module の後ろに import を足す
+    /// ja: ファイルが module なら、足す import を module の行の後ろに public で置く
     #[story("B4")]
     #[test]
     fn module_の後ろに_import_を足す() {
@@ -2400,7 +2400,7 @@ mod ファイルの_import {
         );
     }
 
-    /// ja: 取り除くのは本物の import 行だけ
+    /// ja: どのヘッダでも、本物の import 行だけを数え、取り除くと import が残らない
     #[story("B3", "B4")]
     #[proptest]
     fn 取り除くのは本物の_import_行だけ(
@@ -2433,7 +2433,7 @@ mod 履歴ファイルの形式 {
     use super::*;
     use leani_core::history::history_strings;
 
-    /// ja: 行末の CR を外して読む
+    /// ja: CRLF で書かれた履歴からは、行末の CR を外した入力を返す
     #[story("F3")]
     #[test]
     fn 行末の_CR_を外して読む() {
@@ -2451,7 +2451,7 @@ mod 略記の展開 {
     //! たびには確認しない。
     use super::*;
 
-    /// ja: 名前を記号に変換する
+    /// ja: 末尾の略記の名前を記号に変換する
     #[story("C5")]
     #[test]
     fn 名前を記号に変換する() {
@@ -2459,7 +2459,7 @@ mod 略記の展開 {
         assert_eq!(expand_abbrev("x\\dot"), Some(("·", 4)));
     }
 
-    /// ja: 長い略記が短い略記として変換されない
+    /// ja: 短い略記で始まる長い略記は、長い略記として変換する
     #[story("C5")]
     #[test]
     fn 長い略記が短い略記として変換されない() {
@@ -2470,7 +2470,7 @@ mod 略記の展開 {
         assert_eq!(expand_abbrev("\\alpha"), Some(("α", 6)));
     }
 
-    /// ja: めったに使わない略記も変換できる
+    /// ja: めったに使わない略記を変換する
     #[story("C5")]
     #[test]
     fn めったに使わない略記も変換できる() {
@@ -2479,7 +2479,7 @@ mod 略記の展開 {
         assert_eq!(expand_abbrev("\\Gangia"), Some(("Ϫ", 7)));
     }
 
-    /// ja: 表に無い名前は変えない
+    /// ja: 表に無い名前と、略記の無い入力には None を返す
     #[story("C5")]
     #[test]
     fn 表に無い名前は変えない() {
@@ -2487,7 +2487,7 @@ mod 略記の展開 {
         assert_eq!(expand_abbrev("1 + 1"), None);
     }
 
-    /// ja: 略記のあとに記号が続く場合は変換しない
+    /// ja: 略記の名前のあとに記号が続けば、None を返す
     #[story("C5")]
     #[test]
     fn 略記のあとに記号が続く場合は変換しない() {
@@ -2496,7 +2496,7 @@ mod 略記の展開 {
         assert_eq!(expand_abbrev("\"\\t\""), None);
     }
 
-    /// ja: 表のどの略記も変換できる
+    /// ja: 表のどの略記でも、手前に何があっても記号に変換する
     #[story("C5")]
     #[proptest]
     fn 表のどの略記も変換できる(
@@ -2516,7 +2516,7 @@ mod 略記の候補 {
     //! Tab で略記を補完するときに、カーソルの手前の `\name` から記号の候補を作る。
     use super::*;
 
-    /// ja: カーソルの手前の略記の名前を取り出す
+    /// ja: カーソルの手前の略記の名前を返す
     #[story("C8", "J2")]
     #[test]
     fn カーソルの手前の略記の名前を取り出す() {
@@ -2525,7 +2525,7 @@ mod 略記の候補 {
         assert_eq!(abbrev_head("\\"), Some(""));
     }
 
-    /// ja: 略記の途中でなければ名前を取り出さない
+    /// ja: 略記の途中でなければ None を返す
     #[story("C8", "J2")]
     #[test]
     fn 略記の途中でなければ名前を取り出さない() {
@@ -2533,7 +2533,7 @@ mod 略記の候補 {
         assert_eq!(abbrev_head("\\to x"), None, "空白のあとは略記ではない");
     }
 
-    /// ja: 文字列のエスケープの後ろで補完すると名前を候補に出す
+    /// ja: 文字列のエスケープのあとの名前は、略記ではなく名前を補完の対象として返す
     #[story("D1")]
     #[test]
     fn 文字列のエスケープの後ろで補完すると名前を候補に出す() {
@@ -2548,7 +2548,7 @@ mod 略記の候補 {
         );
     }
 
-    /// ja: 一致する略記の記号を先頭に置く
+    /// ja: 名前と一致する略記の記号を先頭に置き、名前で始まる略記の記号を含める
     #[story("C8", "J2")]
     #[test]
     fn 一致する略記の記号を先頭に置く() {
@@ -2586,7 +2586,7 @@ mod 定理検索 {
         pure::loogle_text(got, 10, 100, Style::PLAIN)
     }
 
-    /// ja: 名前と型と定義されている module を表示する
+    /// ja: 件数と、名前と型と、定義されている module を表示する
     #[story("D4")]
     #[test]
     fn 名前と型と定義されている_module_を表示する() {
@@ -2600,7 +2600,7 @@ mod 定理検索 {
         assert!(out[3].starts_with("List.mapTR : "), "{}", out[3]);
     }
 
-    /// ja: 件数を絞ったときは全体の件数も表示する
+    /// ja: 件数を絞ったときは、全体の件数と表示した件数を表示する
     #[story("D4")]
     #[test]
     fn 件数を絞ったときは全体の件数も表示する() {
@@ -2612,7 +2612,7 @@ mod 定理検索 {
         assert_eq!(all.matches('\n').count(), 4);
     }
 
-    /// ja: 長い行は端末の幅で切り詰める
+    /// ja: 端末の幅より長い行は、幅に合わせて … で切り詰める
     #[story("D4")]
     #[test]
     fn 長い行は端末の幅で切り詰める() {
@@ -2627,14 +2627,14 @@ mod 定理検索 {
         assert!(line.ends_with('…'), "{line}");
     }
 
-    /// ja: 見つからなければ見つからなかったと表示する
+    /// ja: 結果が 0 件なら、見つからなかったと表示する
     #[story("D4")]
     #[test]
     fn 見つからなければ見つからなかったと表示する() {
         assert_eq!(text(&json!({"count": 0, "hits": []})), "見つからなかった");
     }
 
-    /// ja: エラーは翻訳せずに候補を添える
+    /// ja: loogle のエラーは翻訳せずに表示し、候補を添える
     #[story("D4")]
     #[test]
     fn エラーは翻訳せずに候補を添える() {
@@ -2676,7 +2676,7 @@ mod 定理検索 {
         search::loogle(url, query, Duration::from_secs(5))
     }
 
-    /// ja: 記号を含むクエリも URL エンコードして送る
+    /// ja: クエリの記号を URL エンコードして送る
     #[story("D4")]
     #[test]
     fn 記号を含むクエリも_URL_エンコードして送る() {
@@ -2688,7 +2688,7 @@ mod 定理検索 {
         assert!(line.starts_with("GET /json?q=%3Fa%20%2B%20%3Fb "), "{line}");
     }
 
-    /// ja: 応答が無ければ SearchError
+    /// ja: 応答が無ければ SearchError を返す
     #[story("D4")]
     #[test]
     fn 応答が無ければ_SearchError() {
@@ -2700,7 +2700,7 @@ mod 定理検索 {
         assert!(ask(&url, "Nat").is_err());
     }
 
-    /// ja: HTTP のエラーはコードと理由を SearchError にする
+    /// ja: HTTP のエラーは、コードと理由を SearchError として返す
     #[story("D4", "F4")]
     #[test]
     fn HTTP_のエラーはコードと理由を_SearchError_にする() {
@@ -2709,7 +2709,7 @@ mod 定理検索 {
         assert_eq!(err.to_string(), "503 Service Unavailable");
     }
 
-    /// ja: 応答がオブジェクトでなければ SearchError
+    /// ja: 応答が JSON のオブジェクトでなければ SearchError を返す
     #[story("D4", "F4")]
     #[test]
     fn 応答がオブジェクトでなければ_SearchError() {
@@ -2726,7 +2726,7 @@ mod 性質一覧 {
     //! 作らない代わりに、生成し忘れをこのテストで検出する。
     use super::*;
 
-    /// ja: SPEC md がテストとそろっている
+    /// ja: テストとストーリーの文から、SPEC.md と同じ内容を生成する
     #[story("X1")]
     #[test]
     fn SPEC_md_がテストとそろっている() {
@@ -2747,7 +2747,7 @@ mod Lake_プロジェクトの判定 {
         config::lake_libs(&path_str(dir))
     }
 
-    /// ja: lakefile を持つ一番近い親ディレクトリを返す
+    /// ja: サブディレクトリから探すと、lakefile のある親ディレクトリを返す
     #[story("G6")]
     #[test]
     fn lakefile_を持つ一番近い親ディレクトリを返す() {
@@ -2769,7 +2769,7 @@ mod Lake_プロジェクトの判定 {
         assert_eq!(config::lake_root(&path_str(dir.path())), None);
     }
 
-    /// ja: lakefile toml の lean lib を返す
+    /// ja: lakefile.toml から lean_lib の名前を返す
     #[story("G6")]
     #[test]
     fn lakefile_toml_の_lean_lib_を返す() {
@@ -2778,7 +2778,7 @@ mod Lake_プロジェクトの判定 {
         assert_eq!(libs(dir.path(), "lakefile.toml", text), ["Foo", "Bar"]);
     }
 
-    /// ja: lakefile lean の lean lib を返す
+    /// ja: lakefile.lean から lean_lib の名前を返す
     #[story("G6")]
     #[test]
     fn lakefile_lean_の_lean_lib_を返す() {
@@ -2787,7 +2787,7 @@ mod Lake_プロジェクトの判定 {
         assert_eq!(libs(dir.path(), "lakefile.lean", text), ["Foo", "Bar.Baz"]);
     }
 
-    /// ja: TOML として読めない lakefile toml からは空を返す
+    /// ja: TOML として読めない lakefile.toml からは、空を返す
     #[story("G4", "G6")]
     #[test]
     fn TOML_として読めない_lakefile_toml_からは空を返す() {
@@ -2795,7 +2795,7 @@ mod Lake_プロジェクトの判定 {
         assert!(libs(dir.path(), "lakefile.toml", "[[lean_lib]\n").is_empty());
     }
 
-    /// ja: 設定が無ければ Lake プロジェクトの環境で起動する
+    /// ja: 設定が無ければ、上にある Lake プロジェクトのディレクトリ名と lean_lib で環境を作る
     #[story("G6")]
     #[test]
     fn 設定が無ければ_Lake_プロジェクトの環境で起動する() {
@@ -2815,7 +2815,7 @@ mod Lake_プロジェクトの判定 {
         );
     }
 
-    /// ja: -p の書き方によらずディレクトリ名を環境の名前にする
+    /// ja: -p のパスの書き方によらず、プロジェクトのディレクトリ名を環境の名前にする
     #[story("G6")]
     #[test]
     fn dash_p_の書き方によらずディレクトリ名を環境の名前にする() {
@@ -2845,7 +2845,7 @@ mod Lake_プロジェクトの判定 {
         }
     }
 
-    /// ja: Lake プロジェクトの外なら Lean 本体だけで起動する
+    /// ja: Lake プロジェクトの外では、プロジェクトの無い plain という環境にする
     #[story("G3", "G6")]
     #[test]
     fn Lake_プロジェクトの外なら_Lean_本体だけで起動する() {
@@ -2855,7 +2855,7 @@ mod Lake_プロジェクトの判定 {
         assert_eq!((got.name.as_str(), got.project), ("plain", None));
     }
 
-    /// ja: import を指定したら lean lib の代わりにそれを使う
+    /// ja: import を指定すれば、lean_lib の代わりにそれを使う
     #[story("G6")]
     #[test]
     fn import_を指定したら_lean_lib_の代わりにそれを使う() {
@@ -2880,14 +2880,14 @@ mod 起動オプション {
         parse_args(argv).expect("parse_args")
     }
 
-    /// ja: -i を繰り返すと import がすべて残る
+    /// ja: -i と --import を繰り返すと、すべての import を順に返す
     #[story("G6")]
     #[test]
     fn dash_i_を繰り返すと_import_がすべて残る() {
         assert_eq!(parse(&["-i", "A", "--import", "B"]).imports, ["A", "B"]);
     }
 
-    /// ja: -e で環境の名前を受け取る
+    /// ja: -e か --env の値を環境の名前として返す
     #[story("G5")]
     #[test]
     fn dash_e_で環境の名前を受け取る() {
@@ -2895,7 +2895,7 @@ mod 起動オプション {
         assert_eq!(parse(&["--env", "m"]).name.as_deref(), Some("m"));
     }
 
-    /// ja: 値の無いオプションはエラーで終了する
+    /// ja: 値の無い -e、-i、-p には、オプションの名前を含むエラーを返す
     #[story("G5", "G6")]
     #[test]
     fn 値の無いオプションはエラーで終了する() {
@@ -2906,7 +2906,7 @@ mod 起動オプション {
         }
     }
 
-    /// ja: 不明なオプションはエラーで終了する
+    /// ja: 不明なオプションには、そのオプションを不明と書いたエラーを返す
     #[story("H1")]
     #[test]
     fn 不明なオプションはエラーで終了する() {
@@ -2914,14 +2914,14 @@ mod 起動オプション {
         assert!(why.contains("不明なオプション: --nosuch"), "{why}");
     }
 
-    /// ja: ファイル名は読み込むファイルとして受け取る
+    /// ja: ファイル名を、読み込むファイルとして返す
     #[story("B4")]
     #[test]
     fn ファイル名は読み込むファイルとして受け取る() {
         assert_eq!(parse(&["foo.lean"]).preload.as_deref(), Some("foo.lean"));
     }
 
-    /// ja: ファイルを 2 つ指定するとエラーで終了する
+    /// ja: ファイルを 2 つ指定すると、1 つだけと書いたエラーを返す
     #[story("B4")]
     #[test]
     fn ファイルを_2_つ指定するとエラーで終了する() {
@@ -3005,7 +3005,7 @@ mod 起動 {
 
     const NO_ENGINE: &str = "default = \"t\"\n[env.t]\nimports = []\n";
 
-    /// ja: --setup は用意済みならエンジンを用意しない
+    /// ja: エンジンが用意済みなら、leani --setup を実行すると用意せずに用意済みと表示する
     #[story("G3")]
     #[test]
     fn dash_dash_setup_は用意済みならエンジンを用意しない() {
@@ -3022,7 +3022,7 @@ mod 起動 {
         assert_eq!(git_log(dir.path()), "", "エンジンを用意してしまった");
     }
 
-    /// ja: --setup は未用意ならエンジンを用意する
+    /// ja: エンジンが無ければ、LEANI_NO_SETUP があっても leani --setup でエンジンを用意する
     #[story("G3")]
     #[test]
     fn dash_dash_setup_は未用意ならエンジンを用意する() {
@@ -3051,7 +3051,7 @@ mod 起動 {
         assert!(repl.is_file(), "repl が無い: {}", repl.display());
     }
 
-    /// ja: エンジンが起動しなければメッセージを表示して exit 1 で終わる
+    /// ja: leani を実行してエンジンが起動しなければ、起動しなかったと表示して exit 1 で終わる
     #[story("G4")]
     #[test]
     fn エンジンが起動しなければメッセージを表示して_exit_1_で終わる() {
@@ -3067,7 +3067,7 @@ mod 起動 {
         assert!(got.err.contains("エンジンが起動しなかった"), "{}", got.err);
     }
 
-    /// ja: 設定のエラーでは起動せずに知らせる
+    /// ja: 設定ファイルを読めないか起動できない理由があれば、起動せずに理由を表示して exit 1 で終わる
     #[story("G4")]
     #[test]
     fn 設定のエラーでは起動せずに知らせる() {
@@ -3090,7 +3090,7 @@ mod 起動 {
         );
     }
 
-    /// ja: 指定したファイルを Repl に渡す
+    /// ja: ファイルを指定して leani を実行すると、そのファイルの宣言を使った入力を評価する
     #[story("B4")]
     #[test]
     fn 指定したファイルを_Repl_に渡す() {
@@ -3107,7 +3107,7 @@ mod 起動 {
         assert!(answered, "{}", got.out);
     }
 
-    /// ja: 出力先が閉じたら panic せずに終了コード 0 で終わる
+    /// ja: 出力先が閉じると、panic せずに exit 0 で終わる
     #[story("F4")]
     #[test]
     fn 出力先が閉じたら_panic_せずに終了コード_0_で終わる() {
@@ -3136,7 +3136,7 @@ mod 起動 {
     /// そこで、偽のコマンドから leani に SIGINT を送る。
     const SEND_SIGINT: &str = "kill -INT $PPID; sleep 30";
 
-    /// ja: 用意の途中の Ctrl-C は exit 130 で終わる
+    /// ja: エンジンの用意の途中で Ctrl-C を押すと、手動の手順を表示せずに exit 130 で終わる
     #[story("G3")]
     #[test]
     fn 用意の途中の_Ctrl__C_は_exit_130_で終わる() {
@@ -3159,7 +3159,7 @@ mod 起動 {
         assert!(!got.err.contains("手動で用意する場合"), "{}", got.err);
     }
 
-    /// ja: バージョンを調べている途中の Ctrl-C も中断を返す
+    /// ja: バージョンを調べている途中で Ctrl-C を押すと、exit 130 で終わる
     #[story("G3")]
     #[test]
     fn バージョンを調べている途中の_Ctrl__C_も中断を返す() {
@@ -3182,7 +3182,7 @@ mod 起動 {
         assert_eq!(got.code, 130, "{}{}", got.out, got.err);
     }
 
-    /// ja: -V は環境とバージョンと設定ファイルの場所を表示して終わる
+    /// ja: -V を付けて実行すると、環境と Lean のバージョンと設定ファイルの場所を表示する
     #[story("G7")]
     #[test]
     fn dash_V_は環境とバージョンと設定ファイルの場所を表示して終わる() {
@@ -3209,7 +3209,7 @@ mod 略記の一覧 {
     //! `:abbrev` の表示。`man ascii` のように、キーと記号の組を複数の列に並べる。
     use super::*;
 
-    /// ja: キーの先頭で絞り込む
+    /// ja: 入力で始まるキーの略記だけを、先頭のバックスラッシュの有無によらず返す
     #[story("C7")]
     #[test]
     fn キーの先頭で絞り込む() {
@@ -3219,7 +3219,7 @@ mod 略記の一覧 {
         assert_eq!(abbrev_lookup("\\le"), got);
     }
 
-    /// ja: 記号からその記号を入力する略記を調べる
+    /// ja: 記号には、その記号に変換される略記を返す
     #[story("C7")]
     #[test]
     fn 記号からその記号を入力する略記を調べる() {
@@ -3227,7 +3227,7 @@ mod 略記の一覧 {
         assert_eq!(keys, ["->", "imp", "r", "r-", "rightarrow", "to"]);
     }
 
-    /// ja: 列の下まで並べたら右の列に続ける
+    /// ja: 列の下まで並べたら、右の列に続ける
     #[story("C7")]
     #[test]
     fn 列の下まで並べたら右の列に続ける() {
@@ -3239,7 +3239,7 @@ mod 略記の一覧 {
         );
     }
 
-    /// ja: 全角の文字は 2 文字分の幅で列をそろえる
+    /// ja: 全角の文字を 2 文字分の幅として列をそろえる
     #[story("C7")]
     #[test]
     fn 全角の文字は_2_文字分の幅で列をそろえる() {
@@ -3251,7 +3251,7 @@ mod 略記の一覧 {
         );
     }
 
-    /// ja: 幅に収まる範囲で列を増やす
+    /// ja: 幅が広いほど、幅に収まる範囲で列を増やす
     #[story("C7")]
     #[test]
     fn 幅に収まる範囲で列を増やす() {

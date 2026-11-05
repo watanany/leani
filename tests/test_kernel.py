@@ -140,7 +140,7 @@ def describe_セルの実行():
     @story("J1")
     def 前のセルで宣言すると次のセルでその名前を使える(kernel):
         """
-        ja: 前のセルで宣言すると次のセルでその名前を使える
+        ja: 前のセルで宣言した関数を次のセルで評価すると値を表示する
         """
         cell = """\
 def fib : Nat → Nat
@@ -165,7 +165,7 @@ def fib : Nat → Nat
     @story("J1")
     def silent_のセルを実行すると何も表示しない(kernel):
         """
-        ja: silent のセルを実行すると何も表示しない
+        ja: silent のセルを実行すると、何も表示せずに ok を返す
         """
         status, streams = run_silent(kernel, "#eval 3 + 4")
         assert status == "ok"
@@ -174,7 +174,7 @@ def fib : Nat → Nat
     @story("J1")
     def 前のセルで起動したプロセスが出力しても_silent_のセルには表示しない(kernel):
         """
-        ja: 前のセルで起動したプロセスが出力しても silent のセルには表示しない
+        ja: 前のセルで起動したプロセスが silent のセルの実行中に出力すると、何も表示せずに ok を返す
         """
         # 1 秒後に stderr に書くプロセスを起動し、その間に silent のセルを実行する。
         # カーネルが fd 2 の出力を取り込んでいると、その出力は実行中のセルに表示される。
@@ -191,7 +191,7 @@ def fib : Nat → Nat
     @story("J1", "E3")
     def 証明モードで証明を完了すると_sorry_を置き換える(kernel):
         """
-        ja: 証明モードで証明を完了すると sorry を置き換える
+        ja: 証明モードで証明を完了すると、定理の sorry を置き換える
         """
         run(kernel, "theorem cell_t : 1 + 1 = 2 := by sorry")
         run(kernel, ":prove")
@@ -203,7 +203,7 @@ def fib : Nat → Nat
     @story("J1", "E1")
     def 証明モードで閉じていないタクティクを入力すると次の行に続ける(kernel):
         """
-        ja: 証明モードで閉じていないタクティクを入力すると次の行に続ける
+        ja: 証明モードで括弧を閉じていないタクティクを送ると、次の行と合わせて実行する
         """
         run(
             kernel,
@@ -218,7 +218,7 @@ def fib : Nat → Nat
     @story("J1")
     def 複数行の文字列を評価しても値は変わらない(kernel):
         """
-        ja: 複数行の文字列を評価しても値は変わらない
+        ja: 複数行の文字列を含む式のセルを実行すると、文字列を変えずに値を表示する
         """
         # #eval に包むときに 2 行目の先頭に空白を足すと、文字列の値が変わる。
         status, out, err = run(kernel, '"Hello\nWorld".length')
@@ -228,7 +228,7 @@ def fib : Nat → Nat
     @story("J1", "E3")
     def 複数行の文字列で証明しても_sorry_を置き換えた宣言の値は変わらない(kernel):
         """
-        ja: 複数行の文字列で証明しても sorry を置き換えた宣言の値は変わらない
+        ja: 証明モードで複数行の文字列を exact で送ると、その文字列のまま sorry を置き換える
         """
         run(kernel, "def cell_greeting : String := by sorry")
         run(kernel, ":prove")
@@ -240,7 +240,7 @@ def fib : Nat → Nat
     @story("J1", "E1")
     def タクティクの続きを書きかけてやめたらタクティクを戻す(kernel):
         """
-        ja: タクティクの続きを書きかけてやめたらタクティクを戻す
+        ja: 証明モードでタクティクの続きを書きかけたままコマンドを送ると、直前のタクティクを残す
         """
         # インデントした行は直前のタクティクの続きとして読み直すので、直前の
         # タクティクを一度取り消す。続きを書かずにやめたら、取り消しを戻す。
@@ -256,7 +256,7 @@ def fib : Nat → Nat
     @story("J1", "E1")
     def セミコロンでタクティクを並べると_1_行で実行する(kernel):
         """
-        ja: セミコロンでタクティクを並べると 1 行で実行する
+        ja: 証明モードでセミコロンで区切ったタクティクを送ると、すべて実行して証明を完了する
         """
         run(kernel, "theorem cell_semi : 1 = 1 ∧ 2 = 2 := by sorry")
         run(kernel, ":prove")
@@ -266,7 +266,7 @@ def fib : Nat → Nat
     @story("J1", "E1")
     def 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する(kernel):
         """
-        ja: 読めないタクティクを送ると入力したとおりの位置でパースエラーを表示する
+        ja: 証明モードで読めないタクティクを送ると、入力の中の位置でパースエラーを表示する
         """
         run(kernel, "theorem cell_paren : 1 = 1 := by sorry")
         run(kernel, ":prove")
@@ -278,7 +278,7 @@ def fib : Nat → Nat
     @story("J1")
     def 閉じていない_raw_文字列を入力すると次の行に続ける(kernel):
         """
-        ja: 閉じていない raw 文字列を入力すると次の行に続ける
+        ja: 2 行にわたる raw 文字列を含むセルを実行すると、改行を含む 1 つの文字列として評価する
         """
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')
         assert status == "ok", err
@@ -289,7 +289,7 @@ def fib : Nat → Nat
         kernel,
     ):
         """
-        ja: 複数行ブロックを閉じずにセルを実行するとエラーになり次のセルは実行できる
+        ja: 複数行のブロックを閉じないセルを実行すると、:} が無いと表示して失敗し、次のセルを実行する
         """
         status, out, err = run(kernel, ":{\ndef unclosed := 1")
         assert status == "error", out
@@ -301,7 +301,7 @@ def fib : Nat → Nat
     @story("J1")
     def colon_shell_を実行すると出力をセルに表示する(kernel):
         """
-        ja: :shell を実行すると出力をセルに表示する
+        ja: :! でコマンドを実行すると、その stdout と stderr をセルに表示する
         """
         status, out, err = run(kernel, ":! echo to-out; echo to-err >&2; exit 3")
         assert status == "ok"  # 終了コードは見ない (端末と同じ)
@@ -311,7 +311,7 @@ def fib : Nat → Nat
     @story("J1", "C7")
     def colon_abbrev_を実行すると一覧をセルに表示する(kernel):
         """
-        ja: :abbrev を実行すると一覧をセルに表示する
+        ja: :abbrev に記号を付けて実行すると、その記号の略記をセルに表示する
         """
         status, out, _ = run(kernel, ":abbrev →")
         assert status == "ok"
@@ -320,7 +320,7 @@ def fib : Nat → Nat
     @story("J1", "D4")
     def パターンを付けずに_colon_loogle_を実行すると_status_が_error_になる(kernel):
         """
-        ja: パターンを付けずに :loogle を実行すると status が error になる
+        ja: パターンを付けずに :loogle を実行すると、パターンが必要と表示して失敗する
         """
         # 引数を確かめたところで止まるので、loogle には問い合わせない。
         status, _, err = run(kernel, ":loogle")
@@ -330,7 +330,7 @@ def fib : Nat → Nat
     @story("J1")
     def ノートブックで_colon_q_を実行しても終了しない(kernel):
         """
-        ja: ノートブックで :q を実行しても終了しない
+        ja: :q を実行すると、ノートブックでは何もしないと表示し、次のセルを実行する
         """
         _, out, _ = run(kernel, ":q")
         assert "ノートブックでは何もしない" in out, out
@@ -340,7 +340,7 @@ def fib : Nat → Nat
     @story("J1")
     def 改ページを含む文字列を入力しても式として評価する(kernel):
         """
-        ja: 改ページを含む文字列を入力しても式として評価する
+        ja: 改ページの文字を含む文字列の式のセルを実行すると、文字列を変えずに式として評価する
         """
         # 完結の判定に送る文字列リテラルに \f と書くと、Lean が読めずに判定が
         # エラーになり、式を宣言として送ってしまう。#eval に包むときに \f を行の
@@ -358,7 +358,7 @@ def describe_補完():
     @story("J2", "D1")
     def 名前の途中で補完すると定数名を候補に出す(kernel):
         """
-        ja: 名前の途中で補完すると定数名を候補に出す
+        ja: 名前の途中で補完すると、定数名を候補に出す
         """
         run(kernel, "#eval 0")  # エンジンを起動しておく
         head, matches = complete(kernel, "#check Nat.add_c")
@@ -368,7 +368,7 @@ def describe_補完():
     @story("J2", "D1")
     def colon_undo_で宣言を取り消すとその名前は候補に出ない(kernel):
         """
-        ja: :undo で宣言を取り消すとその名前は候補に出ない
+        ja: :undo で宣言を取り消すと、その名前を候補から外す
         """
         run(kernel, "def undoneOnly := 1")
         assert "undoneOnly" in complete(kernel, "#check undoneO")[1]
@@ -381,7 +381,7 @@ def describe_補完():
         kernel,
     ):
         """
-        ja: :undo のあとに同じ数の宣言を足しても取り消した名前は候補に出ない
+        ja: :undo のあとに宣言を 1 つ足すと、足した名前を候補に出し、取り消した名前は出さない
         """
         # 宣言の数だけを見ると、取り消す前の名前を使い続ける。
         run(kernel, "def swappedA := 1")
@@ -395,7 +395,7 @@ def describe_補完():
     @story("J2", "C5")
     def 略記の途中で補完すると記号を候補に出す(kernel):
         """
-        ja: 略記の途中で補完すると記号を候補に出す
+        ja: 略記を補完すると、その記号を最初の候補に出す
         """
         head, matches = complete(kernel, "theorem x : p \\to")
         assert head == "\\to"
@@ -404,7 +404,7 @@ def describe_補完():
     @story("J2", "H1")
     def コマンド名の途中で補完するとコマンド名を候補に出す(kernel):
         """
-        ja: コマンド名の途中で補完するとコマンド名を候補に出す
+        ja: コマンド名の途中で補完すると、入力した部分で始まるコマンド名を候補に出す
         """
         head, matches = complete(kernel, ":re")
         assert head == "re"
@@ -413,7 +413,7 @@ def describe_補完():
     @story("J2", "B4")
     def セルの_2_行目の_colon_l_の後で補完するとファイルのパスを候補に出す(kernel):
         """
-        ja: セルの 2 行目の :l の後で補完するとファイルのパスを候補に出す
+        ja: セルの 2 行目の :l の後ろを補完すると、.lean のファイルだけを候補に出す
         """
         run(
             kernel, ":! touch cell.lean cell.md"
@@ -440,7 +440,7 @@ def describe_Jupyter_の補完の形():
     @pytest.mark.usefixtures("place")
     def 続きの文字だけの候補は_Jupyter_に返すときに語全体に直す():
         """
-        ja: 続きの文字だけの候補は Jupyter に返すときに語全体に直す
+        ja: 続きの文字だけの候補は、入力済みの部分を含めた語全体に直す
         """
         assert jupyter(":! leanf") == (len(":! "), ["leanfoo"])
         assert jupyter(":! cat bin/leanf") == (len(":! cat bin/"), ["leanfoo"])
@@ -449,21 +449,21 @@ def describe_Jupyter_の補完の形():
     @pytest.mark.usefixtures("place")
     def ディレクトリの候補には_slash_を付ける():
         """
-        ja: ディレクトリの候補には slash を付ける
+        ja: ディレクトリの候補の後ろに / を付ける
         """
         assert jupyter(":l ") == (len(":l "), ["bin/", "notes.lean"])
 
     @story("J2", "D1")
     def 定数名の候補は名前全体を置き換える():
         """
-        ja: 定数名の候補は名前全体を置き換える
+        ja: 定数名の候補は、入力した名前全体を置き換える
         """
         assert jupyter("#check Nat.su") == (len("#check "), ["Nat.succ"])
 
     @story("J2", "D1")
     def 文字列のエスケープの後ろで補完すると名前を候補に出す():
         """
-        ja: 文字列のエスケープの後ろで補完すると名前を候補に出す
+        ja: 文字列のエスケープの後ろにある名前だけを定数名の候補で置き換える
         """
         # `\n",Nat.su` で始まる略記は無いので、`\` から後ろは略記ではない。
         text = '#eval ("a\\n",Nat.su'
@@ -472,21 +472,21 @@ def describe_Jupyter_の補完の形():
     @story("J2", "D1")
     def 名前の前に記号があれば記号の後ろから名前を補完する():
         """
-        ja: 名前の前に記号があれば記号の後ろから名前を補完する
+        ja: 名前の前に記号があると、記号の後ろだけを定数名の候補で置き換える
         """
         assert jupyter("#check @Nat.su") == (len("#check @"), ["Nat.succ"])
 
     @story("J2", "D1")
     def 名前の前に_Lean_の名前に使えない文字があればその後ろから名前を補完する():
         """
-        ja: 名前の前に Lean の名前に使えない文字があればその後ろから名前を補完する
+        ja: 名前の前に Lean の名前に使えない文字があると、その文字の後ろだけを定数名の候補で置き換える
         """
         assert jupyter("#check 定理Nat.su") == (len("#check 定理"), ["Nat.succ"])
 
     @story("J2")
     def 候補が無ければカーソルの位置を返す():
         """
-        ja: 候補が無ければカーソルの位置を返す
+        ja: 候補が無ければ、カーソルの位置と空の一覧を返す
         """
         assert jupyter(":env ") == (len(":env "), [])
 
@@ -499,7 +499,7 @@ def describe_エンジンの異常終了と中断():
     @story("J3", "F1")
     def エンジンが異常終了しても宣言が残る(kernel):
         """
-        ja: エンジンが異常終了しても宣言が残る
+        ja: エンジンが異常終了すると、それまでの宣言を残して次のセルを実行する
         """
         km, _ = kernel
         run(kernel, "def kept := 41")
@@ -512,7 +512,7 @@ def describe_エンジンの異常終了と中断():
     @story("J3", "A4")
     def 評価を中断しても宣言が残る(kernel, tmp_path):
         """
-        ja: 評価を中断しても宣言が残る
+        ja: 評価の途中で中断すると、評価を止めてエラーにし、それまでの宣言を残す
         """
         km, kc = kernel
         run(kernel, "def before := 5")
@@ -566,7 +566,7 @@ def describe_起動と再起動の失敗():
         direct, mocker, capsys
     ):
         """
-        ja: 設定にエラーがあればセルに表示して次のセルでもう一度起動する
+        ja: 設定にエラーがあると、エラーを表示してセルを失敗させ、次のセルで起動をやり直す
         """
         k, make, _ = direct
         mocker.patch.object(
@@ -587,7 +587,7 @@ def describe_起動と再起動の失敗():
         direct, capsys
     ):
         """
-        ja: エンジンを起動できなければセルが error になり次のセルで起動し直す
+        ja: エンジンが起動しないと、エラーを表示してセルを失敗させ、次のセルで起動をやり直す
         """
         k, make, fake = direct
         make.side_effect = [leani.types.EngineDied("起動しない"), fake]
@@ -606,7 +606,7 @@ def describe_起動と再起動の失敗():
     )
     def 再起動に失敗したら_repl_を捨てて次のセルで起動する(direct, capsys, exc):
         """
-        ja: 再起動に失敗したら repl を捨てて次のセルで起動する
+        ja: エンジンの再起動に失敗すると、セルを失敗させ、次のセルでエンジンを起動し直す
         """
         k, make, fake = direct
         execute(k)
@@ -622,7 +622,7 @@ def describe_起動と再起動の失敗():
     @story("J3")
     def 想定外の例外が起きたら内部エラーとして表示しセッションを残す(direct, capsys):
         """
-        ja: 想定外の例外が起きたら内部エラーとして表示しセッションを残す
+        ja: 想定外の例外が起きると、内部エラーと表示してセルを失敗させ、セッションを残す
         """
         k, _, fake = direct
         execute(k)
@@ -650,7 +650,7 @@ def describe_Lean_のバージョン():
     @story("J1", "G3")
     def lean_の_version_を調べるときは時間を区切らずに待つ(lean):
         """
-        ja: lean の version を調べるときは時間を区切らずに待つ
+        ja: 手元の toolchain を調べると、時間を区切らずに lean を実行し、lean が表示したバージョンを返す
         """
         assert leani.boot.local_toolchain() == "leanprover/lean4:v4.34.0"
         assert "timeout" not in lean.call_args.kwargs
@@ -658,7 +658,7 @@ def describe_Lean_のバージョン():
     @story("J1", "G3")
     def toolchain_が_stable_なら今のバージョンに置き換える(lean, tmp_path):
         """
-        ja: toolchain が stable なら今のバージョンに置き換える
+        ja: プロジェクトの toolchain が stable なら、stable の lean が示すバージョンに置き換える
         """
         (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
         cfg = leani.config.EnvConfig.make("t", project=str(tmp_path))
@@ -672,7 +672,7 @@ def describe_Lean_のバージョン():
     @story("J1", "G3")
     def エンジンを自分で指定したら_stable_を置き換えない(lean, tmp_path):
         """
-        ja: エンジンを自分で指定したら stable を置き換えない
+        ja: 設定でエンジンを指定してあれば、stable をそのまま返し、lean を実行しない
         """
         (tmp_path / "lean-toolchain").write_text("leanprover/lean4:stable\n")
         cfg = leani.config.EnvConfig.make("t", engine=str(tmp_path))
@@ -688,7 +688,7 @@ def describe_カーネルの登録():
     @story("J1")
     def カーネルを登録すると今の_Python_で_leani_kernel_を起動する設定を書く(tmp_path):
         """
-        ja: カーネルを登録すると今の Python で leani kernel を起動する設定を書く
+        ja: install を実行すると、今の Python で leani.kernel を起動する kernel.json を書く
         """
         env = dict(os.environ, JUPYTER_DATA_DIR=str(tmp_path), PYTHONPATH=SRC)
         subprocess.run(
@@ -701,13 +701,13 @@ def describe_カーネルの登録():
 
 def describe_SPEC_md_との対応():
     """
-    ja: SPEC md との対応
+    ja: SPEC との対応
     """
 
     @story("X1")
     def SPEC_md_に載らない形のテストを実行するとエラーにする(pytester):
         """
-        ja: SPEC md に載らない形のテストを実行するとエラーにする
+        ja: SPEC に載らない形のテストがあると、pytest の実行を失敗させ、そのテストの名前だけを表示する
         """
         pytester.makepyfile(
             test_forms="""
