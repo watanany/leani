@@ -59,7 +59,7 @@ addopts = "-q"
 [tool.ruff.lint]
 # 有効にしなかったルール。どれも一般には推奨されるが、このリポジトリの方針を優先する。
 #   RET505-508       return や raise のあとの else。分岐は明示的に else で書く
-#   N802 / PLC2401   日本語のテスト名。これが SPEC.md の見出しになる
+#   N802 / PLC2401   日本語のテスト名
 #   PTH              os.path で統一している
 #   EM / TRY003      例外のメッセージは raise する所で組み立てて、そのまま読めるようにする
 #   D / ANN          docstring と型注釈は必要な所に手で付ける
@@ -93,6 +93,7 @@ ban-relative-imports = "all"
 # だけに適用する。副作用のモジュールでは、入力を順に分岐して処理する関数が長くなる。
 # print (T201) を使ってよいのは、Output の実装 (show、kernel)、カーネルの登録 (kernel)、
 # エンジンを用意する途中の boot、開発用の tools だけ。ほかの表示は Output で出す。
+# テストの文は docstring の ja: の後ろに 1 行で書くので、テストでは行の長さ (E501) を問わない。
 "src/leani/boot.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/engine.py" = ["TID251", "C901", "PLR091"]
 "src/leani/search.py" = ["TID251", "C901", "PLR091"]
@@ -100,5 +101,5 @@ ban-relative-imports = "all"
 "src/leani/repl.py" = ["TID251", "C901", "PLR091"]
 "src/leani/kernel.py" = ["TID251", "C901", "PLR091", "T201"]
 "src/leani/__init__.py" = ["TID251", "C901", "PLR091"]
-"tests/**" = ["TID251", "C901", "PLR091"]
+"tests/**" = ["TID251", "C901", "PLR091", "E501"]
 "tools/**" = ["C901", "PLR091", "T201"]

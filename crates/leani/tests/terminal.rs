@@ -17,8 +17,10 @@ use common::pty::{PROMPT, Terminal, WIDE_PROMPT, piped, shows};
 use story::story;
 
 mod 行編集 {
+    //! ja: 行編集
     use super::*;
 
+    /// ja: プロンプトの色を桁として数えない
     #[story("C3")]
     #[test]
     fn プロンプトの色を桁として数えない() {
@@ -32,6 +34,7 @@ mod 行編集 {
         assert_eq!(term.cursor().1, 77, "{}", term.cursor_line());
     }
 
+    /// ja: 履歴から呼び出した行を Backspace で修正できる
     #[story("C3")]
     #[test]
     fn 履歴から呼び出した行を_Backspace_で修正できる() {
@@ -48,6 +51,7 @@ mod 行編集 {
         assert!(shows(&out, "2"), "{out}");
     }
 
+    /// ja: Ctrl-C で入力途中の行を捨てる
     #[story("F4")]
     #[test]
     fn Ctrl__C_で入力途中の行を捨てる() {
@@ -61,6 +65,7 @@ mod 行編集 {
         assert!(shows(&out, "2"), "入力途中の内容が残っている: {out}");
     }
 
+    /// ja: Ctrl-D で入力途中のブロックを実行する
     #[story("C6")]
     #[test]
     fn Ctrl__D_で入力途中のブロックを実行する() {
@@ -78,6 +83,7 @@ mod 行編集 {
         assert!(term.wait_exit(10), "もう一度 Ctrl-D を押しても終了しない");
     }
 
+    /// ja: 行編集の無い端末でも Ctrl-D で入力途中のブロックを実行して続ける
     #[story("C6", "F4")]
     #[test]
     fn 行編集の無い端末でも_Ctrl__D_で入力途中のブロックを実行して続ける() {
@@ -95,6 +101,7 @@ mod 行編集 {
         assert!(shows(&out, "2"), "Ctrl-D のあとに入力を読まない: {out}");
     }
 
+    /// ja: Ctrl-C で評価中の計算を止めても宣言が残る
     #[story("A4")]
     #[test]
     fn Ctrl__C_で評価中の計算を止めても宣言が残る() {
@@ -122,6 +129,7 @@ mod 行編集 {
         assert!(shows(&out, "5"), "{out}");
     }
 
+    /// ja: 捨てた入力途中のブロックも履歴には残る
     #[story("C3", "F3")]
     #[test]
     fn 捨てた入力途中のブロックも履歴には残る() {
@@ -139,8 +147,10 @@ mod 行編集 {
 }
 
 mod 略記の入力 {
+    //! ja: 略記の入力
     use super::*;
 
+    /// ja: space で記号に変換され space も残る
     #[story("C5")]
     #[test]
     fn space_で記号に変換され_space_も残る() {
@@ -154,6 +164,7 @@ mod 略記の入力 {
         assert!(term.line("").contains("Nat → Nat : Type"));
     }
 
+    /// ja: Tab で記号に変換され空白は入らない
     #[story("C8")]
     #[test]
     fn Tab_で記号に変換され_空白は入らない() {
@@ -165,6 +176,7 @@ mod 略記の入力 {
         assert!(line.contains("#check (·.succ : Nat →)"), "{line}");
     }
 
+    /// ja: 略記でなければ Tab は名前を補完する
     #[story("C8", "D1")]
     #[test]
     fn 略記でなければ_Tab_は名前を補完する() {
@@ -179,8 +191,10 @@ mod 略記の入力 {
 }
 
 mod 履歴 {
+    //! ja: 履歴
     use super::*;
 
+    /// ja: 複数行のブロックは 1 件にまとまる
     #[story("C3", "F3")]
     #[test]
     fn 複数行のブロックは_1_件にまとまる() {
@@ -191,6 +205,7 @@ mod 履歴 {
         assert_eq!(entries[0].matches('\n').count(), 2, "{:?}", entries[0]);
     }
 
+    /// ja: 1 回の Ctrl-P でブロック全体を呼び出して 1 つの入力として送る
     #[story("C3")]
     #[test]
     fn _1_回の_Ctrl__P_でブロック全体を呼び出して_1_つの入力として送る() {
@@ -210,6 +225,7 @@ mod 履歴 {
         );
     }
 
+    /// ja: ディレクトリを含まない履歴のパスでも前回の履歴を消さない
     #[story("F3")]
     #[test]
     fn ディレクトリを含まない履歴のパスでも前回の履歴を消さない() {
@@ -225,6 +241,7 @@ mod 履歴 {
         assert_eq!(term.saved_history(), ["def old := 1", "1 + 1"]);
     }
 
+    /// ja: 異常終了したセッションの履歴も残る
     #[story("F3")]
     #[test]
     fn 異常終了したセッションの履歴も残る() {
@@ -238,8 +255,10 @@ mod 履歴 {
 }
 
 mod 環境の切り替え {
+    //! ja: 環境の切り替え
     use super::*;
 
+    /// ja: プロンプトが設定どおりに変わる
     #[story("G5")]
     #[test]
     fn プロンプトが設定どおりに変わる() {
@@ -255,8 +274,10 @@ mod 環境の切り替え {
 }
 
 mod 外部コマンド {
+    //! ja: 外部コマンド
     use super::*;
 
+    /// ja: Ctrl-C で外部コマンドを止めてもセッションが残る
     #[story("F4")]
     #[test]
     fn Ctrl__C_で外部コマンドを止めてもセッションが残る() {
@@ -277,8 +298,10 @@ mod 外部コマンド {
 }
 
 mod pager {
+    //! ja: pager
     use super::*;
 
+    /// ja: pager のコマンドが無ければそのまま表示する
     #[story("C7")]
     #[test]
     fn pager_のコマンドが無ければそのまま表示する() {
@@ -290,10 +313,13 @@ mod pager {
     }
 }
 
-/// パイプで渡したとき。
 mod 端末でない入力 {
+    //! ja: 端末でない入力
+    //!
+    //! パイプで渡したとき。
     use super::*;
 
+    /// ja: UTF-8 で読めないバイトがあっても後続の行を失わない
     #[story("F4")]
     #[test]
     fn UTF__8_で読めないバイトがあっても後続の行を失わない() {
@@ -309,6 +335,7 @@ mod 端末でない入力 {
         assert!(out.contains("42"), "{out}");
     }
 
+    /// ja: 末尾に空行が無くても最後のブロックを実行する
     #[story("F4")]
     #[test]
     fn 末尾に空行が無くても最後のブロックを実行する() {
@@ -318,6 +345,7 @@ mod 端末でない入力 {
         assert!(shows(&out, "42"), "{out}");
     }
 
+    /// ja: ファイルを指定して起動すると宣言を使える
     #[story("B4")]
     #[test]
     fn ファイルを指定して起動すると宣言を使える() {

@@ -53,15 +53,15 @@ uv run ruff format . && uv run ruff check .
 uv run mypy
 ```
 
-テストの名前やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.md` を生成し直す。
+テストの文 (doc comment と docstring の `ja:` の行) やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.md` を生成し直す。
 カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
 `SPEC.md` の内容がテストと一致していないと、テストが失敗する。
 
 ## 作業の流れ
 
 - 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `stories.toml` に追加し、テストには `#[story("A1")]` でストーリーの ID を付ける (カーネルのテストでは `@story("A1")`)。1 つのストーリーに複数のテストを付けてよい
-- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.md` を作るので、crate の中の単体テストは `SPEC.md` に載らない。テストの関数名は日本語の文で書き、`mod` を describe にする
-- コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの名前に書く
+- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.md` を作るので、crate の中の単体テストは `SPEC.md` に載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` の後ろに 1 行で書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` に書く
+- コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
 - 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
 

@@ -3,7 +3,7 @@
 //!
 //! ```text
 //! stories.toml                誰の何を助けるか。コードからは分からないので、ここが情報源
-//! crates/leani/tests/*.rs     それを確かめているテスト。テスト名がそのまま仕様の文になる
+//! crates/leani/tests/*.rs     それを確かめているテスト。doc の ja: の行が仕様の文になる
 //! tests/test_*.py             Jupyter のカーネルのテスト (Python 版)
 //! ```
 //!
@@ -19,32 +19,23 @@
 //! ストーリーには「まだ作っていない。」と表示する。
 //!
 //! Rust では、`#[test]` か `#[proptest]` の付いた関数をテストと見なし、テストを含む `mod` を
-//! describe と見なす。
+//! describe と見なす。テストの文は関数の doc comment (`///`) の `ja:` の行から読み、describe の
+//! 文は `mod` の中の doc comment (`//!`) の `ja:` の行から読む。
 //!
 //! Python のテストは行単位で読む。`def describe_` の行をインデントで入れ子にし、その中で
-//! `@story(...)` の行の次にある `def` をテストと見なす。describe の名前からは `describe_`
-//! を外す。Python の構文を解析する crate は使わない。カーネルのテストは数が少なく、
-//! 書き方も決まっているので、行単位で足りる。
+//! `@story(...)` の行の次にある `def` をテストと見なす。describe とテストの文は、`def` の
+//! すぐ後ろの docstring の `ja:` の行から読む。Python の構文を解析する crate は使わない。
+//! カーネルのテストは数が少なく、書き方も決まっているので、行単位で足りる。
 //!
-//! テスト名を文に戻す規則は 5 つだけ。
-//!
-//! ```text
-//! __                     ハイフン   Ctrl__C     -> Ctrl-C
-//! 語の先頭の colon_      :          colon_save  -> :save (関数名に : を書けないため)
-//! 語の先頭の dash_       -          dash_e      -> -e / dash_dash_setup -> --setup
-//! 片側が ASCII の _      空白       do_by       -> do by / IO_の式 -> IO の式
-//! それ以外の _           詰める     行を_待つ   -> 行を待つ
-//! ```
-//!
-//! Python は識別子を NFKC で正規化して読むので、ここでも名前を NFKC にしてから戻す。
+//! 文は `ja:` の後ろに 1 行で書く。`ja:` の次の行に続きを書くと、続きを読み落とすので
+//! エラーにする。doc のほかの行には、テストの説明を自由に書いてよい。
 
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 use syn::punctuated::Punctuated;
-use syn::{Attribute, Item, LitStr, Token};
-use unicode_normalization::UnicodeNormalization;
+use syn::{AttrStyle, Attribute, Expr, ExprLit, Item, Lit, LitStr, Meta, Token};
 
 /// 生成するファイル。
 pub const OUT: &str = "SPEC.md";
@@ -73,13 +64,13 @@ pub fn root() -> PathBuf {
 #[derive(Deserialize)]
 pub struct Group {
     pub id: String,
-    pub title: String,
+    pub ja: String,
 }
 
 #[derive(Deserialize)]
 pub struct Story {
     pub id: String,
-    pub text: String,
+    pub ja: String,
 }
 
 /// `stories.toml` の中身。書いた順に `SPEC.md` に並べるので、`[[group]]` と `[[story]]` の
@@ -103,73 +94,89 @@ pub fn stories(root: &Path) -> Result<Stories, String> {
     toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
-// ---------------------------------------------------------------- 名前を戻す
+// ------------------------------------------------------------------ 文を読む
 
-/// ASCII の英数字か `:` か `-` の 1 文字か。`:` と `-` は `:save` や `-e` のような
-/// コマンド名とオプションの先頭なので、英数字と同じく前の `_` を空白にする。名前の端
-/// では `None` が渡されるので、その場合は false。
-fn ascii_word(ch: Option<char>) -> bool {
-    ch.is_some_and(|c| c.is_ascii_alphanumeric() || c == ':' || c == '-')
+/// doc の `ja:` と `en:` の行に書いた文。
+#[derive(Default)]
+struct Text {
+    ja: Option<String>,
+    en: Option<String>,
 }
 
-/// `_` を単語の区切りとして扱う。前後のどちらかが `ascii_word` なら空白にする。
-fn spaced(part: &str) -> String {
-    let chars: Vec<char> = part.chars().collect();
-    chars
+/// doc の行から `ja:` と `en:` の文を読む。`at` はエラーに出す場所。
+///
+/// 同じ印の行が 2 つあるとき、印の行の次の行が空行でも印の行でもないときはエラーにする。
+/// 後者は、文を 2 行に分けて書いたときに 2 行目を読み落とさないため。
+fn text(lines: &[String], at: &str) -> Result<Text, String> {
+    let (text, _) = lines
         .iter()
-        .enumerate()
-        .fold(String::new(), |out, (i, &ch)| match ch {
-            '_' if !out.is_empty()
-                && (ascii_word(out.chars().last()) || ascii_word(chars.get(i + 1).copied())) =>
-            {
-                out + " "
+        .try_fold((Text::default(), false), |(text, after), line| {
+            let line = line.trim();
+            match (line.strip_prefix("ja:"), line.strip_prefix("en:")) {
+                (Some(ja), _) => match text.ja {
+                    Some(_) => Err(format!("ja: が 2 つある: {at}")),
+                    None => Ok((
+                        Text {
+                            ja: Some(ja.trim().to_string()),
+                            ..text
+                        },
+                        true,
+                    )),
+                },
+                (_, Some(en)) => match text.en {
+                    Some(_) => Err(format!("en: が 2 つある: {at}")),
+                    None => Ok((
+                        Text {
+                            en: Some(en.trim().to_string()),
+                            ..text
+                        },
+                        true,
+                    )),
+                },
+                _ if after && !line.is_empty() => {
+                    Err(format!("ja: か en: の次の行に続きがある: {at}"))
+                }
+                _ => Ok((text, false)),
             }
-            '_' => out,
-            c => {
-                let mut out = out;
-                out.push(c);
-                out
-            }
-        })
+        })?;
+    Ok(text)
 }
 
-/// 語の先頭 (文字列の先頭か `_` の直後) にある `from` を `to` に置き換える。
-fn at_word_start(s: &str, from: &str, to: &str) -> String {
-    let mut out = String::new();
-    let mut prev: Option<char> = None;
-    let mut rest = s;
-    while let Some(c) = rest.chars().next() {
-        if rest.starts_with(from) && prev.is_none_or(|p| p == '_') {
-            out.push_str(to);
-            prev = from.chars().last();
-            rest = &rest[from.len()..];
-        } else {
-            out.push(c);
-            prev = Some(c);
-            rest = &rest[c.len_utf8()..];
-        }
+/// doc の `ja:` の文。無いか空ならエラー。
+fn ja(lines: &[String], at: &str) -> Result<String, String> {
+    match text(lines, at)?.ja {
+        Some(ja) if !ja.is_empty() => Ok(ja),
+        _ => Err(format!("doc に ja: の文が無い: {at}")),
     }
-    out
 }
 
-/// 語の先頭の `colon_` を `:` に、`dash_` を `-` に戻す。関数名に書けない記号。
-fn symbols(part: &str) -> String {
-    at_word_start(&at_word_start(part, "colon_", ":"), "dash_", "-")
-}
-
-/// テストの関数名か describe の `mod` の名前を、仕様の 1 文に戻す。
-pub fn label(name: &str) -> String {
-    let name: String = name.nfkc().collect();
-    name.split("__")
-        .map(|p| spaced(&symbols(p)))
-        .collect::<Vec<_>>()
-        .join("-")
+/// doc comment の行。`inner` なら `//!` を、そうでなければ `///` を読む。
+///
+/// syn は、`mod` の外に書いた `///` と中に書いた `//!` を同じ `attrs` に入れるので、
+/// 書いた場所で分ける。
+fn doc_lines(attrs: &[Attribute], inner: bool) -> Vec<String> {
+    attrs
+        .iter()
+        .filter(|a| matches!(a.style, AttrStyle::Inner(_)) == inner && a.path().is_ident("doc"))
+        .filter_map(|a| match &a.meta {
+            Meta::NameValue(nv) => match &nv.value {
+                Expr::Lit(ExprLit {
+                    lit: Lit::Str(s), ..
+                }) => Some(s.value()),
+                _ => None,
+            },
+            _ => None,
+        })
+        // 空の `///` は空の文字列になり、`lines` では 0 行になるので、`split` で分ける。
+        .flat_map(|s| s.split('\n').map(str::to_string).collect::<Vec<_>>())
+        .collect()
 }
 
 // ------------------------------------------------------------ テストを集める
 
-/// テスト 1 件。`what` は関数名を文に戻したもの、`place` は「層 / describe」。
+/// テスト 1 件。`name` は関数名、`what` は doc の `ja:` の文、`place` は「層 / describe」。
 pub struct Test {
+    pub name: String,
     pub what: String,
     pub place: String,
     pub stories: Vec<String>,
@@ -223,9 +230,36 @@ fn mod_file(dir: &Path, name: &str) -> Result<syn::File, String> {
     syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))
 }
 
+/// 外側の describe の文と内側の場所を ` / ` でつなぐ。内側が空なら外側だけ。
+fn nest(outer: &str, inner: &str) -> String {
+    match inner {
+        "" => outer.to_string(),
+        _ => format!("{outer} / {inner}"),
+    }
+}
+
+/// Rust のテストファイル 1 つのテスト。場所は「層 / describe」で、`mod` の外のテストは
+/// describe の代わりに層の名前を書く。`dir` は、`mod x;` と書いたときに `x` のファイルを
+/// 探すディレクトリ。
+fn rust_tests(items: &[Item], layer: &str, dir: &Path) -> Result<Vec<Test>, String> {
+    Ok(descend(items, layer, dir)?
+        .into_iter()
+        .map(|t| {
+            let place = format!(
+                "{layer} / {}",
+                match t.place.as_str() {
+                    "" => layer,
+                    p => p,
+                }
+            );
+            Test { place, ..t }
+        })
+        .collect())
+}
+
 /// `mod` を再帰的にたどってテストを集める。テストを含む `mod` が describe になる。
-/// `mod` は入れ子にでき、describe の名前は外側の `mod` から ` / ` でつなぐ。
-/// `dir` は、`mod x;` と書いたときに `x` のファイルを探すディレクトリ。
+/// `mod` は入れ子にでき、返すテストの場所は、`items` の中の describe の文を ` / ` で
+/// つないだもの。`at` は、エラーに出すための `mod` の名前の並び。
 ///
 /// 次の書き方はエラーにする。どれも、`SPEC.md` と実行されるテストがずれるのに気づけない。
 ///
@@ -234,65 +268,88 @@ fn mod_file(dir: &Path, name: &str) -> Result<syn::File, String> {
 /// #[ignore] か #[cfg] が付いたテストと mod         実行されないことがあるのに載る
 /// 直下のマクロ (proptest! など)                   中のテストを読めないので載らない
 /// #[path] の付いた mod                            ファイルを探さないので載らない
+/// 同じ文の mod が並ぶ                             2 つの mod のテストが 1 つの describe に載る
 /// ```
-fn descend(
-    items: &[Item],
-    layer: &str,
-    place: Option<&str>,
-    dir: &Path,
-) -> Result<Vec<Test>, String> {
-    let here = place.unwrap_or(layer);
-    items
+fn descend(items: &[Item], at: &str, dir: &Path) -> Result<Vec<Test>, String> {
+    let found = items
         .iter()
-        .map(|item| match item {
-            Item::Mod(m) if m.attrs.iter().any(|a| a.path().is_ident("path")) => Err(format!(
-                "#[path] の付いた mod は読まない: {layer} / {here} / {}",
-                m.ident
-            )),
-            Item::Mod(m) => {
-                let ident = m.ident.to_string();
-                let name = label(&ident);
-                let inside = match place {
-                    Some(outer) => format!("{outer} / {name}"),
-                    None => name,
-                };
-                let sub = dir.join(&ident);
-                let tests = match &m.content {
-                    Some((_, inner)) => descend(inner, layer, Some(&inside), &sub)?,
-                    None => descend(&mod_file(dir, &ident)?.items, layer, Some(&inside), &sub)?,
-                };
-                match (skipped(&m.attrs), tests.is_empty()) {
-                    (true, false) => {
-                        Err(format!("実行されないことがあるテスト: {layer} / {inside}"))
-                    }
-                    _ => Ok(tests),
+        .map(|item| item_tests(item, at, dir))
+        .collect::<Result<Vec<_>, String>>()?;
+    let mods = repeated(found.iter().filter_map(|(m, _)| m.as_deref()));
+    match mods.first() {
+        Some(same) => Err(format!("同じ文の mod が並んでいる: {at} / {same}")),
+        None => Ok(found.into_iter().flat_map(|(_, tests)| tests).collect()),
+    }
+}
+
+/// 1 つの item のテスト。item がテストを含む `mod` なら、その文も返す。
+fn item_tests(item: &Item, at: &str, dir: &Path) -> Result<(Option<String>, Vec<Test>), String> {
+    match item {
+        Item::Mod(m) if m.attrs.iter().any(|a| a.path().is_ident("path")) => Err(format!(
+            "#[path] の付いた mod は読まない: {at} / {}",
+            m.ident
+        )),
+        Item::Mod(m) => {
+            let ident = m.ident.to_string();
+            let inside = format!("{at} / {ident}");
+            let sub = dir.join(&ident);
+            let (docs, tests) = match &m.content {
+                Some((_, inner)) => (doc_lines(&m.attrs, true), descend(inner, &inside, &sub)?),
+                None => {
+                    let file = mod_file(dir, &ident)?;
+                    (
+                        doc_lines(&file.attrs, true),
+                        descend(&file.items, &inside, &sub)?,
+                    )
+                }
+            };
+            match (skipped(&m.attrs), tests.is_empty()) {
+                (true, false) => Err(format!("実行されないことがあるテスト: {inside}")),
+                (_, true) => Ok((None, tests)),
+                (false, false) => {
+                    let name = ja(&docs, &format!("mod {inside}"))?;
+                    let tests = tests
+                        .into_iter()
+                        .map(|t| Test {
+                            place: nest(&name, &t.place),
+                            ..t
+                        })
+                        .collect();
+                    Ok((Some(name), tests))
                 }
             }
-            Item::Macro(m) if m.ident.is_none() => Err(format!(
-                "マクロの中のテストは読めない: {layer} / {here} / {}!",
-                m.mac
-                    .path
-                    .segments
-                    .last()
-                    .map_or(String::new(), |s| s.ident.to_string())
-            )),
-            Item::Fn(f) if is_test(&f.attrs) && skipped(&f.attrs) => Err(format!(
-                "実行されないことがあるテスト: {layer} / {here} / {}",
-                f.sig.ident
-            )),
-            Item::Fn(f) if is_test(&f.attrs) => Ok(vec![Test {
-                what: label(&f.sig.ident.to_string()),
-                place: format!("{layer} / {here}"),
-                stories: marked(&f.attrs),
-            }]),
-            Item::Fn(f) if !marked(&f.attrs).is_empty() => Err(format!(
-                "テストでない関数に #[story] が付いている: {layer} / {here} / {}",
-                f.sig.ident
-            )),
-            _ => Ok(Vec::new()),
-        })
-        .collect::<Result<Vec<_>, String>>()
-        .map(|v| v.into_iter().flatten().collect())
+        }
+        Item::Macro(m) if m.ident.is_none() => Err(format!(
+            "マクロの中のテストは読めない: {at} / {}!",
+            m.mac
+                .path
+                .segments
+                .last()
+                .map_or(String::new(), |s| s.ident.to_string())
+        )),
+        Item::Fn(f) if is_test(&f.attrs) && skipped(&f.attrs) => Err(format!(
+            "実行されないことがあるテスト: {at} / {}",
+            f.sig.ident
+        )),
+        Item::Fn(f) if is_test(&f.attrs) => {
+            let name = f.sig.ident.to_string();
+            let what = ja(&doc_lines(&f.attrs, false), &format!("{at} / {name}"))?;
+            Ok((
+                None,
+                vec![Test {
+                    name,
+                    what,
+                    place: String::new(),
+                    stories: marked(&f.attrs),
+                }],
+            ))
+        }
+        Item::Fn(f) if !marked(&f.attrs).is_empty() => Err(format!(
+            "テストでない関数に #[story] が付いている: {at} / {}",
+            f.sig.ident
+        )),
+        _ => Ok((None, Vec::new())),
+    }
 }
 
 /// Python の 1 行を左から読んでいるときの状態。
@@ -333,6 +390,83 @@ fn string_after(line: &str, open: Option<&'static str>) -> Option<&'static str> 
     }
 }
 
+/// Python のブロックの種類。
+enum Scope {
+    /// ファイルの直下。
+    Top,
+    /// `def describe_`。中身は describe の文。
+    Describe(String),
+    /// `class`。pytest-describe は中の関数を集めない。
+    Class,
+    /// ほかの `def`。テストの中の `def` を、describe の直下の `def` と区別するために数える。
+    Function,
+}
+
+/// 開いているブロック。`names` は直下の `def` と `class` の名前、`describes` は直下の
+/// describe の文。どちらも重複を見つけるために持つ。
+struct Frame {
+    indent: Option<usize>,
+    scope: Scope,
+    names: Vec<String>,
+    describes: Vec<String>,
+}
+
+impl Frame {
+    fn new(indent: Option<usize>, scope: Scope) -> Self {
+        Frame {
+            indent,
+            scope,
+            names: Vec::new(),
+            describes: Vec::new(),
+        }
+    }
+}
+
+/// docstring を待っている `def`。
+enum Waiting {
+    Describe {
+        name: String,
+        indent: usize,
+    },
+    Test {
+        name: String,
+        place: String,
+        stories: Vec<String>,
+    },
+}
+
+impl Waiting {
+    fn name(&self) -> &str {
+        match self {
+            Waiting::Describe { name, .. } | Waiting::Test { name, .. } => name,
+        }
+    }
+}
+
+/// docstring を読んでいるところ。
+enum Doc {
+    Off,
+    /// `def` の行を読んだが、docstring はまだ始まっていない。
+    Before(Waiting),
+    /// docstring の中。読んだ行をためる。
+    Inside(Waiting, Vec<String>),
+}
+
+struct Scan {
+    frames: Vec<Frame>,
+    /// 次の `def` に付く `@story` の番号。
+    pending: Vec<String>,
+    /// 開いている三重引用符。閉じるまで行を読まない。
+    string: Option<&'static str>,
+    doc: Doc,
+    out: Vec<Test>,
+}
+
+/// `"""` だけの行か。describe とテストの docstring は、この行で始めてこの行で閉じる。
+fn quotes(body: &str) -> bool {
+    body.trim_end() == "\"\"\""
+}
+
 /// Python のテストファイルを行単位で読む。describe はインデントで入れ子にする。
 ///
 /// 三重引用符の中の行は読まない。セルの中身として書いた `def fib` を関数と見なすと、
@@ -343,74 +477,153 @@ fn string_after(line: &str, open: Option<&'static str>) -> Option<&'static str> 
 /// describe の外や `class` の中で `@story` を付けた関数はエラーにする。pytest-describe は
 /// これを集めないので、実行されないテストが `SPEC.md` に載る。反対に、`@story` の無い
 /// テストは `tests/stories.py` が実行する前に失敗させる。
+///
+/// 同じブロックの直下に同じ名前の `def` が 2 つあるとエラーにする。後の `def` が前の
+/// テストや describe を隠すので、pytest は前のものを集めないのに、ここでは載せてしまう。
 fn python_tests(text: &str, layer: &str) -> Result<Vec<Test>, String> {
-    struct Scan {
-        /// 開いているブロックの (インデント, describe の名前)。`class` は名前が None。
-        describes: Vec<(usize, Option<String>)>,
-        /// 次の `def` に付く `@story` の番号。
-        pending: Vec<String>,
-        /// 開いている三重引用符。閉じるまで行を読まない。
-        string: Option<&'static str>,
-        out: Vec<Test>,
-    }
     let start = Scan {
-        describes: Vec::new(),
+        frames: vec![Frame::new(None, Scope::Top)],
         pending: Vec::new(),
         string: None,
+        doc: Doc::Off,
         out: Vec::new(),
     };
-    let done = text.lines().try_fold(start, |mut scan, line| {
-        let inside = scan.string;
-        scan.string = string_after(line, inside);
-        if inside.is_some() {
+    let done = text
+        .lines()
+        .try_fold(start, |scan, line| python_line(scan, line, layer))?;
+    match done.doc {
+        Doc::Off => Ok(done.out),
+        Doc::Before(w) | Doc::Inside(w, _) => {
+            Err(format!("docstring が閉じていない: {layer} / {}", w.name()))
+        }
+    }
+}
+
+/// Python の 1 行を読む。
+fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> {
+    let body = line.trim_start();
+    match std::mem::replace(&mut scan.doc, Doc::Off) {
+        Doc::Inside(w, lines) if quotes(body) => return finish(scan, w, &lines, layer),
+        Doc::Inside(w, lines) => {
+            scan.doc = Doc::Inside(w, lines.into_iter().chain([body.to_string()]).collect());
             return Ok(scan);
         }
-        let body = line.trim_start();
-        let indent = line.len() - body.len();
-        let name = body
-            .strip_prefix("async ")
-            .unwrap_or(body)
-            .strip_prefix("def ")
-            .and_then(|rest| rest.split('(').next());
-        if body.starts_with("@story(") {
-            scan.pending
-                .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
+        Doc::Before(w) if quotes(body) => {
+            scan.doc = Doc::Inside(w, Vec::new());
             return Ok(scan);
         }
-        if body.starts_with("class ") {
-            scan.describes.retain(|(at, _)| *at < indent);
-            scan.describes.push((indent, None));
-            return Ok(scan);
-        }
-        let Some(name) = name else {
-            return Ok(scan);
-        };
-        scan.describes.retain(|(at, _)| *at < indent);
-        let stories = std::mem::take(&mut scan.pending);
-        if let Some(d) = name.strip_prefix("describe_") {
-            if !stories.is_empty() {
-                return Err(format!("describe に @story が付いている: {layer} / {name}"));
-            }
-            scan.describes.push((indent, Some(label(d))));
-            return Ok(scan);
-        }
-        if stories.is_empty() {
-            return Ok(scan);
-        }
-        let names: Option<Vec<&str>> = scan.describes.iter().map(|(_, d)| d.as_deref()).collect();
-        let Some(place) = names.filter(|n| !n.is_empty()).map(|n| n.join(" / ")) else {
+        Doc::Before(w)
+            if ["def ", "async def ", "@", "class "]
+                .iter()
+                .any(|p| body.starts_with(p)) =>
+        {
             return Err(format!(
-                "describe の外のテストは pytest-describe が実行しない: {layer} / {name}"
+                "def のすぐ後ろに ja: の docstring が無い: {layer} / {}",
+                w.name()
             ));
-        };
-        scan.out.push(Test {
-            what: label(name),
-            place: format!("{layer} / {place}"),
-            stories,
+        }
+        Doc::Before(w) => {
+            scan.doc = Doc::Before(w);
+            return Ok(scan);
+        }
+        Doc::Off => {}
+    }
+    let inside = scan.string;
+    scan.string = string_after(line, inside);
+    if inside.is_some() {
+        return Ok(scan);
+    }
+    let indent = line.len() - body.len();
+    if body.starts_with("@story(") {
+        scan.pending
+            .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
+        return Ok(scan);
+    }
+    let def = body
+        .strip_prefix("async ")
+        .unwrap_or(body)
+        .strip_prefix("def ")
+        .and_then(|rest| rest.split('(').next());
+    let class = body
+        .strip_prefix("class ")
+        .and_then(|rest| rest.split(['(', ':']).next());
+    let Some(name) = def.or(class).map(str::trim) else {
+        return Ok(scan);
+    };
+    scan.frames
+        .retain(|f| f.indent.is_none_or(|at| at < indent));
+    let parent = scan.frames.len() - 1;
+    if scan.frames[parent].names.iter().any(|n| n == name) {
+        return Err(format!("同じ場所に同じ名前の def がある: {layer} / {name}"));
+    }
+    scan.frames[parent].names.push(name.to_string());
+    let stories = std::mem::take(&mut scan.pending);
+    if class.is_some() {
+        scan.frames.push(Frame::new(Some(indent), Scope::Class));
+        return Ok(scan);
+    }
+    if name.starts_with("describe_") {
+        if !stories.is_empty() {
+            return Err(format!("describe に @story が付いている: {layer} / {name}"));
+        }
+        scan.doc = Doc::Before(Waiting::Describe {
+            name: name.to_string(),
+            indent,
         });
-        Ok(scan)
-    })?;
-    Ok(done.out)
+        return Ok(scan);
+    }
+    let names: Option<Vec<&str>> = scan.frames[1..]
+        .iter()
+        .map(|f| match &f.scope {
+            Scope::Describe(d) => Some(d.as_str()),
+            Scope::Top | Scope::Class | Scope::Function => None,
+        })
+        .collect();
+    let place = names.filter(|n| !n.is_empty()).map(|n| n.join(" / "));
+    scan.frames.push(Frame::new(Some(indent), Scope::Function));
+    if stories.is_empty() {
+        return Ok(scan);
+    }
+    let Some(place) = place else {
+        return Err(format!(
+            "describe の外のテストは pytest-describe が実行しない: {layer} / {name}"
+        ));
+    };
+    scan.doc = Doc::Before(Waiting::Test {
+        name: name.to_string(),
+        place: format!("{layer} / {place}"),
+        stories,
+    });
+    Ok(scan)
+}
+
+/// docstring を閉じたときに、待っていた `def` を describe かテストにする。
+fn finish(mut scan: Scan, w: Waiting, lines: &[String], layer: &str) -> Result<Scan, String> {
+    let what = ja(lines, &format!("{layer} / {}", w.name()))?;
+    match w {
+        Waiting::Describe { indent, .. } => {
+            let parent = scan.frames.len() - 1;
+            if scan.frames[parent].describes.contains(&what) {
+                return Err(format!(
+                    "同じ場所に同じ文の describe がある: {layer} / {what}"
+                ));
+            }
+            scan.frames[parent].describes.push(what.clone());
+            scan.frames
+                .push(Frame::new(Some(indent), Scope::Describe(what)));
+        }
+        Waiting::Test {
+            name,
+            place,
+            stories,
+        } => scan.out.push(Test {
+            name,
+            what,
+            place,
+            stories,
+        }),
+    }
+    Ok(scan)
 }
 
 /// ディレクトリにある、名前が `prefix` で始まり拡張子が `ext` のファイルを、
@@ -441,7 +654,7 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
             }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
             let dir = path.parent().unwrap_or(Path::new("."));
-            descend(&file.items, layer, None, dir)
+            rust_tests(&file.items, layer, dir)
         })
         .collect::<Result<Vec<_>, String>>()
         .map(|v| v.into_iter().flatten().collect())
@@ -475,8 +688,7 @@ fn story_complaints(stories: &Stories) -> Vec<String> {
 }
 
 /// 生成を止める理由。`#[story]` の付け忘れ、ストーリー番号の書き間違い、
-/// `stories.toml` の誤り、同じ場所の同じ名前のテスト。
-/// 同じ名前の Python の関数は後の定義が前の定義を隠すので、前のテストは実行されない。
+/// `stories.toml` の誤り、同じ場所の同じ文のテスト。
 pub fn complaints(stories: &Stories, tests: &[Test]) -> Vec<String> {
     let built = stories
         .unbuilt
@@ -489,7 +701,7 @@ pub fn complaints(stories: &Stories, tests: &[Test]) -> Vec<String> {
         .collect();
     let same = repeated(places.iter().map(String::as_str))
         .into_iter()
-        .map(|p| format!("同じ名前のテストがある: {p}"));
+        .map(|p| format!("同じ文のテストがある: {p}"));
     story_complaints(stories)
         .into_iter()
         .chain(built)
@@ -533,7 +745,7 @@ fn section(stories: &Stories, tests: &[Test], story: &Story) -> String {
         (true, true) => "まだ作っていない。\n".to_string(),
         (true, false) => "**確かめているテストが無い。**\n".to_string(),
     };
-    format!("### {} {}\n\n{body}", story.id, story.text)
+    format!("### {} {}\n\n{body}", story.id, story.ja)
 }
 
 pub fn render(stories: &Stories, tests: &[Test]) -> Result<String, Vec<String>> {
@@ -556,7 +768,7 @@ pub fn render(stories: &Stories, tests: &[Test]) -> Result<String, Vec<String>> 
             None
         } else {
             Some(
-                std::iter::once(format!("## {}. {}\n", g.id, g.title))
+                std::iter::once(format!("## {}. {}\n", g.id, g.ja))
                     .chain(ids.iter().map(|s| section(stories, tests, s)))
                     .collect::<Vec<_>>()
                     .join("\n"),
@@ -589,75 +801,149 @@ pub fn check(root: &Path) -> Result<(), String> {
 mod tests {
     use super::*;
 
-    #[test]
-    fn 名前を文に戻す() {
-        for (name, want) in [
-            ("Ctrl__C_で止める", "Ctrl-C で止める"),
-            ("colon_save_で書き出す", ":save で書き出す"),
-            ("dash_e_で選ぶ", "-e で選ぶ"),
-            ("dash_dash_setup_で用意する", "--setup で用意する"),
-            ("do_by", "do by"),
-            ("IO_の式", "IO の式"),
-            ("行を_待つ", "行を待つ"),
-            (
-                "SPEC_md_がテストとそろっている",
-                "SPEC md がテストとそろっている",
-            ),
-        ] {
-            assert_eq!(label(name), want, "{name}");
-        }
+    /// (場所, 文, 識別子, ストーリー)
+    type Row = (String, String, String, Vec<String>);
+
+    /// Rust のソースを読んで、(場所, 文, 識別子, ストーリー) を返す。
+    fn rust(text: &str) -> Result<Vec<Row>, String> {
+        let file = syn::parse_file(text).unwrap();
+        rust_tests(&file.items, "parsing", Path::new(".")).map(|v| {
+            v.into_iter()
+                .map(|t| (t.place, t.what, t.name, t.stories))
+                .collect()
+        })
+    }
+
+    /// Python のソースを読んで、(場所, 文, 識別子, ストーリー) を返す。
+    fn python(text: &str) -> Result<Vec<Row>, String> {
+        python_tests(text, "kernel").map(|v| {
+            v.into_iter()
+                .map(|t| (t.place, t.what, t.name, t.stories))
+                .collect()
+        })
+    }
+
+    fn row(place: &str, what: &str, name: &str, sids: &[&str]) -> Row {
+        (
+            place.to_string(),
+            what.to_string(),
+            name.to_string(),
+            sids.iter().map(|s| s.to_string()).collect(),
+        )
     }
 
     #[test]
-    fn テストの属性が付いた関数だけを集める() {
-        let file = syn::parse_file(
+    fn テストの属性が付いた関数だけを_doc_の_ja_の文で集める() {
+        let got = rust(
             r#"
-            mod 式の評価 {
+            mod eval {
+                //! ja: 式の評価
+                //!
+                //! mod の説明。
                 fn helper() {}
+                /// ja: 単独の式を評価する
                 #[story("A1")]
                 #[test]
-                fn 単独の式は評価される() {}
+                fn single() {}
+                /// ja: どう連結しても閉じている
+                /// en: Stays balanced
+                ///
+                /// テストの説明。
                 #[story("E2")]
                 #[proptest]
-                fn 連結しても閉じている(a: String) {}
+                fn concat(a: String) {}
             }
             mod common {
                 pub fn drive() {}
             }
             "#,
-        )
-        .unwrap();
-        let got: Vec<(String, String, Vec<String>)> =
-            descend(&file.items, "parsing", None, Path::new("."))
-                .unwrap()
-                .into_iter()
-                .map(|t| (t.place, t.what, t.stories))
-                .collect();
+        );
         assert_eq!(
-            got,
+            got.unwrap(),
             [
-                (
-                    "parsing / 式の評価".to_string(),
-                    "単独の式は評価される".to_string(),
-                    vec!["A1".to_string()],
+                row(
+                    "parsing / 式の評価",
+                    "単独の式を評価する",
+                    "single",
+                    &["A1"]
                 ),
-                (
-                    "parsing / 式の評価".to_string(),
-                    "連結しても閉じている".to_string(),
-                    vec!["E2".to_string()],
+                row(
+                    "parsing / 式の評価",
+                    "どう連結しても閉じている",
+                    "concat",
+                    &["E2"]
                 ),
             ]
         );
     }
 
     #[test]
-    fn describe_の中で_story_を付けた関数をテストとして読む() {
+    fn mod_の文は中の_doc_だけから読む() {
+        let got = rust(
+            r#"
+            /// ja: 外の文
+            mod eval {
+                //! ja: 中の文
+                /// ja: 評価する
+                #[story("A1")]
+                #[test]
+                fn t() {}
+            }
+            "#,
+        );
+        assert_eq!(
+            got.unwrap(),
+            [row("parsing / 中の文", "評価する", "t", &["A1"])]
+        );
+    }
+
+    #[test]
+    fn doc_の_ja_が無いか_2_つあるか続きの行があればエラーにする() {
+        for doc in [
+            "",
+            "/// en: Evaluates",
+            "/// ja: 評価する\n/// ja: 評価する",
+            "/// ja: 評価\n/// する",
+            "/// ja:",
+        ] {
+            let text =
+                format!("mod m {{ //! ja: 式\n{doc}\n#[story(\"A1\")] #[test] fn t() {{}} }}");
+            assert!(rust(&text).is_err(), "{doc}");
+        }
+        let no_mod_doc = "mod m { /// ja: 評価する\n#[story(\"A1\")] #[test] fn t() {} }";
+        assert!(rust(no_mod_doc).is_err());
+    }
+
+    #[test]
+    fn 同じ_mod_の中に同じ文の_mod_があればエラーにする() {
         let text = r#"
-def describe_セルの実行():
+            mod a { //! ja: 式
+                /// ja: 評価する
+                #[story("A1")] #[test] fn t() {} }
+            mod b { //! ja: 式
+                /// ja: 表示する
+                #[story("A1")] #[test] fn u() {} }
+        "#;
+        assert!(rust(text).is_err());
+    }
+
+    #[test]
+    fn describe_の中で_story_を付けた関数を_docstring_の_ja_の文で読む() {
+        let text = r#"
+def describe_cell():
+    """
+    ja: セルの実行
+    """
 
     @story("J1", "E3")
     @pytest.mark.usefixtures("place")
-    def colon_q_は何もしない(kernel):
+    def quit(kernel):
+        """
+        ja: :q は何もしない
+        en: Does nothing
+
+        テストの説明。
+        """
         pass
 
     @pytest.fixture
@@ -667,180 +953,216 @@ def describe_セルの実行():
     def 補助():
         pass
 
-def describe_カーネルの登録():
+def describe_register():
+    """
+    ja: カーネルの登録
+    """
+    # コメント
 
     @story("J1")
-    def 複数行の(
+    @pytest.mark.parametrize(
+        "exc",
+        [1, 2],
+    )
+    def multi(
         tmp_path,
+        exc,
     ):
+        # 引数のあとのコメント
+        """
+        ja: 複数行の引数
+        """
         pass
 "#;
-        let got: Vec<(String, String, Vec<String>)> = python_tests(text, "kernel")
-            .unwrap()
-            .into_iter()
-            .map(|t| (t.place, t.what, t.stories))
-            .collect();
         assert_eq!(
-            got,
+            python(text).unwrap(),
             [
-                (
-                    "kernel / セルの実行".to_string(),
-                    ":q は何もしない".to_string(),
-                    vec!["J1".to_string(), "E3".to_string()],
+                row(
+                    "kernel / セルの実行",
+                    ":q は何もしない",
+                    "quit",
+                    &["J1", "E3"]
                 ),
-                (
-                    "kernel / カーネルの登録".to_string(),
-                    "複数行の".to_string(),
-                    vec!["J1".to_string()],
-                ),
+                row("kernel / カーネルの登録", "複数行の引数", "multi", &["J1"]),
             ]
         );
     }
+
+    #[test]
+    fn docstring_より先に_def_が来るか_ja_が無ければエラーにする() {
+        let before = "def describe_cell():\n    @story(\"J1\")\n    def t(kernel):\n        \"\"\"\n        ja: 文\n        \"\"\"\n";
+        assert!(python(before).is_err());
+        let test = "def describe_cell():\n    \"\"\"\n    ja: セル\n    \"\"\"\n    @story(\"J1\")\n    def t(kernel):\n        pass\n";
+        assert!(python(test).is_err());
+        let no_ja = "def describe_cell():\n    \"\"\"\n    セル\n    \"\"\"\n";
+        assert!(python(no_ja).is_err());
+        let open = "def describe_cell():\n    \"\"\"\n    ja: セル\n";
+        assert!(python(open).is_err());
+    }
+
+    #[test]
+    fn 同じ_scope_に同じ名前の_def_があればエラーにする() {
+        let doc = |ja: &str, pad: &str| format!("{pad}\"\"\"\n{pad}ja: {ja}\n{pad}\"\"\"\n");
+        let test = |name: &str, ja: &str| {
+            format!(
+                "    @story(\"J1\")\n    def {name}(kernel):\n{}",
+                doc(ja, "        ")
+            )
+        };
+        let fixture = "    @pytest.fixture\n    def t():\n        pass\n";
+        let head = format!("def describe_cell():\n{}", doc("セル", "    "));
+        for body in [
+            format!("{}{}", test("t", "前"), test("t", "後ろ")),
+            format!("{}{fixture}", test("t", "前")),
+        ] {
+            assert!(python(&format!("{head}{body}")).is_err(), "{body}");
+        }
+        let same_describe = format!("{head}{}{head}{}", test("a", "前"), test("b", "後ろ"));
+        assert!(python(&same_describe).is_err());
+        let other_scope = format!(
+            "{head}{}    def helper():\n        pass\n{}",
+            test("t", "前"),
+            "    def other():\n        def helper():\n            pass\n"
+        );
+        assert!(python(&other_scope).is_ok());
+    }
+
     #[test]
     fn 三重引用符の中の_def_は読まない() {
         let text = r#"
 def helper():
     """1 行で閉じる docstring。"""
 
-def describe_セルの実行():
+def describe_cell():
+    """
+    ja: セルの実行
+    """
 
     @story("J1")
-    def 前のセルの宣言を使える(kernel):
+    def before(kernel):
+        """
+        ja: 前のセルの宣言を使える
+        """
         cell = """\
 def fib : Nat → Nat
   | 0 => 0"""
         pass
 
     @story("J2")
-    async def 後ろのテスト(kernel):
+    async def after(kernel):
+        """
+        ja: 後ろのテスト
+        """
         pass
 "#;
-        let got: Vec<(String, String)> = python_tests(text, "kernel")
-            .unwrap()
-            .into_iter()
-            .map(|t| (t.place, t.what))
-            .collect();
-        let place = "kernel / セルの実行".to_string();
         assert_eq!(
-            got,
+            python(text).unwrap(),
             [
-                (place.clone(), "前のセルの宣言を使える".to_string()),
-                (place, "後ろのテスト".to_string()),
+                row(
+                    "kernel / セルの実行",
+                    "前のセルの宣言を使える",
+                    "before",
+                    &["J1"]
+                ),
+                row("kernel / セルの実行", "後ろのテスト", "after", &["J2"]),
             ]
         );
     }
 
     #[test]
     fn story_が付いているのにテストでない関数はエラーにする() {
-        let file = syn::parse_file(
-            r#"
-            mod 式の評価 {
-                #[story("A1")]
-                fn 属性を付け忘れた() {}
-            }
-            "#,
-        )
-        .unwrap();
-        assert!(descend(&file.items, "parsing", None, Path::new(".")).is_err());
+        let text = "mod m { //! ja: 式\n/// ja: 評価する\n#[story(\"A1\")] fn t() {} }";
+        assert!(rust(text).is_err());
     }
 
     #[test]
-    fn 入れ子の_mod_は外側の名前から並べる() {
-        let file = syn::parse_file(
-            r#"
-            mod 外側 {
-                mod 内側 {
+    fn 入れ子の_mod_は外側の文から並べる() {
+        let text = r#"
+            mod outer {
+                //! ja: 外側
+                mod inner {
+                    //! ja: 内側
+                    /// ja: 評価する
                     #[story("A1")]
                     #[test]
-                    fn 評価される() {}
+                    fn t() {}
                 }
             }
-            "#,
-        )
-        .unwrap();
-        let got: Vec<String> = descend(&file.items, "parsing", None, Path::new("."))
-            .unwrap()
-            .into_iter()
-            .map(|t| t.place)
-            .collect();
+        "#;
+        let got: Vec<String> = rust(text).unwrap().into_iter().map(|t| t.0).collect();
         assert_eq!(got, ["parsing / 外側 / 内側"]);
+    }
+
+    /// describe とテスト 2 件。`body` は 1 件目のテストの本文。
+    fn two_tests(body: &str) -> String {
+        format!(
+            "def describe_cell():\n    \"\"\"\n    ja: セル\n    \"\"\"\n\n    @story(\"J1\")\n    def before(kernel):\n        \"\"\"\n        ja: 前のテスト\n        \"\"\"\n{body}\n\n    @story(\"J2\")\n    def after(kernel):\n        \"\"\"\n        ja: 後ろのテスト\n        \"\"\"\n        pass\n"
+        )
+    }
+
+    fn whats(text: &str) -> Vec<String> {
+        python(text).unwrap().into_iter().map(|t| t.1).collect()
     }
 
     #[test]
     fn コメントの中の三重引用符では文字列にしない() {
-        let text = r#"
-def describe_セルの実行():
-
-    @story("J1")
-    def 前のテスト(kernel):
-        # 次の """ は文字列ではない
-        pass
-
-    @story("J2")
-    def 後ろのテスト(kernel):
-        pass
-"#;
-        let got: Vec<String> = python_tests(text, "kernel")
-            .unwrap()
-            .into_iter()
-            .map(|t| t.what)
-            .collect();
-        assert_eq!(got, ["前のテスト", "後ろのテスト"]);
+        let text = two_tests("        # 次の \"\"\" は文字列ではない\n        pass");
+        assert_eq!(whats(&text), ["前のテスト", "後ろのテスト"]);
     }
 
     #[test]
     fn describe_の外か_class_の中で_story_を付けるとエラーにする() {
-        let top = "@story(\"J1\")\ndef 外のテスト(kernel):\n    pass\n";
-        assert!(python_tests(top, "kernel").is_err());
-        let class = "def describe_セル():\n    class TestX:\n        @story(\"J1\")\n        def 中のテスト(self):\n            pass\n";
-        assert!(python_tests(class, "kernel").is_err());
+        let doc = "    \"\"\"\n    ja: 文\n    \"\"\"\n";
+        let top = format!("@story(\"J1\")\ndef t(kernel):\n{doc}");
+        assert!(python(&top).is_err());
+        let class = format!(
+            "def describe_cell():\n{doc}    class TestX:\n        @story(\"J1\")\n        def t(self):\n            \"\"\"\n            ja: 文\n            \"\"\"\n"
+        );
+        assert!(python(&class).is_err());
     }
 
     #[test]
     fn ふつうの文字列の中の三重引用符では文字列にしない() {
-        let text = r#"
-def describe_セルの実行():
-
-    @story("J1")
-    def 前のテスト(kernel):
-        src = 'x = """'
-        code = "theorem h''' : True := trivial"
-        doc = """閉じる""" + """
-続く"""
-        pass
-
-    @story("J2")
-    def 後ろのテスト(kernel):
-        pass
-"#;
-        let got: Vec<String> = python_tests(text, "kernel")
-            .unwrap()
-            .into_iter()
-            .map(|t| t.what)
-            .collect();
-        assert_eq!(got, ["前のテスト", "後ろのテスト"]);
+        let text = two_tests(
+            "        src = 'x = \"\"\"'\n        code = \"theorem h''' : True := trivial\"\n        doc = \"\"\"閉じる\"\"\" + \"\"\"\n続く\"\"\"\n        pass",
+        );
+        assert_eq!(whats(&text), ["前のテスト", "後ろのテスト"]);
     }
 
     #[test]
-    fn 入れ子の_describe_は外側の名前から並べる() {
+    fn 入れ子の_describe_は外側の文から並べる() {
         let text = r#"
-def describe_外側A():
-    def describe_共通():
+def describe_a():
+    """
+    ja: 外側A
+    """
+    def describe_common():
+        """
+        ja: 共通
+        """
         @story("J1")
-        def 同じ名前(kernel):
+        def same(kernel):
+            """
+            ja: 同じ文
+            """
             pass
 
-def describe_外側B():
-    def describe_共通():
+def describe_b():
+    """
+    ja: 外側B
+    """
+    def describe_common():
+        """
+        ja: 共通
+        """
         @story("J1")
-        def 同じ名前(kernel):
+        def same(kernel):
+            """
+            ja: 同じ文
+            """
             pass
 "#;
-        let got: Vec<String> = python_tests(text, "kernel")
-            .unwrap()
-            .into_iter()
-            .map(|t| t.place)
-            .collect();
+        let got: Vec<String> = python(text).unwrap().into_iter().map(|t| t.0).collect();
         assert_eq!(got, ["kernel / 外側A / 共通", "kernel / 外側B / 共通"]);
     }
 
@@ -856,19 +1178,19 @@ def describe_外側B():
     }
 
     #[test]
-    fn 別のファイルの_mod_のテストも読む() {
-        let test = "#[story(\"A1\")]\n#[test]\nfn 評価される() {}\n";
+    fn 別のファイルの_mod_のテストはそのファイルの_doc_の文で読む() {
+        let test = "/// ja: 評価する\n#[story(\"A1\")]\n#[test]\nfn t() {}\n";
         let dir = scratch(
             "mod",
             &[
-                ("外.rs", "mod 内;\n"),
-                ("外/内.rs", test),
-                ("共通/mod.rs", "mod 下;\n"),
-                ("共通/下.rs", test),
+                ("outer.rs", "//! ja: 外\nmod inner;\n"),
+                ("outer/inner.rs", &format!("//! ja: 内\n{test}")),
+                ("common/mod.rs", "//! ja: 共通\nmod sub;\n"),
+                ("common/sub.rs", &format!("//! ja: 下\n{test}")),
             ],
         );
-        let file = syn::parse_file("mod 外;\nmod 共通;\n").unwrap();
-        let got = descend(&file.items, "parsing", None, &dir)
+        let file = syn::parse_file("mod outer;\nmod common;\n").unwrap();
+        let got = rust_tests(&file.items, "parsing", &dir)
             .map(|v| v.into_iter().map(|t| t.place).collect::<Vec<_>>());
         fs::remove_dir_all(&dir).unwrap();
         assert_eq!(got.unwrap(), ["parsing / 外 / 内", "parsing / 共通 / 下"]);
@@ -878,47 +1200,45 @@ def describe_外側B():
     fn 実行されないか読み取れないテストはエラーにする() {
         let dir = std::env::temp_dir();
         for text in [
-            "proptest! { #[test] fn 評価される(a in 0..1) {} }",
-            "#[story(\"A1\")] #[test] #[ignore] fn 評価される() {}",
-            "#[story(\"A1\")] #[test] #[cfg(unix)] fn 評価される() {}",
-            "#[cfg(unix)] mod 式 { #[story(\"A1\")] #[test] fn 評価される() {} }",
-            "mod 無いファイル;",
+            "proptest! { #[test] fn t(a in 0..1) {} }",
+            "/// ja: 評価する\n#[story(\"A1\")] #[test] #[ignore] fn t() {}",
+            "/// ja: 評価する\n#[story(\"A1\")] #[test] #[cfg(unix)] fn t() {}",
+            "#[cfg(unix)] mod m { //! ja: 式\n/// ja: 評価する\n#[story(\"A1\")] #[test] fn t() {} }",
+            "mod missing;",
         ] {
             let file = syn::parse_file(text).unwrap();
-            assert!(
-                descend(&file.items, "parsing", None, &dir).is_err(),
-                "{text}"
-            );
+            assert!(rust_tests(&file.items, "parsing", &dir).is_err(), "{text}");
         }
     }
 
     #[test]
-    fn stories_toml_の誤りと同じ名前のテストを見つける() {
+    fn stories_toml_の誤りと同じ文のテストを見つける() {
         let stories: Stories = toml::from_str(
             r#"
 unbuilt = ["A2"]
 [[group]]
 id = "A"
-title = "式"
+ja = "式"
 [[group]]
 id = "A"
-title = "式"
+ja = "式"
 [[story]]
 id = "A1"
-text = "a"
+ja = "a"
 [[story]]
 id = "A1"
-text = "a"
+ja = "a"
 [[story]]
 id = "A2"
-text = "b"
+ja = "b"
 [[story]]
 id = "Z1"
-text = "z"
+ja = "z"
 "#,
         )
         .unwrap();
         let test = |what: &str, sid: &str| Test {
+            name: "t".to_string(),
             what: what.to_string(),
             place: "kernel / 補完".to_string(),
             stories: vec![sid.to_string()],
@@ -931,7 +1251,7 @@ text = "z"
                 "group の番号が重複している: A",
                 "どの group にも入らない: Z1",
                 "unbuilt にあるのにテストがある: A2",
-                "同じ名前のテストがある: kernel / 補完 / 同じ",
+                "同じ文のテストがある: kernel / 補完 / 同じ",
             ]
         );
     }
