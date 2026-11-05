@@ -207,6 +207,19 @@ def fib : Nat → Nat
         _, out, _ = run(kernel, "#eval cell_greeting.length")
         assert "11" in out, out
 
+    @story("J1", "E1")
+    def it_タクティクの続きを書きかけてやめたらタクティクを戻す(kernel):
+        # インデントした行は直前のタクティクの続きとして読み直すので、直前の
+        # タクティクを一度取り消す。続きを書かずにやめたら、取り消しを戻す。
+        run(kernel, "theorem cell_two : 1 = 1 ∧ 2 = 2 := by sorry")
+        run(kernel, ":prove")
+        _, out, _ = run(kernel, "constructor\n  <;> exact (\n:goals")
+        goals = out[out.index("捨てた") :]
+        assert "1 = 1" in goals, out
+        assert "∧" not in goals, out
+        status, _, err = run(kernel, "rfl\nrfl")
+        assert status == "ok", err
+
     @story("J1")
     def it_閉じていない_raw_文字列は次の行に続ける(kernel):
         status, out, err = run(kernel, '#eval r#"a\nb"#.length')

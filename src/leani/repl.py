@@ -371,8 +371,9 @@ class Repl:
         self.ready: Kind | None = None  # 構文的に完結しているときの送り方
         self.last: Last | None = None
         self.explicit = False  # :{ ... :} の中か
-        # rewind で取り消した宣言と、その宣言の sorry の保留
-        self.undone: tuple[Undone, Held | None] | None = None
+        # rewind で取り消したもの。取り消した宣言と、その宣言の sorry の保留か、
+        # タクティクを取り消す前の証明モードの状態
+        self.undone: tuple[Undone, Held | None] | Proof | None = None
         self.show_time = False
 
         # 証明モード
@@ -970,6 +971,7 @@ class Repl:
             # ここで宣言を pop してはいけない (直前の実際の宣言が消える)。
             if self.proof is None:
                 return
+            self.undone = self.proof
             self.proof = tactic_undo(self.proof) or self.proof
             return
         else:
@@ -980,11 +982,19 @@ class Repl:
             self.held = None
 
     def restore_undone(self) -> None:
-        """rewind で取り消した宣言を戻す。書き直さずにやめたとき。"""
-        if self.undone is None:
+        """rewind で取り消したものを戻す。書き直さずにやめたとき。"""
+        saved, self.undone = self.undone, None
+        if saved is None:
+            return
+        if isinstance(saved, Proof):
+            # 保存しているあいだにエンジンが再起動されたら、保存した proofState は
+            # 前のプロセスのものなので戻さない。証明モードが終了していたら、
+            # 終了した証明モードを戻すことになるので、これも戻さない。
+            if saved.gen == self.eng.gen and self.proof is not None:
+                self.proof = saved
             return
 
-        (undone, held), self.undone = self.undone, None
+        undone, held = saved
         if self.eng.push_decl(undone):
             self.held = held
             return
