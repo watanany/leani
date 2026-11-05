@@ -35,7 +35,7 @@ leani-kernel install
 
 ```
 cargo nextest run                          # すべてのテストを実行する
-cargo nextest run -E 'binary(parsing)'     # 純粋関数と読み取りのテストだけを実行する
+cargo nextest run -E 'binary(parsing)'     # 端末とエンジンを使わないテストだけを実行する
 cargo nextest run history                  # テストを名前で絞り込む
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
@@ -53,14 +53,14 @@ uv run ruff format . && uv run ruff check .
 uv run mypy
 ```
 
-テストの文 (doc comment と docstring の `ja:` と `en:` の行) やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.ja.md` と `SPEC.en.md` を生成し直す。
+テストを足すか消したとき、テストの文 (doc comment と docstring の `ja:` と `en:` の行) か、テストの場所 (ファイルと `mod`) か、ストーリーを変えたときは、`cargo run -p spec` を実行して `SPEC.ja.md` と `SPEC.en.md` を生成し直す。
 カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
-`SPEC.ja.md` か `SPEC.en.md` の内容がテストと一致していないと、テストが失敗する。
+`SPEC.ja.md` か `SPEC.en.md` の内容がテストと一致していないと、`cargo nextest run` の X1 と X2 のテストが失敗する。`uv run pytest` は失敗しない。
 
 ## 作業の流れ
 
 - 機能を追加するときは、ストーリー、テスト、実装の順に書く。このリポジトリでは、この 3 つのつながりがいちばん大事である。ストーリーは `stories.toml` に追加し、テストには `#[story("A1")]` でストーリーの ID を付ける (カーネルのテストでは `@story("A1")`)。1 つのストーリーに複数のテストを付けてよい
-- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.ja.md` と `SPEC.en.md` を作るので、crate の中の単体テストはどちらにも載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` と `en:` の後ろに 1 行ずつ書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` と `en:` に書く。テストの関数名と `mod` の名前は `en:` の文から作る。小文字にし、英数字でない文字の並びを `_` にして、両端の `_` を消す (カーネルの describe は前に `describe_` を付ける)。名前が違えば `crates/spec` がエラーにする
+- テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.ja.md` と `SPEC.en.md` を作るので、crate の中の単体テストはどちらにも載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` と `en:` の後ろに 1 行ずつ書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` と `en:` に書く。テストの関数名と `mod` の名前は `en:` の文から作る。小文字にし、英数字でない文字の並びを `_` にして、両端の `_` を消す (カーネルの describe は前に `describe_` を付ける)。名前が違えば `crates/spec` がエラーにする。作った名前が英字で始まらないとき、Rust か Python のキーワードになるとき、`mod` の名前が crate の名前 (`leani`、`spec` など) になるとき、カーネルのテストの名前が `describe` で始まるときもエラーにするので、`en:` の文を書き直す
 - `crates/spec` は、SPEC に載るのに実行されないことがあるテストと、実行されるのに SPEC に載らないテストをエラーにする。Rust のテストには `#[ignore]`、`#[cfg]`、`#[cfg_attr]` を付けない。カーネルのテストでは、skip と xfail のマーカーと `pytestmark` を使わず、describe とテストを `if`、`for`、`with` の下に書かず、`def` の名前を `del` で消したり別の値を入れたりしない。`@story(...)` は 1 行で書き、番号は `"J1"` のように二重引用符で書く。docstring は `def` の行のすぐ後ろに書き、`"""` だけの行で始めて `"""` だけの行で閉じる。テストのファイルは `crates/leani/tests/` と `tests/` の直下に置く
 - コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
 - 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない

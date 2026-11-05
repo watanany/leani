@@ -6,7 +6,9 @@
 
 <img src="guide/screenshot.png" alt="leani で式を評価して補完の候補を表示したところ" width="720">
 
-[証明モード](guide/proof.md) · [設定](guide/config.md) · [Jupyter](guide/jupyter.md) · [開発メモ](DEVELOPMENT.md)
+[証明モード](guide/proof.md) · [設定](guide/config.md) · [Jupyter](guide/jupyter.md) · [できること](SPEC.ja.md) · [開発メモ](DEVELOPMENT.md)
+
+English: [what leani can do](SPEC.en.md)
 
 </div>
 
