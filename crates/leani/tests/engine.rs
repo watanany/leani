@@ -73,11 +73,11 @@ mod startup_checks {
         assert!(why.contains("SIGKILL"), "{why}");
     }
 
-    /// ja: :env で切り替えた先のエンジンが起動に失敗すると、そのプロセスを終了させ、元の環境のエンジンは動いたままにする
-    /// en: Stops the failed engine and leaves the engine of the original environment running when the engine for :env fails to start
+    /// ja: :env で切り替えた先のエンジンが起動に失敗すると、そのプロセスを終了させ、元の環境で起動し直したエンジンは動いたままにする
+    /// en: Stops the failed engine and keeps the engine restarted in the original environment running when the engine for :env fails to start
     #[story("G4", "G5")]
     #[test]
-    fn stops_the_failed_engine_and_leaves_the_engine_of_the_original_environment_running_when_the_engine_for_env_fails_to_start()
+    fn stops_the_failed_engine_and_keeps_the_engine_restarted_in_the_original_environment_running_when_the_engine_for_env_fails_to_start()
      {
         // Engine を作った時点で repl は起動している。boot が失敗したあとに
         // Repl がエンジンを差し替えると、終了させる方法が無いままプロセスが残る。

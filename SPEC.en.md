@@ -616,7 +616,7 @@ Not built yet.
 
 - Aborts startup and reports the import failure when started with an unresolvable import (engine / Startup checks)
 - Names the signal in the report when a command is sent after the engine is killed by a signal (engine / Startup checks)
-- Stops the failed engine and leaves the engine of the original environment running when the engine for :env fails to start (engine / Startup checks)
+- Stops the failed engine and keeps the engine restarted in the original environment running when the engine for :env fails to start (engine / Startup checks)
 - Reports the error and leaves the environment unchanged when an init file with an error is loaded (engine / Handling init)
 - Says the init file cannot be read when a directory is given as init (engine / Handling init)
 - Says the file could not be loaded and keeps the current environment when :l runs (engine / Files with unresolvable imports)
@@ -654,7 +654,7 @@ Not built yet.
 
 - Returns environment names as candidates after :env (completion / Tab completion of commands)
 - Returns no environment names if the config file is not valid TOML (completion / Tab completion of commands)
-- Stops the failed engine and leaves the engine of the original environment running when the engine for :env fails to start (engine / Startup checks)
+- Stops the failed engine and keeps the engine restarted in the original environment running when the engine for :env fails to start (engine / Startup checks)
 - Keeps pending declarations when :env switches the environment (engine / Pending declarations and environment switching)
 - Switches to the configured core when :env core runs in a core started with extra imports (engine / Switching environments)
 - Says the environment is already in use when :env names the current one missing from the config (engine / Switching environments)
