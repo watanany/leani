@@ -23,7 +23,7 @@
 //! describe の文は `mod` の中の doc comment (`//!`) の `ja:` と `en:` の行から読む。
 //!
 //! Python のテストは行単位で読む。`def describe_` の行をインデントで入れ子にし、その中で
-//! `@story(...)` の行の次にある `def` をテストと見なす。describe とテストの文は、`def` の
+//! `@story(...)` の行 (1 行で書く) の次にある `def` をテストと見なす。describe とテストの文は、`def` の
 //! すぐ後ろの docstring の `ja:` と `en:` の行から読む。Python の構文を解析する crate は使わない。
 //! カーネルのテストは数が少なく、書き方も決まっているので、行単位で足りる。
 //!
@@ -393,15 +393,21 @@ fn is_test(attrs: &[Attribute]) -> bool {
     })
 }
 
-/// `#[ignore]` か、`cfg(test)` 以外の `#[cfg]` が付いているか。どちらのテストも、
-/// `cargo nextest run` で実行されないことがある。
+/// `#[ignore]`、`cfg(test)` 以外の `#[cfg]`、`#[cfg_attr]` のどれかが付いているか。
+/// どのテストも、`cargo nextest run` で実行されないことがある。`#[cfg_attr]` は中身を
+/// 読まずにすべて含める。`#[cfg_attr(unix, ignore)]` のように、条件によって `ignore` か
+/// `cfg` になるため。`#[core::prelude::v1::ignore]` のようなパスでも、最後の名前で判定する。
 fn skipped(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|a| {
-        a.path().is_ident("ignore")
-            || (a.path().is_ident("cfg")
-                && a.meta
-                    .require_list()
-                    .map_or(true, |l| l.tokens.to_string() != "test"))
+        let last = a.path().segments.last().map(|s| s.ident.to_string());
+        match last.as_deref() {
+            Some("ignore" | "cfg_attr") => true,
+            Some("cfg") => a
+                .meta
+                .require_list()
+                .map_or(true, |l| l.tokens.to_string() != "test"),
+            _ => false,
+        }
     })
 }
 
@@ -447,6 +453,16 @@ fn rust_tests(items: &[Item], layer: &str, dir: &Path) -> Result<Vec<Test>, Stri
         .collect())
 }
 
+/// テストのファイル 1 つのテスト。ファイルの先頭に `#![cfg]` か `#![ignore]` があり、
+/// テストを含むならエラーにする。
+fn rust_file(file: &syn::File, layer: &str, dir: &Path) -> Result<Vec<Test>, String> {
+    let tests = rust_tests(&file.items, layer, dir)?;
+    match skipped(&file.attrs) && !tests.is_empty() {
+        true => Err(format!("実行されないことがあるテスト: {layer}")),
+        false => Ok(tests),
+    }
+}
+
 /// `mod` を再帰的にたどってテストを集める。テストを含む `mod` が describe になる。
 /// `mod` は入れ子にでき、返すテストの場所は、`items` の中の describe の文を ` / ` で
 /// つないだもの。`at` は、エラーに出すための `mod` の名前の並び。
@@ -455,7 +471,7 @@ fn rust_tests(items: &[Item], layer: &str, dir: &Path) -> Result<Vec<Test>, Stri
 ///
 /// ```text
 /// #[story] が付いているのにテストの属性が無い関数   実行されないのに載る
-/// #[ignore] か #[cfg] が付いたテストと mod         実行されないことがあるのに載る
+/// #[ignore]、#[cfg]、#[cfg_attr] が付いたテストと mod  実行されないことがあるのに載る
 /// 直下のマクロ (proptest! など)                   中のテストを読めないので載らない
 /// #[path] の付いた mod                            ファイルを探さないので載らない
 /// 同じ文の mod が並ぶ                             2 つの mod のテストが 1 つの describe に載る
@@ -486,17 +502,23 @@ fn item_tests(item: &Item, at: &str, dir: &Path) -> Result<(Option<Both>, Vec<Te
             let ident = m.ident.to_string();
             let inside = format!("{at} / {ident}");
             let sub = dir.join(&ident);
-            let (docs, tests) = match &m.content {
-                Some((_, inner)) => (doc_lines(&m.attrs, true), descend(inner, &inside, &sub)?),
+            // `mod x;` のファイルの先頭の `#![cfg]` は、`m.attrs` ではなく `file.attrs` にある。
+            let (docs, tests, skip) = match &m.content {
+                Some((_, inner)) => (
+                    doc_lines(&m.attrs, true),
+                    descend(inner, &inside, &sub)?,
+                    skipped(&m.attrs),
+                ),
                 None => {
                     let file = mod_file(dir, &ident)?;
                     (
                         doc_lines(&file.attrs, true),
                         descend(&file.items, &inside, &sub)?,
+                        skipped(&m.attrs) || skipped(&file.attrs),
                     )
                 }
             };
-            match (skipped(&m.attrs), tests.is_empty()) {
+            match (skip, tests.is_empty()) {
                 (true, false) => Err(format!("実行されないことがあるテスト: {inside}")),
                 (_, true) => Ok((None, tests)),
                 (false, false) => {
@@ -729,6 +751,10 @@ fn python_line(mut scan: Scan, line: &str, layer: &str) -> Result<Scan, String> 
         return Ok(scan);
     }
     let indent = line.len() - body.len();
+    if body.starts_with("@story") && !body.contains(')') {
+        // 次の行のストーリーを読まないので、テストが SPEC に載らないか、ストーリーが減る。
+        return Err(format!("@story(...) は 1 行で書く: {layer} / {body}"));
+    }
     if body.starts_with("@story(") {
         scan.pending
             .extend(body.split('"').skip(1).step_by(2).map(str::to_string));
@@ -871,7 +897,7 @@ pub fn collect(root: &Path) -> Result<Vec<Test>, String> {
             }
             let file = syn::parse_file(&text).map_err(|e| format!("{}: {e}", path.display()))?;
             let dir = path.parent().unwrap_or(Path::new("."));
-            rust_tests(&file.items, layer, dir)
+            rust_file(&file, layer, dir)
         })
         .collect::<Result<Vec<_>, String>>()
         .map(|v| v.into_iter().flatten().collect())
@@ -1385,6 +1411,19 @@ def fib : Nat → Nat
     }
 
     #[test]
+    fn rejects_story_written_over_several_lines() {
+        for story in [
+            "    @story(\n        \"J1\",\n    )\n",
+            "    @story(\"J1\",\n           \"E3\")\n",
+        ] {
+            let text = format!(
+                "def describe_cell():\n    \"\"\"\n    ja: セル\n    en: Cell\n    \"\"\"\n{story}    def runs_it(kernel):\n        \"\"\"\n        ja: 実行する\n        en: Runs it\n        \"\"\"\n"
+            );
+            assert!(python(&text).is_err(), "{text}");
+        }
+    }
+
+    #[test]
     fn does_not_open_a_string_at_triple_quotes_in_a_plain_string() {
         let text = two_tests(
             "        src = 'x = \"\"\"'\n        code = \"theorem h''' : True := trivial\"\n        doc = \"\"\"閉じる\"\"\" + \"\"\"\n続く\"\"\"\n        pass",
@@ -1470,12 +1509,34 @@ def describe_outer_b():
     }
 
     #[test]
+    fn rejects_a_file_with_cfg_at_the_top() {
+        let test =
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")]\n#[test]\nfn evaluates() {}\n";
+        let top = syn::parse_file(&format!("#![cfg(unix)]\n{test}")).unwrap();
+        assert!(rust_file(&top, "parsing", Path::new(".")).is_err());
+
+        let dir = scratch(
+            "cfg",
+            &[(
+                "outer.rs",
+                &format!("#![cfg(unix)]\n//! ja: 外\n//! en: Outer\n{test}"),
+            )],
+        );
+        let file = syn::parse_file("mod outer;\n").unwrap();
+        let got = rust_tests(&file.items, "parsing", &dir);
+        fs::remove_dir_all(&dir).unwrap();
+        assert!(got.is_err());
+    }
+
+    #[test]
     fn rejects_tests_that_may_not_run_or_cannot_be_read() {
         let dir = std::env::temp_dir();
         for text in [
             "proptest! { #[test] fn t(a in 0..1) {} }",
             "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[ignore] fn evaluates() {}",
             "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[cfg(unix)] fn evaluates() {}",
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[cfg_attr(unix, ignore)] fn evaluates() {}",
+            "/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] #[core::prelude::v1::ignore] fn evaluates() {}",
             "#[cfg(unix)] mod expr { //! ja: 式\n//! en: Expr\n/// ja: 評価する\n/// en: Evaluates\n#[story(\"A1\")] #[test] fn evaluates() {} }",
             "mod missing;",
         ] {
