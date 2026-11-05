@@ -55,7 +55,7 @@ uv run mypy
 
 テストの名前やストーリーを変えたら、`cargo run -p spec` を実行して `SPEC.md` を生成し直す。
 カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
-`SPEC.md` の内容がテストと一致していないと、`just check` が失敗する。
+`SPEC.md` の内容がテストと一致していないと、テストが失敗する。
 
 ## 作業の流れ
 
