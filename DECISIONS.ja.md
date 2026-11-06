@@ -339,8 +339,11 @@ AI が書き換えた場合も同じで、Bash の許可の確認を通らずに
 代わりに、hook は、人が `cargo install --path crates/claude-hooks` でインストールした版だけを動かす。
 インストールしていなければ、hook は何もしない。
 `crates/claude-hooks` を変えても、インストールし直すまで hook は古い版で動く。
-同じ理由で、`claude-hooks` は git を `core.fsmonitor=false` で実行し、`git diff` では外部の diff と textconv を使わない。
-`.git/config` に書いたコマンドを、hook から実行させないためである。
+同じ理由で、`claude-hooks` は `.git/config` に書いたコマンドを git に実行させない。
+fsmonitor、外部の diff、textconv、filter のように、git がコマンドを実行するキーは多く、止めるキーを並べると漏れが残る。
+そこで、コマンドを動かさないと分かっているキーを並べ、リポジトリの config (local と worktree) にそれ以外のキーがあれば、`claude-hooks` は git を動かさない。
+このとき hook は何も知らせず、`just status` が理由を表示する。
+ユーザーの global と system の config は、ユーザーが自分で書いたものなので確かめない。
 
 ### 不採用: コードを 1 つの crate にまとめる
 

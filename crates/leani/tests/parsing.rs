@@ -3449,6 +3449,50 @@ diff --git a/tests/test_kernel.py b/tests/test_kernel.py
     }
 }
 
+mod repository_config_checked_before_running_git {
+    //! ja: git を動かす前に確かめる、リポジトリの config
+    //! en: Repository config checked before running git
+    //!
+    //! hook は sandbox の外で動くので、`.git/config` に書いたコマンドを git に実行させない。
+    //! 動かしてよいキーを並べ、それ以外のキーがあれば git を動かさない。
+    use super::*;
+    use claude_hooks::unknown_keys;
+
+    /// ja: 既知のキーだけの config には、空の一覧を返す
+    /// en: Returns an empty list for config with only known keys
+    #[story("X4")]
+    #[test]
+    fn returns_an_empty_list_for_config_with_only_known_keys() {
+        let list = "\
+local\tcore.repositoryformatversion=0
+local\tcore.filemode=true
+local\tuser.name=leani
+local\tremote.origin.url=git@example.com:leani.git
+local\tremote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+local\tbranch.main-rs.remote=origin
+local\tbranch.main-rs.merge=refs/heads/main-rs
+";
+        assert_eq!(unknown_keys(list), Vec::<String>::new());
+    }
+
+    /// ja: local と global に filter のキーがある config には、local のキーだけを返す
+    /// en: Returns only the local key for config with filter keys in local and global
+    #[story("X4")]
+    #[test]
+    fn returns_only_the_local_key_for_config_with_filter_keys_in_local_and_global() {
+        let list = "\
+global\tfilter.lfs.clean=git-lfs clean -- %f
+local\tcore.bare=false
+local\tfilter.x.clean=sh -c evil
+worktree\tcore.fsmonitor=sh -c evil
+";
+        assert_eq!(
+            unknown_keys(list),
+            vec!["filter.x.clean".to_string(), "core.fsmonitor".to_string()]
+        );
+    }
+}
+
 mod detecting_lake_projects {
     //! ja: Lake プロジェクトの判定
     //! en: Detecting Lake projects

@@ -339,8 +339,11 @@ The same applies when AI rewrites it, so code could run without going through th
 Instead, the hooks run only the version that a person installed with `cargo install --path crates/claude-hooks`.
 If it is not installed, the hooks do nothing.
 After `crates/claude-hooks` changes, the hooks keep running the old version until it is installed again.
-For the same reason, `claude-hooks` runs git with `core.fsmonitor=false`, and does not use external diff or textconv in `git diff`.
-This keeps the hooks from running commands written in `.git/config`.
+For the same reason, `claude-hooks` does not let git run commands written in `.git/config`.
+Many keys make git run a command, such as fsmonitor, external diff, textconv and filter, so a list of keys to block leaves gaps.
+Instead, `claude-hooks` lists the keys known not to run commands, and does not run git if the repository config (local and worktree) has any other key.
+In that case the hooks say nothing, and `just status` shows the reason.
+The user's global and system config is not checked, because the user wrote it.
 
 ### Rejected: Putting the code in one crate
 

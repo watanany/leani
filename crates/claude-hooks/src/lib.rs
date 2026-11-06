@@ -278,8 +278,9 @@ fn hunk_start(text: &str) -> Option<usize> {
     after.split([',', ' ']).next().and_then(|n| n.parse().ok())
 }
 
-/// hook は sandbox の外で動くので、リポジトリの `.git/config` に書いたコマンド (fsmonitor、
-/// 外部の diff、textconv) を git に実行させない。
+/// hook は sandbox の外で動くので、リポジトリの `.git/config` に書いたコマンドを git に実行させない。
+/// 主に防ぐのは [`guard`] で、ここで fsmonitor を止め、`git diff` に `--no-ext-diff` と
+/// `--no-textconv` を付けるのは、[`guard`] の既知のキーに漏れがあったときのためである。
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
         .arg("-C")
@@ -298,8 +299,56 @@ fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     }
 }
 
-/// [`BASE`] と今の commit が分かれた commit。[`BASE`] が無ければ `HEAD`。
-pub fn base(root: &Path) -> String {
+/// コマンドを動かさないことが分かっている、リポジトリの config のキー。
+fn known(key: &str) -> bool {
+    matches!(
+        key,
+        "core.repositoryformatversion"
+            | "core.filemode"
+            | "core.bare"
+            | "core.logallrefupdates"
+            | "core.ignorecase"
+            | "core.precomposeunicode"
+    ) || key.starts_with("user.")
+        || (key.starts_with("remote.") && (key.ends_with(".url") || key.ends_with(".fetch")))
+        || (key.starts_with("branch.") && (key.ends_with(".remote") || key.ends_with(".merge")))
+}
+
+/// `git config --list --show-scope` の出力から、リポジトリの config (local と worktree) にある、
+/// コマンドを動かさないと分かっていないキーを返す。
+///
+/// hook は sandbox の外で動く。`.git/config` に filter や fsmonitor のコマンドを書かれると、
+/// `git diff` がそのコマンドを実行する。止めるキーを並べると漏れが残るので、動かしてよいキーを並べ、
+/// それ以外のキーがあれば git を動かさない (DECISIONS.ja.md)。ユーザーの global と system の
+/// config は、ユーザーが自分で書いたものなので確かめない。
+pub fn unknown_keys(list: &str) -> Vec<String> {
+    list.lines()
+        .filter_map(|line| line.split_once('\t'))
+        .filter(|(scope, _)| matches!(*scope, "local" | "worktree"))
+        .map(|(_, entry)| {
+            entry
+                .split_once('=')
+                .map_or(entry, |(key, _)| key)
+                .to_string()
+        })
+        .filter(|key| !known(key))
+        .collect()
+}
+
+/// リポジトリの config に [`unknown_keys`] があれば、エラーを返す。git を動かす前に呼ぶ。
+fn guard(root: &Path) -> Result<(), String> {
+    let list = git(root, &["config", "--list", "--show-scope"])?;
+    match unknown_keys(&list).as_slice() {
+        [] => Ok(()),
+        keys => Err(format!(
+            "リポジトリの git の config に、コマンドを動かさないと分かっていないキーがあるので、git を動かさない: {}",
+            keys.join(", ")
+        )),
+    }
+}
+
+/// [`BASE`] と今の commit が分かれた commit。[`BASE`] が無ければ `HEAD`。[`guard`] のあとに呼ぶ。
+fn base(root: &Path) -> String {
     git(root, &["merge-base", "HEAD", BASE])
         .map(|id| id.trim().to_string())
         .unwrap_or_else(|_| "HEAD".to_string())
@@ -307,6 +356,7 @@ pub fn base(root: &Path) -> String {
 
 /// 作業ツリーの状態を git から読む。
 pub fn tree(root: &Path) -> Result<Tree, String> {
+    guard(root)?;
     let branch = git(root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
     let diff = git(
         root,
@@ -352,6 +402,7 @@ pub fn all(root: &Path, tree: &Tree) -> Vec<Notice> {
 
 /// [`BASE`] から足したテストの文。
 pub fn texts(root: &Path) -> Result<Vec<String>, String> {
+    guard(root)?;
     git(
         root,
         &[

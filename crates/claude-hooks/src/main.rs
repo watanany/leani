@@ -60,14 +60,27 @@ fn hook(root: &Path) -> Result<(), String> {
         .read_to_string(&mut raw)
         .map_err(|e| e.to_string())?;
     let given = claude_hooks::input(&raw, root)?;
-    let tree = claude_hooks::tree(root)?;
+    let state = root.join(claude_hooks::STATE);
+    fs::create_dir_all(&state).map_err(|e| e.to_string())?;
+    let time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let input = serde_json::from_str::<serde_json::Value>(&raw).unwrap_or_default();
+    // git を動かせないときは、作業を止めないように何も返さず、理由をログにだけ残す。
+    // 人は just status で理由を読める。
+    let tree = match claude_hooks::tree(root) {
+        Ok(tree) => tree,
+        Err(why) => {
+            let log = json!({"time": time, "input": input, "error": why});
+            return append(&state.join("log.jsonl"), &format!("{log}\n"));
+        }
+    };
     // SPEC の確かめは時間がかかるので、AI が終わるときだけ行う。
     let found: Vec<Notice> = match given.event {
         Event::Stop { active: false } => claude_hooks::all(root, &tree),
         _ => claude_hooks::notices(&tree),
     };
-    let state = root.join(claude_hooks::STATE);
-    fs::create_dir_all(&state).map_err(|e| e.to_string())?;
     let seen_file = state.join(format!("seen-{}", safe(&given.session)));
     let seen: Vec<String> = fs::read_to_string(&seen_file)
         .unwrap_or_default()
@@ -79,13 +92,9 @@ fn hook(root: &Path) -> Result<(), String> {
         &seen_file,
         &keys.iter().map(|k| format!("{k}\n")).collect::<String>(),
     )?;
-    let time = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
     let log = json!({
         "time": time,
-        "input": serde_json::from_str::<serde_json::Value>(&raw).unwrap_or_default(),
+        "input": input,
         "notices": found.iter().map(Notice::key).collect::<Vec<_>>(),
         "reply": out,
     });
