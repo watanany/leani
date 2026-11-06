@@ -99,7 +99,7 @@ An `en:` sentence is the English translation of the `ja:` sentence, and is writt
 The crates are split by whether they have side effects.
 
 | crate          | Contents                                                                      |
-|----------------|-------------------------------------------------------------------------------|
+| -------------- | ----------------------------------------------------------------------------- |
 | `leani-core`   | Pure functions and constants. The output depends only on the input            |
 | `leani-read`   | Reading. Reads environment variables and files, but changes nothing           |
 | `leani`        | Side effects. Operates on processes, the terminal, files, and the network     |
@@ -147,7 +147,7 @@ The README, DEVELOPMENT, DECISIONS, and guide documents each have two files: the
 ## Documentation
 
 | File                                 | Contents                                                                                          |
-|--------------------------------------|---------------------------------------------------------------------------------------------------|
+| ------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | [README.md](README.md)               | Installation and the first start                                                                  |
 | [guide/proof.md](guide/proof.md)     | Proof mode                                                                                        |
 | [guide/config.md](guide/config.md)   | Configuration, environment variables, and file locations                                          |

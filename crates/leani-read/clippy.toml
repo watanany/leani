@@ -2,24 +2,24 @@
 # ネットワークを使う関数と型を禁じる。読むための関数 (std::env::var、current_dir、
 # fs::read_to_string、fs::metadata、Path::exists など) は使ってよい。
 disallowed-methods = [
-    "std::env::remove_var",
-    "std::env::set_current_dir",
-    "std::env::set_var",
-    "std::fs::copy",
-    "std::fs::create_dir_all",
-    "std::fs::remove_dir_all",
-    "std::fs::remove_file",
-    "std::fs::rename",
-    "std::fs::write",
-    "std::process::exit",
+  "std::env::remove_var",
+  "std::env::set_current_dir",
+  "std::env::set_var",
+  "std::fs::copy",
+  "std::fs::create_dir_all",
+  "std::fs::remove_dir_all",
+  "std::fs::remove_file",
+  "std::fs::rename",
+  "std::fs::write",
+  "std::process::exit",
 ]
 disallowed-types = [
-    "std::fs::File",
-    "std::fs::OpenOptions",
-    "std::net::TcpListener",
-    "std::net::TcpStream",
-    "std::net::UdpSocket",
-    "std::process::Command",
+  "std::fs::File",
+  "std::fs::OpenOptions",
+  "std::net::TcpListener",
+  "std::net::TcpStream",
+  "std::net::UdpSocket",
+  "std::process::Command",
 ]
 
 # 関数の複雑さの上限。leani-core と同じ値にする。

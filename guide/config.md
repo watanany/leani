@@ -21,7 +21,7 @@ prompt = "λ∀> "
 ```
 
 | Key                  | Description                                                           |
-|----------------------|-----------------------------------------------------------------------|
+| -------------------- | --------------------------------------------------------------------- |
 | `default`            | Name of the environment used when leani starts without options        |
 | `engine`             | Directory of an engine you built yourself (leanprover-community/repl) |
 | `env.<名前>.project` | Directory of the Lake project                                         |
@@ -47,7 +47,7 @@ They remain after `:reset` and `:l`.
 ## Environment variables
 
 | Environment variable | Description                                                                                    |
-|----------------------|------------------------------------------------------------------------------------------------|
+| -------------------- | ---------------------------------------------------------------------------------------------- |
 | `LEANI_CONFIG`       | Path of the configuration file                                                                 |
 | `LEANI_INIT`         | Path of the init file                                                                          |
 | `LEANI_HISTORY`      | Path of the history file                                                                       |
@@ -61,7 +61,7 @@ They remain after `:reset` and `:l`.
 ## File locations
 
 | File             | Location                                   |
-|------------------|--------------------------------------------|
+| ---------------- | ------------------------------------------ |
 | Configuration    | `~/.config/leani/config.toml`              |
 | init             | `~/.config/leani/init.lean`                |
 | History          | `~/.local/state/leani/history`             |

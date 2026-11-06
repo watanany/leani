@@ -99,7 +99,7 @@ uv run mypy
 crate は副作用の有無で分けてある。
 
 | crate          | 中身                                                             |
-|----------------|------------------------------------------------------------------|
+| -------------- | ---------------------------------------------------------------- |
 | `leani-core`   | 純粋な関数と定数。入力だけで出力が決まる                         |
 | `leani-read`   | 読み取り。環境変数とファイルを読むが、何も書き換えない           |
 | `leani`        | 副作用。プロセス、端末、ファイル、ネットワークを操作する         |
@@ -146,16 +146,16 @@ README、DEVELOPMENT、DECISIONS、guide の文書は、英語の `X.md` と日�
 
 ## ドキュメント
 
-| ファイル                                           | 内容                                                                   |
-|----------------------------------------------------|------------------------------------------------------------------------|
-| [README.ja.md](README.ja.md)                       | インストールと、はじめての起動                                         |
-| [guide/proof.ja.md](guide/proof.ja.md)             | 証明モード                                                             |
-| [guide/config.ja.md](guide/config.ja.md)           | 設定、環境変数、ファイルの場所                                         |
-| [guide/jupyter.ja.md](guide/jupyter.ja.md)         | Jupyter のカーネルとして使う方法                                       |
-| [SPEC.ja.md](SPEC.ja.md)                           | leani ができることの一覧。`crates/spec` がテストから生成する           |
-| [SPEC.en.md](SPEC.en.md)                           | `SPEC.ja.md` の英語版。`crates/spec` がテストの `en:` の文から生成する |
-| [DECISIONS.ja.md](DECISIONS.ja.md)                 | 設計の判断。採用しなかった案と、その理由                               |
-| `stories.toml`                                     | ユーザーストーリーの一覧                                               |
-| `glossary.toml`                                    | テストの文と文書で使う、日本語と英語の語の組                           |
-| `crates/`                                          | leani のコード。設計の理由は doc comment とコメントに書いてある        |
-| `src/leani/`                                       | Jupyter のカーネル (Python 版)                                         |
+| ファイル                                   | 内容                                                                   |
+| ------------------------------------------ | ---------------------------------------------------------------------- |
+| [README.ja.md](README.ja.md)               | インストールと、はじめての起動                                         |
+| [guide/proof.ja.md](guide/proof.ja.md)     | 証明モード                                                             |
+| [guide/config.ja.md](guide/config.ja.md)   | 設定、環境変数、ファイルの場所                                         |
+| [guide/jupyter.ja.md](guide/jupyter.ja.md) | Jupyter のカーネルとして使う方法                                       |
+| [SPEC.ja.md](SPEC.ja.md)                   | leani ができることの一覧。`crates/spec` がテストから生成する           |
+| [SPEC.en.md](SPEC.en.md)                   | `SPEC.ja.md` の英語版。`crates/spec` がテストの `en:` の文から生成する |
+| [DECISIONS.ja.md](DECISIONS.ja.md)         | 設計の判断。採用しなかった案と、その理由                               |
+| `stories.toml`                             | ユーザーストーリーの一覧                                               |
+| `glossary.toml`                            | テストの文と文書で使う、日本語と英語の語の組                           |
+| `crates/`                                  | leani のコード。設計の理由は doc comment とコメントに書いてある        |
+| `src/leani/`                               | Jupyter のカーネル (Python 版)                                         |

@@ -58,14 +58,14 @@ A `sorry` written in term position, as in `:= sorry`, cannot be replaced (the de
 ## Input
 
 - One input is one tactic.
-- When you enter a line that needs a continuation, such as `induction n with`, leani waits for the continuation with ` | `. An empty line finishes the input.
+- When you enter a line that needs a continuation, such as `induction n with`, leani waits for the continuation with `  |  `. An empty line finishes the input.
 - When there are two or more goals, leani shows all of them with numbers, as in `goal 1/2`.
 - A tactic that results in an error is not recorded. The state does not change, so you can enter a different tactic.
 
 ## Commands
 
 | Command        | Action                                                  |
-|----------------|---------------------------------------------------------|
+| -------------- | ------------------------------------------------------- |
 | `:goals`, `:g` | Shows the current goals                                 |
 | `:script`      | Shows the tactics entered so far                        |
 | `:undo`        | Undoes the last tactic                                  |

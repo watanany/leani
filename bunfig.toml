@@ -1,0 +1,13 @@
+# bun fmt で整形しないファイル。
+# - .claude/: AI が Edit で直す。just check で確かめるだけにする (justfile の check)
+# - SPEC.ja.md と SPEC.en.md: crates/spec が生成する
+# - src/leani/abbrev.json: Lean から写したデータ
+# - pyproject.toml: uv が書き戻す
+[fmt]
+ignorePatterns = [
+  ".claude/**",
+  "SPEC.ja.md",
+  "SPEC.en.md",
+  "src/leani/abbrev.json",
+  "pyproject.toml",
+]
