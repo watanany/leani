@@ -3950,8 +3950,10 @@ mod checks_of_answers_about_test_sentences {
         json!({"place": place, "text": text, "verdict": "ok"})
     }
 
+    /// fixed は、text と同じ `ja:` か `en:` で始める。
     fn ng(place: &str, text: &str) -> serde_json::Value {
-        json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い", "fixed": "直した文"})
+        let fixed = format!("{} 直した文", &text[..3]);
+        json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い", "fixed": fixed})
     }
 
     /// ja: 今の文を 1 つずつ持つ答えには、ng の文の一覧を返し、en: の文には関数名か mod の名前も変えることを添える
@@ -4037,6 +4039,25 @@ mod checks_of_answers_about_test_sentences {
             );
         });
         assert!(verify_texts(&current(), "{}").is_err());
+    }
+
+    /// ja: ng の fixed が、元の文と同じ ja: か en: で始まらない答えと、その後ろに文が無い答えと、元の文と同じ答えには、その場所を含むエラーを返す
+    /// en: Returns an error with the place for an answer with ng whose fixed does not start with the same ja: or en: as the sentence, has no sentence after it, or equals the sentence
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_with_the_place_for_an_answer_with_ng_whose_fixed_does_not_start_with_the_same_ja_or_en_as_the_sentence_has_no_sentence_after_it_or_equals_the_sentence()
+     {
+        let second = ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence");
+        let place = "crates/leani/tests/parsing.rs:10";
+        let text = "ja: 文を返す";
+        ["en: Returns a sentence", "直した文", "ja:  ", "ja: 文を返す"]
+            .into_iter()
+            .for_each(|fixed| {
+                let first = json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い", "fixed": fixed});
+                let answer = json!([first, second]);
+                let err = verify_texts(&current(), &answer.to_string()).expect_err(fixed);
+                assert!(err.contains("parsing.rs:10"), "{fixed}: {err}");
+            });
     }
 }
 

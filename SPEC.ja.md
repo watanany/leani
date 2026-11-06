@@ -11,7 +11,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 47 件、テスト 527 件。括弧の中はテストの場所
+ストーリー 47 件、テスト 528 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -865,6 +865,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 同じ文を 2 回持つ答えには、その文の場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
 - 今の文と text が違う答えには、その場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
 - verdict が ok と ng のどちらでもない答えと、ng に reason か fixed が無い答えと、ok に reason がある答えには、エラーを返す (parsing / テストの文の判断の確かめ)
+- ng の fixed が、元の文と同じ ja: か en: で始まらない答えと、その後ろに文が無い答えと、元の文と同じ答えには、その場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
 - リポジトリの直下の project の要素があれば、user の要素より先に、その要素の installPath と version を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
 - 別のディレクトリの project の要素しか無ければ、user の要素を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
 - yomiyasu の要素が無ければ None を返す (parsing / installed_plugins.json から選ぶ yomiyasu)

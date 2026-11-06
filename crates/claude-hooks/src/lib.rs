@@ -814,6 +814,22 @@ struct Answer {
     ng: Option<(String, String)>,
 }
 
+/// ng の直した文 (fixed) が、元の文 (text) の直しとして使えないときに、その理由を返す。
+/// fixed は text と同じ `ja:` か `en:` で始まり、その後ろに文があり、text と違わなければならない。
+fn fixed_problem(text: &str, fixed: &str) -> Option<String> {
+    let prefix = text.split_once(':').map_or("", |(p, _)| p);
+    match fixed.strip_prefix(prefix).and_then(|r| r.strip_prefix(':')) {
+        None => Some(format!(
+            "fixed が元の文と同じ {prefix}: で始まらない: {fixed}"
+        )),
+        Some(rest) if rest.trim().is_empty() => {
+            Some(format!("fixed の {prefix}: の後ろに文が無い"))
+        }
+        Some(_) if fixed.trim() == text.trim() => Some("fixed が元の文と同じ".to_string()),
+        Some(_) => None,
+    }
+}
+
 /// 答えの 1 つの要素を確かめて返す。
 fn answer_item(item: &Value) -> Result<Answer, String> {
     let field = |key: &str| item.get(key).and_then(Value::as_str).map(str::to_string);
@@ -844,11 +860,14 @@ fn answer_item(item: &Value) -> Result<Answer, String> {
             text,
             ng: None,
         }),
-        (Some("ng"), Some(reason), Some(fixed), _) => Ok(Answer {
-            place,
-            text,
-            ng: Some((reason, fixed)),
-        }),
+        (Some("ng"), Some(reason), Some(fixed), _) => match fixed_problem(&text, &fixed) {
+            Some(problem) => Err(format!("{place}: {problem}")),
+            None => Ok(Answer {
+                place,
+                text,
+                ng: Some((reason, fixed)),
+            }),
+        },
         (Some("ok"), _, _, true) => Err(format!("{place}: ok に reason か fixed がある")),
         (Some("ng"), _, _, _) => Err(format!("{place}: ng に reason か fixed が無い")),
         _ => Err(format!("{place}: verdict が ok でも ng でもない")),
