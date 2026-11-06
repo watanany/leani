@@ -67,7 +67,7 @@ uv run mypy
 - コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
 - 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
-- `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める
+- `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める。hook は `cargo install --path crates/claude-hooks` でインストールした版で動き、インストールしていなければ何もしない。`crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、このコマンドを再実行する
 
 ## テストの文の書き方
 

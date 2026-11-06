@@ -329,6 +329,19 @@ When AI changes a file, the hook gives AI the notices related to that file.
 When AI is about to finish, if there are notices, the hook stops AI once and has it fix them or write the reason for not fixing them in its reply to the user.
 The same notice is not repeated within one session, so after AI decides to continue with a reason, the hook does not stop AI.
 
+### Rejected: Building and running the code in the working tree from the hooks
+
+If the hooks ran `cargo run -p claude-hooks`, a change to `crates/claude-hooks` would take effect in the hooks right away.
+However, the hooks run outside the sandbox, without asking for permission.
+If the code of `crates/claude-hooks` or of a crate it depends on, or a `build.rs`, is rewritten, the rewritten code runs at the next hook without any confirmation.
+The same applies when AI rewrites it, so code could run without going through the permission check for Bash.
+
+Instead, the hooks run only the version that a person installed with `cargo install --path crates/claude-hooks`.
+If it is not installed, the hooks do nothing.
+After `crates/claude-hooks` changes, the hooks keep running the old version until it is installed again.
+For the same reason, `claude-hooks` runs git with `core.fsmonitor=false`, and does not use external diff or textconv in `git diff`.
+This keeps the hooks from running commands written in `.git/config`.
+
 ### Rejected: Putting the code in one crate
 
 Another option is to put the code in one crate, and divide the modules by whether they have side effects.

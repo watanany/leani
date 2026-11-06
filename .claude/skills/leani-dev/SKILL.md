@@ -32,3 +32,7 @@ description: leani に機能を足す、動作を変える、不具合を直す�
 
 知らせは強制ではない。直すか、直さない理由をユーザーへの返事に書いて続ける。
 同じ知らせは、1 つのセッションの中で繰り返さない。
+
+hook は、ユーザーが `cargo install --path crates/claude-hooks` でインストールした版で動く。
+`crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、インストールし直すようにユーザーに伝える。
+AI が自分でインストールし直さない。

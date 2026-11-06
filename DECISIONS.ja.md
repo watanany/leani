@@ -329,6 +329,19 @@ AI がファイルを変えたときは、そのファイルに関係する知�
 AI が終わろうとしたときは、知らせがあれば 1 回だけ止めて、直すか、直さない理由をユーザーへの返事に書かせる。
 同じ知らせは 1 つのセッションの中で繰り返さないので、AI が理由を書いて続けると決めたあとは、hook は AI を止めない。
 
+### 不採用: hook で作業ツリーのコードをビルドして動かす
+
+hook から `cargo run -p claude-hooks` を実行すれば、`crates/claude-hooks` を変えるとすぐに hook に反映される。
+しかし、hook は sandbox の外で、許可を求めずに動く。
+`crates/claude-hooks` か、それが依存する crate のコードか `build.rs` を書き換えると、書き換えたコードが次の hook で確認なしに動く。
+AI が書き換えた場合も同じで、Bash の許可の確認を通らずにコードを動かせることになる。
+
+代わりに、hook は、人が `cargo install --path crates/claude-hooks` でインストールした版だけを動かす。
+インストールしていなければ、hook は何もしない。
+`crates/claude-hooks` を変えても、インストールし直すまで hook は古い版で動く。
+同じ理由で、`claude-hooks` は git を `core.fsmonitor=false` で実行し、`git diff` では外部の diff と textconv を使わない。
+`.git/config` に書いたコマンドを、hook から実行させないためである。
+
 ### 不採用: コードを 1 つの crate にまとめる
 
 コードを 1 つの crate にまとめ、副作用の有無でモジュールを分ける方法もある。

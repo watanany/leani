@@ -278,10 +278,13 @@ fn hunk_start(text: &str) -> Option<usize> {
     after.split([',', ' ']).next().and_then(|n| n.parse().ok())
 }
 
+/// hook は sandbox の外で動くので、リポジトリの `.git/config` に書いたコマンド (fsmonitor、
+/// 外部の diff、textconv) を git に実行させない。
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
         .arg("-C")
         .arg(root)
+        .args(["-c", "core.fsmonitor=false"])
         .args(args)
         .output()
         .map_err(|e| format!("git: {e}"))?;
@@ -305,7 +308,16 @@ pub fn base(root: &Path) -> String {
 /// 作業ツリーの状態を git から読む。
 pub fn tree(root: &Path) -> Result<Tree, String> {
     let branch = git(root, &["rev-parse", "--abbrev-ref", "HEAD"])?;
-    let diff = git(root, &["diff", "--name-only", &base(root)])?;
+    let diff = git(
+        root,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--name-only",
+            &base(root),
+        ],
+    )?;
     let others = git(root, &["ls-files", "--others", "--exclude-standard"])?;
     Ok(Tree {
         branch: branch.trim().to_string(),
@@ -344,6 +356,8 @@ pub fn texts(root: &Path) -> Result<Vec<String>, String> {
         root,
         &[
             "diff",
+            "--no-ext-diff",
+            "--no-textconv",
             "-U0",
             &base(root),
             "--",

@@ -67,7 +67,7 @@ If the content of `SPEC.ja.md` or `SPEC.en.md` does not match the tests, the X1 
 - After changing code, read again the doc comment of the changed function, the comments in its callers and callees, and the documentation that describes that behavior. `crates/spec` detects differences between the tests and `SPEC.ja.md` and `SPEC.en.md`, but nothing detects differences between comments and documentation, or between `en:` sentences and `ja:` sentences. Of the descriptions of behavior, write the ones that can be checked with input and output in test sentences, not in comments
 - Work on a branch, and when done, merge it into main and delete the branch. Do not create PRs
 - Write commit messages in the Conventional Commits format, in Japanese
-- `.claude/skills/` has development skills (`leani-dev`, `leani-test-text`, `leani-docs-sync`). The hooks in `.claude/settings.json` notify AI when files change without a branch, when code changes without changes to tests, when only one document of a pair changes, and when `SPEC.ja.md` or `SPEC.en.md` does not match the tests. Run `just status` to read the same notices yourself
+- `.claude/skills/` has development skills (`leani-dev`, `leani-test-text`, `leani-docs-sync`). The hooks in `.claude/settings.json` notify AI when files change without a branch, when code changes without changes to tests, when only one document of a pair changes, and when `SPEC.ja.md` or `SPEC.en.md` does not match the tests. Run `just status` to read the same notices yourself. The hooks run the version installed with `cargo install --path crates/claude-hooks`, and do nothing if it is not installed. After changing `crates/claude-hooks`, `crates/spec`, or `crates/docs-pair`, run this command again
 
 ## Writing test sentences
 
