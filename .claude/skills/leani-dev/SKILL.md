@@ -6,22 +6,33 @@ description: leani に機能を足す、動作を変える、不具合を直す�
 # leani の開発の手順
 
 決まりの本文は `DEVELOPMENT.ja.md` にある。このスキルは、その決まりを作業の順に並べたものである。
+引数なしで `just` を実行すると、同じ流れとコマンドの一覧が出る。
 
 ## 手順
 
-1. `just status` を実行して、今の枝と、手順から外れていることの知らせを見る
-2. `main-rs` の上にいるなら、`git switch -c <枝の名前>` で枝を切る
-3. 機能を足すときと動作を変えるときは、`stories.toml` にストーリーを足すか、既にあるストーリーを選ぶ
-4. テストを書き、失敗することを確かめる。テストの文 (`ja:` と `en:`) を書いたら、スキル `leani-test-text` で見直す
-5. 実装を書き、テストが通ることを確かめる
-6. `cargo run -p spec` で `SPEC.ja.md` と `SPEC.en.md` を生成し直す
-7. 文書を変えたら、スキル `leani-docs-sync` で、もう片方の言語の文書に同じ変更を入れる
-8. `cargo fmt` と `uv run ruff format .` を実行してから、`just check` を実行する
-9. Conventional Commits の形で、日本語で commit する
-10. `just check` をもう一度実行する (`docs-pair` は commit だけを確かめる)
-11. `git switch main-rs && git merge --ff-only <枝の名前> && git branch -d <枝の名前>`
+担当が「スクリプト」の手順では、`just` のレシピを実行して結果を読む。AI は同じことを手で行わない。
 
-動作を変えないリファクタリングでは、3 と 4 を飛ばしてよい。
+| 手順                                                                                   | 担当            |
+| -------------------------------------------------------------------------------------- | --------------- |
+| 1. `just status` で、今の枝と、手順から外れていることの知らせを見る                    | スクリプト      |
+| 2. `just start <枝の名前>` で、`main-rs` から枝を切る                                  | スクリプト      |
+| 3. `stories.toml` にストーリーを足すか、既にあるストーリーを選ぶ                       | AI              |
+| 4. テストを書き、`cargo nextest run <名前>` でテストが失敗することを確かめる           | AI              |
+| 5. テストの文を、スキル `leani-test-text` で見直す                                     | スクリプトと AI |
+| 6. 実装を書き、`cargo nextest run <名前>` でテストが通ることを確かめる                 | AI              |
+| 7. 文書を変えたら、スキル `leani-docs-sync` で、もう片方の言語の文書に同じ変更を入れる | スクリプトと AI |
+| 8. `just fix` で整形し、`SPEC.ja.md` と `SPEC.en.md` を生成し直す                      | スクリプト      |
+| 9. `just check` でテストと lint をすべて実行する                                       | スクリプト      |
+| 10. Conventional Commits の形で、日本語の commit メッセージを書いて commit する        | AI              |
+| 11. `just finish` で、`main-rs` に merge して枝を消す                                  | スクリプト      |
+
+動作を変えないリファクタリングでは、3 から 5 を飛ばしてよい。
+
+## 実行するときの注意
+
+- `just finish` は、`just check` の前と後に、枝の状態と commit の件名を確かめる。確かめに通らなければ、理由を出して merge せずに止まる。中で `just check` を実行するので、timeout を 600000 ms にする
+- `just fix` はファイルを書き換え、`just finish` は git の枝を操作する。どちらも sandbox の外で実行するので、許可の一覧 (`permissions.allow`) に入れず、毎回ユーザーの許可を得る
+- `just fix` は `.claude/` の下のファイルを整形しない。`.claude/` の下のファイルは Edit で直し、`just check` で整形を確かめる
 
 ## hook からの知らせ
 
@@ -35,4 +46,5 @@ description: leani に機能を足す、動作を変える、不具合を直す�
 
 hook は、ユーザーが `cargo install --path crates/claude-hooks` でインストールした版で動く。
 `crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、インストールし直すようにユーザーに伝える。
+`just finish` も、merge で変わったファイルを見て、インストールし直しを頼む文を出す。
 AI が自分でインストールし直さない。

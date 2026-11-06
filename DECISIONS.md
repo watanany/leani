@@ -316,6 +316,18 @@ The stage that collects the targets and the stage that checks and summarizes the
 AI handles only the stage that makes judgments about the collected targets, and the form of its answer is fixed in advance with a JSON schema.
 The input and output of the scripts are kept in files, so they can be checked again later with the same input.
 
+For example, in the skill `leani-test-text`, `just texts` collects the test sentences and writes them to `target/claude-hooks/texts.txt`.
+AI writes its judgment of each sentence to `target/claude-hooks/texts.json`, and `just texts-verify` checks for missing and duplicate judgments, old sentences, and errors in the form.
+
+`just texts-verify` does not write the sentences that AI fixed back to the source.
+If it did, errors in the judgment of AI would go into the source without a person reading them.
+Fixing an `en:` sentence also means changing the name of the test function, and changing the name needs reading the code around it.
+AI fixes the sentences with Edit, and starts again from `just texts`.
+
+The yomiyasu lint (`just lint-ja`) is not part of `just check`.
+The lint is in a plugin outside the repository, and its rules and output change with its version.
+If it were part of `just check`, the same commit could give different results depending on the version of the installed plugin.
+
 ### Rejected: Forcing the development workflow with hooks
 
 Claude Code hooks can also refuse a change before AI makes it to a file.

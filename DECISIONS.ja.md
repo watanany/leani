@@ -316,6 +316,18 @@ describe の側の `describe_` は、pytest-describe が describe を見つけ�
 AI には、集めた対象について判断する段だけを任せ、答えの形を JSON の schema で決めておく。
 スクリプトの入力と出力はファイルに残し、あとから同じ入力で確かめ直せるようにする。
 
+たとえば、スキル `leani-test-text` では、`just texts` がテストの文を集めて `target/claude-hooks/texts.txt` に書く。
+AI は文ごとの判断を `target/claude-hooks/texts.json` に書き、`just texts-verify` が、判断の抜けと重複、古い文、形の誤りを確かめる。
+
+`just texts-verify` は、AI が直した文をソースに書き戻さない。
+書き戻すと、AI の判断の誤りが、人が読まないままソースに入る。
+`en:` の文を直すときはテストの関数名も変えるが、関数名を変えるには周りのコードを読む必要がある。
+直すのは AI が Edit で行い、`just texts` からやり直す。
+
+yomiyasu の lint (`just lint-ja`) は、`just check` に入れない。
+lint はリポジトリの外の plugin にあり、版によって規則と出力が変わる。
+`just check` に入れると、同じ commit でも、入れた plugin の版によって結果が変わる。
+
 ### 不採用: hook で開発の手順を強制する
 
 Claude Code の hook は、AI がファイルを変える前に、その変更を拒むこともできる。

@@ -27,8 +27,11 @@ leani-kernel install
 
 ## Tests and lint
 
-`just check` runs all the tests and lints listed below. Install `just` with
-`brew install just`.
+`just check` runs all the tests and lints listed below. `just fix` formats the code and then
+generates `SPEC.ja.md` and `SPEC.en.md` again. Before running either, install the tools they use
+with `brew install just bun shellcheck shfmt`. The checked versions are just 1.59, bun 1.4.4,
+shellcheck 0.11.0, and shfmt 3.14.1. Running `just` with no arguments shows the workflow and the
+list of commands.
 
 The tests require the Rust toolchain, cargo-nextest, elan, and a built engine.
 Build the engine with `cargo run -p leani -- --setup`.
@@ -51,9 +54,11 @@ Run the tests and lints of the Jupyter kernel with the following commands.
 ```
 uv sync
 uv run pytest -n auto
-uv run ruff format . && uv run ruff check .
+uv run ruff check .
 uv run mypy
 ```
+
+`just fix` formats the Python code.
 
 When you add or remove a test, or change the test sentences (the `ja:` and `en:` lines of doc comments and docstrings), the location of tests (the file and the `mod`), or the stories, run `cargo run -p spec` to regenerate `SPEC.ja.md` and `SPEC.en.md`.
 The same applies when you change the kernel tests (`tests/test_kernel.py`).
@@ -65,9 +70,10 @@ If the content of `SPEC.ja.md` or `SPEC.en.md` does not match the tests, the X1 
 - Put tests in `crates/leani/tests/`. `crates/spec` reads only this directory and `tests/test_*.py` to make `SPEC.ja.md` and `SPEC.en.md`, so unit tests inside a crate appear in neither. Write the test sentences one line each after `ja:` and `en:` in the doc comment of the test (the docstring for kernel tests). A `mod` is a describe, and the sentences of a `mod` go in `ja:` and `en:` of `//!` inside the `mod`. Make the test function name and the `mod` name from the `en:` sentence. Make it lowercase, replace each run of non-alphanumeric characters with `_`, and remove `_` at both ends (a kernel describe gets `describe_` in front). If the name is different, `crates/spec` reports an error. `crates/spec` also reports an error when the name made does not start with a letter, when it is a Rust or Python keyword, when a `mod` name is a crate name (`leani`, `spec`, etc.), and when a kernel test name starts with `describe`, so rewrite the `en:` sentence in those cases
 - `crates/spec` reports an error for a test that appears in SPEC but may not run, and for a test that runs but does not appear in SPEC. Do not put `#[ignore]`, `#[cfg]`, or `#[cfg_attr]` on Rust tests. In kernel tests, do not use skip and xfail markers or `pytestmark`, do not write describes and tests under `if`, `for`, or `with`, and do not delete the name of a `def` with `del` or assign another value to it. Write `@story(...)` on one line, and write the number in double quotes, as in `"J1"`. Write the docstring right after the `def` line, start it with a line of only `"""`, and close it with a line of only `"""`. Put test files directly under `crates/leani/tests/` and `tests/`
 - After changing code, read again the doc comment of the changed function, the comments in its callers and callees, and the documentation that describes that behavior. `crates/spec` detects differences between the tests and `SPEC.ja.md` and `SPEC.en.md`, but nothing detects differences between comments and documentation, or between `en:` sentences and `ja:` sentences. Of the descriptions of behavior, write the ones that can be checked with input and output in test sentences, not in comments
-- Work on a branch, and when done, merge it into main and delete the branch. Do not create PRs
+- Work on a branch created from `main-rs` with `just start <branch name>`. When done, merge it into `main-rs` and delete the branch with `just finish`. `just finish` merges only when `just check` passes, there are no uncommitted changes, and the commit subjects are in the Conventional Commits format. Do not create PRs
 - Write commit messages in the Conventional Commits format, in Japanese
 - `.claude/skills/` has development skills (`leani-dev`, `leani-test-text`, `leani-docs-sync`). The hooks in `.claude/settings.json` notify AI when files change without a branch, when code changes without changes to tests, when only one document of a pair changes, and when `SPEC.ja.md` or `SPEC.en.md` does not match the tests. Run `just status` to read the same notices yourself. The hooks run the version installed with `cargo install --path crates/claude-hooks`, and do nothing if it is not installed. After changing `crates/claude-hooks`, `crates/spec`, or `crates/docs-pair`, run this command again
+- In the development skills, the `just` recipes (`texts`, `texts-lint`, `texts-verify`, `pairs`, `pairs-verify`) do the stages that collect the targets and check the results, and AI does only the stage that makes judgments. `just lint-ja <file>` runs the yomiyasu lint on a Japanese document, and shows its findings without the rules that conflict with the rules of this repository
 
 ## Writing test sentences
 
@@ -98,15 +104,15 @@ An `en:` sentence is the English translation of the `ja:` sentence, and is writt
 
 The crates are split by whether they have side effects.
 
-| crate          | Contents                                                                      |
-| -------------- | ----------------------------------------------------------------------------- |
-| `leani-core`   | Pure functions and constants. The output depends only on the input            |
-| `leani-read`   | Reading. Reads environment variables and files, but changes nothing           |
-| `leani`        | Side effects. Operates on processes, the terminal, files, and the network     |
-| `story`        | `#[story]` given to tests. Returns the function without doing anything        |
-| `spec`         | Generates `SPEC.ja.md` and `SPEC.en.md`                                       |
-| `docs-pair`    | Checks that the English `X.md` and the Japanese `X.ja.md` are paired          |
-| `claude-hooks` | Notifies AI through Claude Code hooks when it leaves the development workflow |
+| crate          | Contents                                                                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leani-core`   | Pure functions and constants. The output depends only on the input                                                                                                                                             |
+| `leani-read`   | Reading. Reads environment variables and files, but changes nothing                                                                                                                                            |
+| `leani`        | Side effects. Operates on processes, the terminal, files, and the network                                                                                                                                      |
+| `story`        | `#[story]` given to tests. Returns the function without doing anything                                                                                                                                         |
+| `spec`         | Generates `SPEC.ja.md` and `SPEC.en.md`                                                                                                                                                                        |
+| `docs-pair`    | Checks that the English `X.md` and the Japanese `X.ja.md` are paired                                                                                                                                           |
+| `claude-hooks` | Notifies AI through Claude Code hooks when it leaves the development workflow. Checks the start and the end of a branch for `just start` and `just finish`, and does the fixed steps of the development skills |
 
 The list of modules of each crate is at the top of the `lib.rs` of that crate.
 When adding code, follow these rules.

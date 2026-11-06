@@ -27,8 +27,11 @@ leani-kernel install
 
 ## テストと lint
 
-`just check` で、次に挙げるテストと lint をすべて実行する。`just` は `brew install just` で
-インストールする。
+`just check` で、次に挙げるテストと lint をすべて実行する。`just fix` は、整形してから
+`SPEC.ja.md` と `SPEC.en.md` を生成し直す。どちらも、使う道具を
+`brew install just bun shellcheck shfmt` でインストールしてから実行する。確かめた版は
+just 1.59、bun 1.4.4、shellcheck 0.11.0、shfmt 3.14.1 である。引数なしで `just` を実行すると、
+作業の流れとコマンドの一覧が出る。
 
 テストには、Rust の toolchain、cargo-nextest、elan、ビルド済みのエンジンが必要。
 エンジンは `cargo run -p leani -- --setup` でビルドする。
@@ -51,9 +54,11 @@ Jupyter のカーネルのテストと lint は、次のコマンドで実行す
 ```
 uv sync
 uv run pytest -n auto
-uv run ruff format . && uv run ruff check .
+uv run ruff check .
 uv run mypy
 ```
+
+Python のコードの整形は `just fix` で行う。
 
 テストを足すか消したとき、テストの文 (doc comment と docstring の `ja:` と `en:` の行) か、テストの場所 (ファイルと `mod`) か、ストーリーを変えたときは、`cargo run -p spec` を実行して `SPEC.ja.md` と `SPEC.en.md` を生成し直す。
 カーネルのテスト (`tests/test_kernel.py`) を変えたときも同じ。
@@ -65,9 +70,10 @@ uv run mypy
 - テストは `crates/leani/tests/` に置く。`crates/spec` がこのディレクトリと `tests/test_*.py` だけを読んで `SPEC.ja.md` と `SPEC.en.md` を作るので、crate の中の単体テストはどちらにも載らない。テストの文は、テストの doc comment (カーネルのテストでは docstring) の `ja:` と `en:` の後ろに 1 行ずつ書く。`mod` を describe にし、`mod` の文は `mod` の中の `//!` の `ja:` と `en:` に書く。テストの関数名と `mod` の名前は `en:` の文から作る。小文字にし、英数字でない文字の並びを `_` にして、両端の `_` を消す (カーネルの describe は前に `describe_` を付ける)。名前が違えば `crates/spec` がエラーにする。作った名前が英字で始まらないとき、Rust か Python のキーワードになるとき、`mod` の名前が crate の名前 (`leani`、`spec` など) になるとき、カーネルのテストの名前が `describe` で始まるときもエラーにするので、`en:` の文を書き直す
 - `crates/spec` は、SPEC に載るのに実行されないことがあるテストと、実行されるのに SPEC に載らないテストをエラーにする。Rust のテストには `#[ignore]`、`#[cfg]`、`#[cfg_attr]` を付けない。カーネルのテストでは、skip と xfail のマーカーと `pytestmark` を使わず、describe とテストを `if`、`for`、`with` の下に書かず、`def` の名前を `del` で消したり別の値を入れたりしない。`@story(...)` は 1 行で書き、番号は `"J1"` のように二重引用符で書く。docstring は `def` の行のすぐ後ろに書き、`"""` だけの行で始めて `"""` だけの行で閉じる。テストのファイルは `crates/leani/tests/` と `tests/` の直下に置く
 - コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
-- 作業はブランチで行い、終わったら main に merge してブランチを消す。PR は作らない
+- 作業は、`just start <枝の名前>` で `main-rs` から切った枝で行う。終わったら `just finish` で `main-rs` に merge し、枝を消す。`just finish` は、`just check` が通り、commit していない変更が無く、commit の件名が Conventional Commits の形のときだけ merge する。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
 - `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める。hook は `cargo install --path crates/claude-hooks` でインストールした版で動き、インストールしていなければ何もしない。`crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、このコマンドを再実行する
+- 開発用のスキルのうち、対象を集める段と結果を確かめる段は `just` のレシピ (`texts`、`texts-lint`、`texts-verify`、`pairs`、`pairs-verify`) が行い、AI は判断する段だけを行う。`just lint-ja <ファイル>` は、日本語の文書を yomiyasu の lint にかけ、このリポジトリの決まりと食い違う規則の指摘を外して出す
 
 ## テストの文の書き方
 
@@ -98,15 +104,15 @@ uv run mypy
 
 crate は副作用の有無で分けてある。
 
-| crate          | 中身                                                             |
-| -------------- | ---------------------------------------------------------------- |
-| `leani-core`   | 純粋な関数と定数。入力だけで出力が決まる                         |
-| `leani-read`   | 読み取り。環境変数とファイルを読むが、何も書き換えない           |
-| `leani`        | 副作用。プロセス、端末、ファイル、ネットワークを操作する         |
-| `story`        | テストに付ける `#[story]`。何もせずに関数を返す                  |
-| `spec`         | `SPEC.ja.md` と `SPEC.en.md` を生成する                          |
-| `docs-pair`    | 英語の `X.md` と日本語の `X.ja.md` が対になっているかを確かめる  |
-| `claude-hooks` | 開発の手順から外れたことを、Claude Code の hook で AI に知らせる |
+| crate          | 中身                                                                                                                                                           |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leani-core`   | 純粋な関数と定数。入力だけで出力が決まる                                                                                                                       |
+| `leani-read`   | 読み取り。環境変数とファイルを読むが、何も書き換えない                                                                                                         |
+| `leani`        | 副作用。プロセス、端末、ファイル、ネットワークを操作する                                                                                                       |
+| `story`        | テストに付ける `#[story]`。何もせずに関数を返す                                                                                                                |
+| `spec`         | `SPEC.ja.md` と `SPEC.en.md` を生成する                                                                                                                        |
+| `docs-pair`    | 英語の `X.md` と日本語の `X.ja.md` が対になっているかを確かめる                                                                                                |
+| `claude-hooks` | 開発の手順から外れたことを、Claude Code の hook で AI に知らせる。`just start` と `just finish` で枝の始めと終わりを確かめ、開発用のスキルの決まった手順を行う |
 
 各 crate のモジュールの一覧は、その crate の `lib.rs` の先頭に書いてある。
 コードを追加するときは、次の決まりに従う。
