@@ -9,19 +9,8 @@ import unicodedata
 from importlib.resources import files
 from typing import Final
 
-# 略記表。VS Code の Lean 拡張にある 1857 件のうち 1829 件を使う。値も元の表のまま
-# なので、`\d` が δ ではなく ↓ になるような意外な対応もそのままにしてある。
-# leani とエディタで対応が違うと、ユーザーはどちらで入力しているかを意識しながら
-# 入力することになる。
-#   https://github.com/leanprover/vscode-lean4/blob/master/lean4-unicode-input/src/abbreviations.json
-#
-# 除いたのは 2 種類。`{}` → `{$CURSOR}` のように変換後のカーソル位置を持つ
-# 26 件は、置き換えたあとにカーソルを戻す仕組みが必要になる。`\` と `+ ` の 2 件は
-# space か Tab で確定する方式では入力できない (`\` は、直前の `\` より後ろをキーと
-# して表を検索するのでキーが空になる。`+ ` は、キーの中の空白で先に確定してしまう)。
-#
-# キーの順に並べてある。293 件が他のキーの接頭辞なので、意味で並べても探しやすく
-# はならない。表は Rust 版と共有するので abbrev.json に置く。
+# 表の出どころと除いた略記は Rust 版 (crates/leani-core/src/abbrev.rs) に書いてある。
+# src/leani/abbrev.json は crates/leani-core/abbrev.json への symlink である。
 ABBREV: Final[dict[str, str]] = json.loads(
     files("leani").joinpath("abbrev.json").read_text(encoding="utf-8")
 )

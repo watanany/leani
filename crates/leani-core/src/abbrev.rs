@@ -1,8 +1,20 @@
 //! 略記の表と展開 (純粋)。
 //!
-//! `\to` を `→` にする表。VS Code の Lean 拡張と同じ表記と同じ値を使う。表は Python 版と
-//! 共有するので `src/leani/abbrev.json` に置き、ここに埋め込む。表の出どころと、除いた
-//! 略記は `src/leani/abbrev.py` の冒頭に書いてある。
+//! `\to` を `→` にする表。VS Code の Lean 拡張と同じ表記と同じ値を使う。
+//!
+//! 表は、VS Code の Lean 拡張にある 1857 件のうち 1829 件を使う。値も元の表のままなので、
+//! `\d` が δ ではなく ↓ になるような意外な対応もそのままにしてある。leani とエディタで
+//! 対応が違うと、ユーザーはどちらで入力しているかを意識しながら入力することになる。
+//!   https://github.com/leanprover/vscode-lean4/blob/master/lean4-unicode-input/src/abbreviations.json
+//!
+//! 除いたのは 2 種類。`{}` → `{$CURSOR}` のように変換後のカーソル位置を持つ 26 件は、
+//! 置き換えたあとにカーソルを戻す仕組みが必要になる。`\` と `+ ` の 2 件は space か Tab で
+//! 確定する方式では入力できない (`\` は、直前の `\` より後ろをキーとして表を検索するので
+//! キーが空になる。`+ ` は、キーの中の空白で先に確定してしまう)。
+//!
+//! 表はキーの順に並べてある。293 件が他のキーの接頭辞なので、意味で並べても探しやすくは
+//! ならない。表はこの crate の `abbrev.json` に置き、ここに埋め込む。Python 版は、この
+//! ファイルへの symlink の `src/leani/abbrev.json` を読む。
 //!
 //! キーはすべて ASCII なので、キーの文字数と byte 数は同じ。
 
@@ -13,9 +25,8 @@ use std::sync::LazyLock;
 use crate::width::{WIDE, ZERO};
 
 /// 略記の表。キーの順に並ぶ (`:abbrev` もこの順に表示する)。
-pub static ABBREV: LazyLock<BTreeMap<String, String>> = LazyLock::new(|| {
-    serde_json::from_str(include_str!("../../../src/leani/abbrev.json")).expect("abbrev.json")
-});
+pub static ABBREV: LazyLock<BTreeMap<String, String>> =
+    LazyLock::new(|| serde_json::from_str(include_str!("../abbrev.json")).expect("abbrev.json"));
 
 /// カーソルの手前にある `\name` を記号に置き換える。(記号, 消す文字数) を返す。
 /// space か Tab を押したときに呼ぶ。キーを押すたびに呼ばない理由は DECISIONS.md にある。
