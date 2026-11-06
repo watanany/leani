@@ -3458,21 +3458,29 @@ mod repository_config_checked_before_running_git {
     use super::*;
     use claude_hooks::unknown_keys;
 
+    /// `git config --list --show-scope --name-only -z` の出力の形にする。
+    fn listed(entries: &[(&str, &str)]) -> String {
+        entries
+            .iter()
+            .map(|(scope, key)| format!("{scope}\0{key}\0"))
+            .collect()
+    }
+
     /// ja: 既知のキーだけの config には、空の一覧を返す
     /// en: Returns an empty list for config with only known keys
     #[story("X4")]
     #[test]
     fn returns_an_empty_list_for_config_with_only_known_keys() {
-        let list = "\
-local\tcore.repositoryformatversion=0
-local\tcore.filemode=true
-local\tuser.name=leani
-local\tremote.origin.url=git@example.com:leani.git
-local\tremote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
-local\tbranch.main-rs.remote=origin
-local\tbranch.main-rs.merge=refs/heads/main-rs
-";
-        assert_eq!(unknown_keys(list), Vec::<String>::new());
+        let list = listed(&[
+            ("local", "core.repositoryformatversion"),
+            ("local", "core.filemode"),
+            ("local", "user.name"),
+            ("local", "remote.origin.url"),
+            ("local", "remote.origin.fetch"),
+            ("local", "branch.main-rs.remote"),
+            ("local", "branch.main-rs.merge"),
+        ]);
+        assert_eq!(unknown_keys(&list), Vec::<String>::new());
     }
 
     /// ja: local と global に filter のキーがある config には、local のキーだけを返す
@@ -3480,15 +3488,27 @@ local\tbranch.main-rs.merge=refs/heads/main-rs
     #[story("X4")]
     #[test]
     fn returns_only_the_local_key_for_config_with_filter_keys_in_local_and_global() {
-        let list = "\
-global\tfilter.lfs.clean=git-lfs clean -- %f
-local\tcore.bare=false
-local\tfilter.x.clean=sh -c evil
-worktree\tcore.fsmonitor=sh -c evil
-";
+        let list = listed(&[
+            ("global", "filter.lfs.clean"),
+            ("local", "core.bare"),
+            ("local", "filter.x.clean"),
+            ("worktree", "core.fsmonitor"),
+        ]);
         assert_eq!(
-            unknown_keys(list),
+            unknown_keys(&list),
             vec!["filter.x.clean".to_string(), "core.fsmonitor".to_string()]
+        );
+    }
+
+    /// ja: subsection の名前に = があるキーを含む config には、そのキーの全体を返す
+    /// en: Returns the whole key for config with a key whose subsection name contains =
+    #[story("X4")]
+    #[test]
+    fn returns_the_whole_key_for_config_with_a_key_whose_subsection_name_contains() {
+        let list = listed(&[("local", "remote.a.url=b.uploadpack")]);
+        assert_eq!(
+            unknown_keys(&list),
+            vec!["remote.a.url=b.uploadpack".to_string()]
         );
     }
 }

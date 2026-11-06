@@ -281,6 +281,8 @@ fn hunk_start(text: &str) -> Option<usize> {
 /// hook は sandbox の外で動くので、リポジトリの `.git/config` に書いたコマンドを git に実行させない。
 /// 主に防ぐのは [`guard`] で、ここで fsmonitor を止め、`git diff` に `--no-ext-diff` と
 /// `--no-textconv` を付けるのは、[`guard`] の既知のキーに漏れがあったときのためである。
+/// `git diff` には `--ignore-submodules=all` も付ける。[`guard`] は submodule の config を
+/// 確かめないので、git を submodule の中で動かさないためである。
 fn git(root: &Path, args: &[&str]) -> Result<String, String> {
     let out = Command::new("git")
         .arg("-C")
@@ -314,30 +316,34 @@ fn known(key: &str) -> bool {
         || (key.starts_with("branch.") && (key.ends_with(".remote") || key.ends_with(".merge")))
 }
 
-/// `git config --list --show-scope` の出力から、リポジトリの config (local と worktree) にある、
-/// コマンドを動かさないと分かっていないキーを返す。
+/// `git config --list --show-scope --name-only -z` の出力から、リポジトリの config (local と
+/// worktree) にある、コマンドを動かさないと分かっていないキーを返す。
+///
+/// 出力は、scope とキーを NUL で区切って交互に並べたものである。subsection の名前には `=` や
+/// 改行を書けるので、値と一緒に出す形 (`scope\tkey=value` の行) から `=` で切り出すと、
+/// `remote.a.url=b.uploadpack` を `remote.a.url` と読み違える。
 ///
 /// hook は sandbox の外で動く。`.git/config` に filter や fsmonitor のコマンドを書かれると、
 /// `git diff` がそのコマンドを実行する。止めるキーを並べると漏れが残るので、動かしてよいキーを並べ、
 /// それ以外のキーがあれば git を動かさない (DECISIONS.ja.md)。ユーザーの global と system の
 /// config は、ユーザーが自分で書いたものなので確かめない。
 pub fn unknown_keys(list: &str) -> Vec<String> {
-    list.lines()
-        .filter_map(|line| line.split_once('\t'))
-        .filter(|(scope, _)| matches!(*scope, "local" | "worktree"))
-        .map(|(_, entry)| {
-            entry
-                .split_once('=')
-                .map_or(entry, |(key, _)| key)
-                .to_string()
-        })
+    list.split('\0')
+        .collect::<Vec<_>>()
+        .chunks_exact(2)
+        .filter(|pair| matches!(pair[0], "local" | "worktree"))
+        .map(|pair| pair[1])
         .filter(|key| !known(key))
+        .map(str::to_string)
         .collect()
 }
 
 /// リポジトリの config に [`unknown_keys`] があれば、エラーを返す。git を動かす前に呼ぶ。
 fn guard(root: &Path) -> Result<(), String> {
-    let list = git(root, &["config", "--list", "--show-scope"])?;
+    let list = git(
+        root,
+        &["config", "--list", "--show-scope", "--name-only", "-z"],
+    )?;
     match unknown_keys(&list).as_slice() {
         [] => Ok(()),
         keys => Err(format!(
@@ -364,6 +370,7 @@ pub fn tree(root: &Path) -> Result<Tree, String> {
             "diff",
             "--no-ext-diff",
             "--no-textconv",
+            "--ignore-submodules=all",
             "--name-only",
             &base(root),
         ],
@@ -409,6 +416,7 @@ pub fn texts(root: &Path) -> Result<Vec<String>, String> {
             "diff",
             "--no-ext-diff",
             "--no-textconv",
+            "--ignore-submodules=all",
             "-U0",
             &base(root),
             "--",

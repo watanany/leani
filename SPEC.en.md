@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-46 stories, 493 tests. In parentheses: where the test is
+46 stories, 494 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -828,3 +828,4 @@ Not built yet.
 - Returns the added ja: and en: lines with the file name and the line number (parsing / Test sentences collected from a diff)
 - Returns an empty list for config with only known keys (parsing / Repository config checked before running git)
 - Returns only the local key for config with filter keys in local and global (parsing / Repository config checked before running git)
+- Returns the whole key for config with a key whose subsection name contains = (parsing / Repository config checked before running git)

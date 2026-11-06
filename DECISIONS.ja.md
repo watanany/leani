@@ -343,6 +343,7 @@ AI が書き換えた場合も同じで、Bash の許可の確認を通らずに
 fsmonitor、外部の diff、textconv、filter のように、git がコマンドを実行するキーは多く、止めるキーを並べると漏れが残る。
 そこで、コマンドを動かさないと分かっているキーを並べ、リポジトリの config (local と worktree) にそれ以外のキーがあれば、`claude-hooks` は git を動かさない。
 このとき hook は何も知らせず、`just status` が理由を表示する。
+submodule の config は確かめないので、`git diff` は submodule の中で git を動かさない。
 ユーザーの global と system の config は、ユーザーが自分で書いたものなので確かめない。
 
 ### 不採用: コードを 1 つの crate にまとめる

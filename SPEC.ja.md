@@ -11,7 +11,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 46 件、テスト 493 件。括弧の中はテストの場所
+ストーリー 46 件、テスト 494 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -829,3 +829,4 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 足した ja: と en: の行を、ファイルの名前と行の番号を付けて返す (parsing / diff から集めるテストの文)
 - 既知のキーだけの config には、空の一覧を返す (parsing / git を動かす前に確かめる、リポジトリの config)
 - local と global に filter のキーがある config には、local のキーだけを返す (parsing / git を動かす前に確かめる、リポジトリの config)
+- subsection の名前に = があるキーを含む config には、そのキーの全体を返す (parsing / git を動かす前に確かめる、リポジトリの config)

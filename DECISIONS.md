@@ -343,6 +343,7 @@ For the same reason, `claude-hooks` does not let git run commands written in `.g
 Many keys make git run a command, such as fsmonitor, external diff, textconv and filter, so a list of keys to block leaves gaps.
 Instead, `claude-hooks` lists the keys known not to run commands, and does not run git if the repository config (local and worktree) has any other key.
 In that case the hooks say nothing, and `just status` shows the reason.
+The config of submodules is not checked, so `git diff` does not run git inside submodules.
 The user's global and system config is not checked, because the user wrote it.
 
 ### Rejected: Putting the code in one crate
