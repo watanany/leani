@@ -14,14 +14,14 @@ default:
 
 # main-rs から枝を切る。main-rs の上にいなければ、理由を出して止まる
 start name:
-    cargo run -q -p claude-hooks -- can-start {{ quote(name) }}
+    cargo run -q -p dev-checks -- can-start {{ quote(name) }}
     git switch -c {{ quote(name) }}
 
 # just check を実行し、通れば今の枝を main-rs に fast-forward で merge して、枝を消す
 finish:
     #!/bin/sh
     set -eu
-    hooks() { cargo run -q -p claude-hooks -- "$@"; }
+    hooks() { cargo run -q -p dev-checks -- "$@"; }
     base=$(hooks base)
     branch=$(git branch --show-current)
     head=$(git rev-parse HEAD)
@@ -57,7 +57,7 @@ check:
     uv run mypy
     cargo clippy --all-targets -- -D warnings
     cargo run -p spec -- --check
-    cargo run -p docs-pair -- --check
+    cargo run -p docs-langs-check -- --check
     cargo nextest run
     uv run pytest -n auto
 
@@ -79,31 +79,31 @@ check-claude:
     done
     exit "$bad"
 
-# 今の枝と、開発の手順から外れていることの知らせを出す (crates/claude-hooks)
+# 今の枝と、開発の手順から外れていることの知らせを出す (crates/dev-checks)
 status:
-    cargo run -q -p claude-hooks -- status
+    cargo run -q -p dev-checks -- status
 
-# main-rs から足したテストの文を出し、target/claude-hooks/texts.txt にも書く (スキル leani-test-text)
-texts:
-    cargo run -q -p claude-hooks -- texts
+# main-rs から足したテストの文を出し、target/dev-checks/test-texts.txt にも書く (スキル leani-test-text)
+test-texts:
+    cargo run -q -p dev-checks -- test-texts
 
-# AI の判断 (target/claude-hooks/texts.json) が今の文と合っているかを確かめ、ng の文を出す (スキル leani-test-text)
-texts-verify:
-    cargo run -q -p claude-hooks -- texts-verify
+# AI の判断 (target/dev-checks/test-texts.json) が今の文と合っているかを確かめ、ng の文を出す (スキル leani-test-text)
+test-texts-check:
+    cargo run -q -p dev-checks -- test-texts-check
 
 # main-rs から足した ja: の文を yomiyasu の lint にかける (スキル leani-test-text)
-texts-lint:
-    cargo run -q -p claude-hooks -- texts-lint
+test-texts-lint:
+    cargo run -q -p dev-checks -- test-texts-lint
 
 # 日本語の文書を yomiyasu の lint にかけ、DEVELOPMENT の決まりと食い違う指摘を外して出す
 [positional-arguments]
 lint-ja +files:
-    cargo run -q -p claude-hooks -- lint-ja "$@"
+    cargo run -q -p dev-checks -- lint-ja "$@"
 
 # 片方の言語だけを変えた文書と、その差分を出す (スキル leani-docs-sync)
-pairs:
-    cargo run -q -p claude-hooks -- pairs
+langs-diff:
+    cargo run -q -p dev-checks -- langs-diff
 
 # 日本語の文書に足した glossary.toml の語が、英語の文書にあるかを確かめる (スキル leani-docs-sync)
-pairs-verify:
-    cargo run -q -p claude-hooks -- pairs --verify
+glossary-check:
+    cargo run -q -p dev-checks -- glossary-check

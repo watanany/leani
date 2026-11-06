@@ -1,5 +1,5 @@
 [package]
-name = "docs-pair"
+name = "docs-langs-check"
 version.workspace = true
 edition.workspace = true
 publish = false

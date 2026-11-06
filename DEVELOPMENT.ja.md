@@ -43,7 +43,7 @@ cargo nextest run history                  # テストを名前で絞り込む
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo run -p spec -- --check              # SPEC.ja.md と SPEC.en.md がテストと合っているかを確かめる
-cargo run -p docs-pair -- --check         # 英語と日本語の文書が対になっているかを確かめる
+cargo run -p docs-langs-check -- --check         # 英語と日本語の文書が対になっているかを確かめる
 ```
 
 テストを動かす正式な方法は `cargo nextest run` である。nextest はテストごとに別の
@@ -72,8 +72,8 @@ Python のコードの整形は `just fix` で行う。
 - コードを変えたら、変えた関数の doc comment、呼び出し元と呼び出し先のコメント、その動作を説明しているドキュメントを読み直す。テストと `SPEC.ja.md`、`SPEC.en.md` のずれは `crates/spec` が検出するが、コメントとドキュメントのずれと、`en:` の文と `ja:` の文のずれを検出するものは無い。動作の説明のうち、入力と出力で確かめられるものは、コメントではなくテストの文に書く
 - 作業は、`just start <枝の名前>` で `main-rs` から切った枝で行う。終わったら `just finish` で `main-rs` に merge し、枝を消す。`just finish` は、`just check` が通り、commit していない変更が無く、commit の件名が Conventional Commits の形のときだけ merge する。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
-- `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める。hook は `cargo install --path crates/claude-hooks` でインストールした版で動き、インストールしていなければ何もしない。`crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、このコマンドを再実行する
-- 開発用のスキルのうち、対象を集める段と結果を確かめる段は `just` のレシピ (`texts`、`texts-lint`、`texts-verify`、`pairs`、`pairs-verify`) が行い、AI は判断する段だけを行う。`just lint-ja <ファイル>` は、日本語の文書を yomiyasu の lint にかけ、このリポジトリの決まりと食い違う規則の指摘を外して出す
+- `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める。hook は `cargo install --path crates/dev-checks` でインストールした版で動き、インストールしていなければ何もしない。`crates/dev-checks`、`crates/spec`、`crates/docs-langs-check` を変えたら、このコマンドを再実行する
+- 開発用のスキルのうち、対象を集める段と結果を確かめる段は `just` のレシピ (`test-texts`、`test-texts-lint`、`test-texts-check`、`langs-diff`、`glossary-check`) が行い、AI は判断する段だけを行う。`just lint-ja <ファイル>` は、日本語の文書を yomiyasu の lint にかけ、このリポジトリの決まりと食い違う規則の指摘を外して出す
 
 ## テストの文の書き方
 
@@ -104,15 +104,15 @@ Python のコードの整形は `just fix` で行う。
 
 crate は副作用の有無で分けてある。
 
-| crate          | 中身                                                                                                                                                           |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `leani-core`   | 純粋な関数と定数。入力だけで出力が決まる                                                                                                                       |
-| `leani-read`   | 読み取り。環境変数とファイルを読むが、何も書き換えない                                                                                                         |
-| `leani`        | 副作用。プロセス、端末、ファイル、ネットワークを操作する                                                                                                       |
-| `story`        | テストに付ける `#[story]`。何もせずに関数を返す                                                                                                                |
-| `spec`         | `SPEC.ja.md` と `SPEC.en.md` を生成する                                                                                                                        |
-| `docs-pair`    | 英語の `X.md` と日本語の `X.ja.md` が対になっているかを確かめる                                                                                                |
-| `claude-hooks` | 開発の手順から外れたことを、Claude Code の hook で AI に知らせる。`just start` と `just finish` で枝の始めと終わりを確かめ、開発用のスキルの決まった手順を行う |
+| crate              | 中身                                                                                                                                                           |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leani-core`       | 純粋な関数と定数。入力だけで出力が決まる                                                                                                                       |
+| `leani-read`       | 読み取り。環境変数とファイルを読むが、何も書き換えない                                                                                                         |
+| `leani`            | 副作用。プロセス、端末、ファイル、ネットワークを操作する                                                                                                       |
+| `story`            | テストに付ける `#[story]`。何もせずに関数を返す                                                                                                                |
+| `spec`             | `SPEC.ja.md` と `SPEC.en.md` を生成する                                                                                                                        |
+| `docs-langs-check` | 英語の `X.md` と日本語の `X.ja.md` が対になっているかを確かめる                                                                                                |
+| `dev-checks`       | 開発の手順から外れたことを、Claude Code の hook で AI に知らせる。`just start` と `just finish` で枝の始めと終わりを確かめ、開発用のスキルの決まった手順を行う |
 
 各 crate のモジュールの一覧は、その crate の `lib.rs` の先頭に書いてある。
 コードを追加するときは、次の決まりに従う。
@@ -146,8 +146,8 @@ README、DEVELOPMENT、DECISIONS、guide の文書は、英語の `X.md` と日�
 
 - どちらの言語の文書から追加、変更、削除してもよい。同じ commit で、もう片方の文書にも同じ変更を入れる
 - 訳すときは、`glossary.toml` の語の組を使う
-- 片方の文書だけを変える理由があるとき (片方にしか無い誤字を直すときなど) は、commit メッセージに `Docs-Pair-Skip: 理由` の行を書く
-- `cargo run -p docs-pair -- --check` は、もう片方の言語の文書が無い文書と、片方の文書だけを変えた commit をエラーにする。commit していない変更は確かめないので、片方だけを変えた commit は、commit したあとに `just check` を実行したときに見つかる。merge の前に `git commit --amend` か `git rebase` で直す
+- 片方の文書だけを変える理由があるとき (片方にしか無い誤字を直すときなど) は、commit メッセージに `Docs-Langs-Skip: 理由` の行を書く
+- `cargo run -p docs-langs-check -- --check` は、もう片方の言語の文書が無い文書と、片方の文書だけを変えた commit をエラーにする。commit していない変更は確かめないので、片方だけを変えた commit は、commit したあとに `just check` を実行したときに見つかる。merge の前に `git commit --amend` か `git rebase` で直す
 - `CLAUDE.md` は日本語だけで書く。`SPEC.ja.md` と `SPEC.en.md` は `crates/spec` が生成する
 
 ## ドキュメント

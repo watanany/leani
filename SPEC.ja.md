@@ -810,7 +810,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
 - 対の文書の片方だけを変えた commit があると、変えなかった文書の名前を含むエラーを返す (parsing / 2 つの言語の文書の確認)
 - 対の文書の両方を同じ commit で変えると Ok を返す (parsing / 2 つの言語の文書の確認)
-- commit メッセージに Docs-Pair-Skip: で始まる行があると、対の片方だけを変えた commit でも Ok を返す (parsing / 2 つの言語の文書の確認)
+- commit メッセージに Docs-Langs-Skip: で始まる行があると、対の片方だけを変えた commit でも Ok を返す (parsing / 2 つの言語の文書の確認)
 - もう片方の言語の文書が無い文書があると、その文書の名前を含むエラーを返す (parsing / 2 つの言語の文書の確認)
 - 英語の文書しか無かった文書に、日本語の文書を足す commit では Ok を返す (parsing / 2 つの言語の文書の確認)
 - もう片方の言語の文書が無い文書が CLAUDE.md と SPEC.ja.md と SPEC.en.md だけなら Ok を返す (parsing / 2 つの言語の文書の確認)
@@ -851,7 +851,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - HEAD が記録した commit と違うときは、エラーを返す (parsing / merge する前の確かめ)
 - 記録した commit が無いときは、HEAD を比べずに Ok を返す (parsing / merge する前の確かめ)
 - feat: のような型で始まらない件名と、日本語の文字を含まない件名を、元の順に返す (parsing / commit の件名の確かめ)
-- crates/claude-hooks、crates/spec、crates/docs-pair の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/claude-hooks を頼む文を返す (parsing / merge のあとの案内)
+- crates/dev-checks、crates/spec、crates/docs-langs-check の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/dev-checks を頼む文を返す (parsing / merge のあとの案内)
 - ほかのファイルだけを変えたときは None を返す (parsing / merge のあとの案内)
 - 日本語の文書だけを変えた作業ツリーには、その文書ともう片方の文書と、足した行を含む差分を返す (parsing / 片方だけを変えた文書)
 - 日本語の文書だけを変えた commit には、もう片方の文書の名前を含む commit の文を付けて返す (parsing / 片方だけを変えた文書)

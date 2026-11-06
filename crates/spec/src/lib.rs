@@ -410,10 +410,10 @@ const KEYWORDS: &[&str] = &[
 const CRATES: &[&str] = &[
     "alloc",
     "chrono",
-    "claude_hooks",
+    "dev_checks",
     "core",
     "crossterm",
-    "docs_pair",
+    "docs_langs_check",
     "leani",
     "leani_core",
     "leani_read",

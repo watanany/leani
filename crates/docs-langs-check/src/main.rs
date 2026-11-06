@@ -12,8 +12,8 @@ fn main() -> ExitCode {
         .collect::<Vec<_>>()
         .as_slice()
     {
-        ["--check"] => docs_pair::check(&docs_pair::root()),
-        _ => Err("使い方: docs-pair --check".to_string()),
+        ["--check"] => docs_langs_check::check(&docs_langs_check::root()),
+        _ => Err("使い方: docs-langs-check --check".to_string()),
     };
     match done {
         Ok(()) => ExitCode::SUCCESS,

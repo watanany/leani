@@ -11,7 +11,7 @@ README、DEVELOPMENT、DECISIONS、guide の文書は、英語の `X.md` と日�
 ## 1. 集める (スクリプト)
 
 ```
-just pairs
+just langs-diff
 ```
 
 片方だけを変えた文書ごとに、相手の文書の名前と、`main-rs` からの差分を出す。
@@ -30,17 +30,17 @@ just pairs
 ## 3. 確かめる (スクリプト)
 
 ```
-just pairs
-just pairs-verify
+just langs-diff
+just glossary-check
 ```
 
-`just pairs` が「片方だけを変えた文書は無い」と出すことを確かめる。
+`just langs-diff` が「片方だけを変えた文書は無い」と出すことを確かめる。
 片方だけを変えた commit が出たときは、`git commit --amend` か `git rebase` で、両方の文書を同じ commit に入れる。
 
-`just pairs-verify` は、日本語の文書に足した行にある `glossary.toml` の語ごとに、英語の文書にその語の英語があるかを確かめる。
+`just glossary-check` は、日本語の文書に足した行にある `glossary.toml` の語ごとに、英語の文書にその語の英語があるかを確かめる。
 
 - 「誤り」: 英語の文書のどこにも語の英語が無い。1 で終わるので、英語の文書を直す
 - 「候補」: 英語の文書にはあるが、英語の差分に無い。語だけを直した場合や、代名詞にした場合はそのままでよいので、訳を読んで判断する
 
-両方の文書を同じ commit に入れてから、`cargo run -p docs-pair -- --check` を実行する。
-片方だけを変える理由があるときは、commit メッセージに `Docs-Pair-Skip: 理由` の行を書く。
+両方の文書を同じ commit に入れてから、`cargo run -p docs-langs-check -- --check` を実行する。
+片方だけを変える理由があるときは、commit メッセージに `Docs-Langs-Skip: 理由` の行を書く。

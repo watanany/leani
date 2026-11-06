@@ -10,22 +10,22 @@ description: leani のテストの文 (doc comment と docstring の ja: と en:
 ## 1. 集める (スクリプト)
 
 ```
-just texts
-just texts-lint
+just test-texts
+just test-texts-lint
 ```
 
-`just texts` は、`main-rs` から足した `ja:` と `en:` の行を `ファイル:行: 文` の形で出し、`target/claude-hooks/texts.txt` にも書く。
+`just test-texts` は、`main-rs` から足した `ja:` と `en:` の行を `ファイル:行: 文` の形で出し、`target/dev-checks/test-texts.txt` にも書く。
 見直すのは、この出力に出た行だけにする。
 
-`just texts-lint` は、足した `ja:` の文を yomiyasu の lint にかけ、指摘を元の場所 (`ファイル:行`) で出す。
+`just test-texts-lint` は、足した `ja:` の文を yomiyasu の lint にかけ、指摘を元の場所 (`ファイル:行`) で出す。
 `DEVELOPMENT.ja.md` の決まりと食い違う規則の指摘は、スクリプトが外す。
 
 ## 2. 判断する (AI)
 
-`DEVELOPMENT.ja.md` の「テストの文の書き方」を読んでから、`just texts` の出力の行ごとに、テストの中身 (assert) と照らして判断する。
-`just texts-lint` の指摘も判断に使う。ただし、`DEVELOPMENT.ja.md` の決まりと食い違う直しは使わず、半角の () は残す。
+`DEVELOPMENT.ja.md` の「テストの文の書き方」を読んでから、`just test-texts` の出力の行ごとに、テストの中身 (assert) と照らして判断する。
+`just test-texts-lint` の指摘も判断に使う。ただし、`DEVELOPMENT.ja.md` の決まりと食い違う直しは使わず、半角の () は残す。
 
-判断は `target/claude-hooks/texts.json` に、出力の行ごとに 1 つの要素を持つ配列で書く。
+判断は `target/dev-checks/test-texts.json` に、出力の行ごとに 1 つの要素を持つ配列で書く。
 
 ```json
 [
@@ -60,12 +60,12 @@ just texts-lint
 ## 3. 確かめる (スクリプト)
 
 ```
-just texts-verify
+just test-texts-check
 ```
 
-`texts.json` の `place` と `text` の組が、`just texts` の今の出力と 1 つずつ合っているか、要素の形が合っているかを確かめる。
+`test-texts.json` の `place` と `text` の組が、`just test-texts` の今の出力と 1 つずつ合っているか、要素の形が合っているかを確かめる。
 `fixed` が元の文と同じ `ja:` か `en:` で始まり、元の文と違うことも確かめる。
-合っていなければ、理由を出して 1 で終わる。そのときは `texts.json` を直す。
+合っていなければ、理由を出して 1 で終わる。そのときは `test-texts.json` を直す。
 `ng` の文があれば、理由と直した文の一覧を出して 1 で終わる。すべて `ok` なら 0 で終わり、見直しは終わる。
 
 ## 4. 直す (AI)

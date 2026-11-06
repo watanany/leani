@@ -9,20 +9,21 @@
 //! - 対の文書の片方だけを変えている
 //! - `SPEC.ja.md` か `SPEC.en.md` がテストと合っていない (Stop の hook と `status` だけで確かめる)
 //!
-//! | サブコマンド             | 使う所                                                                                    |
-//! |--------------------------|-------------------------------------------------------------------------------------------|
-//! | `post-edit`              | PostToolUse の hook (Edit と Write)。変えたファイルに関係する知らせを返す                 |
-//! | `stop`                   | Stop の hook。知らせがあれば、AI が終わる前に 1 回だけ止めて、知らせを読ませる            |
-//! | `status`                 | `just status` とスキル。今の知らせを、人が読む形で出す                                    |
-//! | `texts`                  | スキル leani-test-text。`main-rs` から足したテストの文を出し、`texts.txt` にも書く        |
-//! | `base`                   | `just finish`。枝を切る元の枝 ([`BASE`]) の名前を出す                                     |
-//! | `can-start <名前>`       | `just start`。枝を切ってよいかを確かめる ([`can_start`])                                  |
-//! | `can-finish [--head X]`  | `just finish`。merge してよいかを確かめる ([`can_finish`] と [`bad_subjects`])            |
-//! | `after-finish <前> <後>` | `just finish`。merge で変わったファイルを見て、インストールし直しを頼む                   |
-//! | `pairs [--verify]`       | スキル leani-docs-sync。片方だけを変えた文書を出す ([`pairs`] と [`verify_pairs`])        |
-//! | `texts-verify`           | スキル leani-test-text。AI の判断 (`texts.json`) を確かめる ([`verify_texts`])            |
-//! | `lint-ja <ファイル…>`    | `just lint-ja`。yomiyasu の lint を動かし、決まりと食い違う指摘を外す ([`kept_findings`]) |
-//! | `texts-lint`             | スキル leani-test-text。足した `ja:` の文を yomiyasu の lint にかける                     |
+//! | サブコマンド             | 使う所                                                                                                  |
+//! |--------------------------|---------------------------------------------------------------------------------------------------------|
+//! | `post-edit`              | PostToolUse の hook (Edit と Write)。変えたファイルに関係する知らせを返す                               |
+//! | `stop`                   | Stop の hook。知らせがあれば、AI が終わる前に 1 回だけ止めて、知らせを読ませる                          |
+//! | `status`                 | `just status` とスキル。今の知らせを、人が読む形で出す                                                  |
+//! | `test-texts`             | スキル leani-test-text。`main-rs` から足したテストの文を出し、`test-texts.txt` にも書く                 |
+//! | `base`                   | `just finish`。枝を切る元の枝 ([`BASE`]) の名前を出す                                                   |
+//! | `can-start <名前>`       | `just start`。枝を切ってよいかを確かめる ([`can_start`])                                                |
+//! | `can-finish [--head X]`  | `just finish`。merge してよいかを確かめる ([`can_finish`] と [`bad_subjects`])                          |
+//! | `after-finish <前> <後>` | `just finish`。merge で変わったファイルを見て、インストールし直しを頼む                                 |
+//! | `langs-diff`             | スキル leani-docs-sync。片方だけを変えた文書と、その差分を出す ([`langs_diff`])                         |
+//! | `glossary-check`         | スキル leani-docs-sync。`glossary.toml` の語の英語が、英語の文書にあるかを確かめる ([`check_glossary`]) |
+//! | `test-texts-check`       | スキル leani-test-text。AI の判断 (`test-texts.json`) を確かめる ([`check_test_texts`])                 |
+//! | `lint-ja <ファイル…>`    | `just lint-ja`。yomiyasu の lint を動かし、決まりと食い違う指摘を外す ([`kept_findings`])               |
+//! | `test-texts-lint`        | スキル leani-test-text。足した `ja:` の文を yomiyasu の lint にかける                                   |
 //!
 //! 1 つのセッションの中では、同じ知らせを hook ごとに 1 回だけ返す。hook の入力と応答は
 //! [`STATE`] の `log.jsonl` に残す。
@@ -42,7 +43,7 @@ pub const BASE: &str = "main-rs";
 pub const BASES: &[&str] = &["main-rs", "main"];
 
 /// hook のログと、セッションごとに返した知らせを置くディレクトリ (リポジトリの直下から)。
-pub const STATE: &str = "target/claude-hooks";
+pub const STATE: &str = "target/dev-checks";
 
 /// 作業ツリーの状態。
 #[derive(Debug, PartialEq)]
@@ -137,8 +138,8 @@ pub fn notices(tree: &Tree) -> Vec<Notice> {
     };
     let one_sided = counted
         .iter()
-        .filter(|path| !docs_pair::exempt(path))
-        .filter_map(|path| docs_pair::partner(path).map(|other| (path, other)))
+        .filter(|path| !docs_langs_check::exempt(path))
+        .filter_map(|path| docs_langs_check::partner(path).map(|other| (path, other)))
         .filter(|(_, other)| !tree.changed.contains(other))
         .map(|(path, other)| Notice::OneSided {
             changed: path.to_string(),
@@ -252,11 +253,15 @@ fn japanese(c: char) -> bool {
     matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}')
 }
 
-/// hook が動かす claude-hooks のコードと、それが依存する crate。
-const HOOK_SOURCES: &[&str] = &["crates/claude-hooks/", "crates/spec/", "crates/docs-pair/"];
+/// hook が動かす dev-checks のコードと、それが依存する crate。
+const HOOK_SOURCES: &[&str] = &[
+    "crates/dev-checks/",
+    "crates/spec/",
+    "crates/docs-langs-check/",
+];
 
 /// merge で changed のファイルが変わったときに、ユーザーに頼む文。hook はインストールした
-/// claude-hooks で動くので、hook のコードが変わったらインストールし直してもらう。
+/// dev-checks で動くので、hook のコードが変わったらインストールし直してもらう。
 /// AI はインストールしない (スキル leani-dev の「hook からの知らせ」)。
 pub fn reinstall(changed: &[String]) -> Option<String> {
     let touched = changed.iter().any(|path| {
@@ -265,7 +270,7 @@ pub fn reinstall(changed: &[String]) -> Option<String> {
     });
     match touched {
         true => Some(
-            "hook のコードが変わった。ユーザーに `cargo install --path crates/claude-hooks` を\
+            "hook のコードが変わった。ユーザーに `cargo install --path crates/dev-checks` を\
              実行してもらう。"
                 .to_string(),
         ),
@@ -318,10 +323,10 @@ fn relative(path: &str, root: &Path) -> String {
     }
 }
 
-const POST_HEAD: &str = "leani の開発の手順から外れているかもしれない (crates/claude-hooks)。\
+const POST_HEAD: &str = "leani の開発の手順から外れているかもしれない (crates/dev-checks)。\
      直すか、理由があればそのまま続ける。";
 
-const STOP_HEAD: &str = "終わる前の確認。leani の開発の手順から外れているかもしれない (crates/claude-hooks)。\
+const STOP_HEAD: &str = "終わる前の確認。leani の開発の手順から外れているかもしれない (crates/dev-checks)。\
      直すか、直さない理由をユーザーへの返事に書く。この知らせは、このセッションでは繰り返さない。";
 
 /// hook の応答の JSON と、新しく返した知らせの名前。seen は、このセッションで既に返した知らせの名前。
@@ -541,7 +546,7 @@ pub fn all(root: &Path, tree: &Tree) -> Vec<Notice> {
 }
 
 /// [`BASE`] から足したテストの文。
-pub fn texts(root: &Path) -> Result<Vec<String>, String> {
+pub fn test_texts(root: &Path) -> Result<Vec<String>, String> {
     guard(root)?;
     git(
         root,
@@ -636,7 +641,7 @@ pub enum Origin {
     Tree,
     /// 追跡していない新しいファイル。差分は無いので、ファイルを読む。
     NewFile,
-    /// 片方だけを変えた commit。中身は docs-pair のエラーの文。
+    /// 片方だけを変えた commit。中身は docs-langs-check のエラーの文。
     Commit(String),
 }
 
@@ -660,8 +665,8 @@ fn untracked(root: &Path) -> Result<Vec<String>, String> {
 const SAFE_DIFF: [&str; 3] = ["--no-ext-diff", "--no-textconv", "--ignore-submodules=all"];
 
 /// 片方だけを変えた文書。作業ツリーの [`Notice::OneSided`] と、[`BASE`] から足した commit のうち
-/// docs-pair がエラーにするものを合わせる。
-pub fn pairs(root: &Path) -> Result<Vec<Pair>, String> {
+/// docs-langs-check がエラーにするものを合わせる。
+pub fn langs_diff(root: &Path) -> Result<Vec<Pair>, String> {
     let tree = tree(root)?;
     let base = base(root);
     let new = untracked(root)?;
@@ -692,7 +697,7 @@ pub fn pairs(root: &Path) -> Result<Vec<Pair>, String> {
             }
         });
     let range = format!("{BASE}..HEAD");
-    let from_commits = docs_pair::sided_commits(root, &[&range])?
+    let from_commits = docs_langs_check::sided_commits(root, &[&range])?
         .into_iter()
         .map(|s| {
             let args: Vec<&str> = ["show", "--format="]
@@ -763,7 +768,7 @@ pub fn term_gaps(
 
 /// [`BASE`] から作業ツリーまでに変えた日本語の文書ごとに、[`term_gaps`] を調べる。
 /// 追跡していない文書は、全体を足した行として扱う。空白だけを変えた行は、足した行に数えない。
-pub fn verify_pairs(root: &Path) -> Result<Vec<Gap>, String> {
+pub fn check_glossary(root: &Path) -> Result<Vec<Gap>, String> {
     let tree = tree(root)?;
     let base = base(root);
     let new = untracked(root)?;
@@ -784,8 +789,8 @@ pub fn verify_pairs(root: &Path) -> Result<Vec<Gap>, String> {
     };
     tree.changed
         .iter()
-        .filter(|path| path.ends_with(".ja.md") && counts(path) && !docs_pair::exempt(path))
-        .filter_map(|ja| docs_pair::partner(ja).map(|en| (ja, en)))
+        .filter(|path| path.ends_with(".ja.md") && counts(path) && !docs_langs_check::exempt(path))
+        .filter_map(|ja| docs_langs_check::partner(ja).map(|en| (ja, en)))
         .map(|(ja, en)| {
             Ok(term_gaps(
                 &glossary,
@@ -799,12 +804,12 @@ pub fn verify_pairs(root: &Path) -> Result<Vec<Gap>, String> {
         .map(|gaps| gaps.into_iter().flatten().collect())
 }
 
-/// [`texts`] の 1 行 (`ファイル:行: 文`) を、場所と文に分ける。
+/// [`test_texts`] の 1 行 (`ファイル:行: 文`) を、場所と文に分ける。
 fn place_and_text(line: &str) -> (&str, &str) {
     line.split_once(": ").unwrap_or((line, ""))
 }
 
-/// AI の答え (`texts.json` の要素) のキー。
+/// AI の答え (`test-texts.json` の要素) のキー。
 const ANSWER_KEYS: &[&str] = &["place", "text", "verdict", "reason", "fixed"];
 
 /// AI の答えの 1 つの要素。ng は、ng のときの理由と直した文。
@@ -874,14 +879,14 @@ fn answer_item(item: &Value) -> Result<Answer, String> {
     }
 }
 
-/// AI の答え (`texts.json` の中身) を、今の [`texts`] の行 (current) と比べて確かめ、ng の文を
+/// AI の答え (`test-texts.json` の中身) を、今の [`test_texts`] の行 (current) と比べて確かめ、ng の文を
 /// 1 つずつ人が読む形で返す。答えの場所と文の組は、今の行の組と 1 つずつ対応しなければならない。
 /// 文を直したあとの古い答えと、あとから足した文の抜けは、ここでエラーになる。
-pub fn verify_texts(current: &[String], answer: &str) -> Result<Vec<String>, String> {
+pub fn check_test_texts(current: &[String], answer: &str) -> Result<Vec<String>, String> {
     let items: Vec<Value> = match serde_json::from_str::<Value>(answer) {
         Ok(Value::Array(items)) => items,
-        Ok(_) => return Err("texts.json が配列でない".to_string()),
-        Err(e) => return Err(format!("texts.json: {e}")),
+        Ok(_) => return Err("test-texts.json が配列でない".to_string()),
+        Err(e) => return Err(format!("test-texts.json: {e}")),
     };
     let (answers, shape): (Vec<_>, Vec<_>) = items.iter().map(answer_item).partition(Result::is_ok);
     let answers: Vec<_> = answers.into_iter().filter_map(Result::ok).collect();

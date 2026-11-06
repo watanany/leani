@@ -316,13 +316,13 @@ describe の側の `describe_` は、pytest-describe が describe を見つけ�
 AI には、集めた対象について判断する段だけを任せ、答えの形を JSON の schema で決めておく。
 スクリプトの入力と出力はファイルに残し、あとから同じ入力で確かめ直せるようにする。
 
-たとえば、スキル `leani-test-text` では、`just texts` がテストの文を集めて `target/claude-hooks/texts.txt` に書く。
-AI は文ごとの判断を `target/claude-hooks/texts.json` に書き、`just texts-verify` が、判断の抜けと重複、古い文、形の誤りを確かめる。
+たとえば、スキル `leani-test-text` では、`just test-texts` がテストの文を集めて `target/dev-checks/test-texts.txt` に書く。
+AI は文ごとの判断を `target/dev-checks/test-texts.json` に書き、`just test-texts-check` が、判断の抜けと重複、古い文、形の誤りを確かめる。
 
-`just texts-verify` は、AI が直した文をソースに書き戻さない。
+`just test-texts-check` は、AI が直した文をソースに書き戻さない。
 書き戻すと、AI の判断の誤りが、人が読まないままソースに入る。
 `en:` の文を直すときはテストの関数名も変えるが、関数名を変えるには周りのコードを読む必要がある。
-直すのは AI が Edit で行い、`just texts` からやり直す。
+直すのは AI が Edit で行い、`just test-texts` からやり直す。
 
 yomiyasu の lint (`just lint-ja`) は、`just check` に入れない。
 lint はリポジトリの外の plugin にあり、版によって規則と出力が変わる。
@@ -336,24 +336,24 @@ Claude Code の hook は、AI がファイルを変える前に、その変更�
 動作を変えないリファクタリングではテストを変えず、片方の言語の文書にしか無い誤字は片方だけを直す。
 変更を拒むと、AI は拒まれない別の方法で同じ変更をしようとし、手順から外れた理由が残らない。
 
-代わりに、hook (`crates/claude-hooks`) は AI に知らせるだけにする。
+代わりに、hook (`crates/dev-checks`) は AI に知らせるだけにする。
 AI がファイルを変えたときは、そのファイルに関係する知らせを AI に渡す。
 AI が終わろうとしたときは、知らせがあれば 1 回だけ止めて、直すか、直さない理由をユーザーへの返事に書かせる。
 同じ知らせは 1 つのセッションの中で繰り返さないので、AI が理由を書いて続けると決めたあとは、hook は AI を止めない。
 
 ### 不採用: hook で作業ツリーのコードをビルドして動かす
 
-hook から `cargo run -p claude-hooks` を実行すれば、`crates/claude-hooks` を変えるとすぐに hook に反映される。
+hook から `cargo run -p dev-checks` を実行すれば、`crates/dev-checks` を変えるとすぐに hook に反映される。
 しかし、hook は sandbox の外で、許可を求めずに動く。
-`crates/claude-hooks` か、それが依存する crate のコードか `build.rs` を書き換えると、書き換えたコードが次の hook で確認なしに動く。
+`crates/dev-checks` か、それが依存する crate のコードか `build.rs` を書き換えると、書き換えたコードが次の hook で確認なしに動く。
 AI が書き換えた場合も同じで、Bash の許可の確認を通らずにコードを動かせることになる。
 
-代わりに、hook は、人が `cargo install --path crates/claude-hooks` でインストールした版だけを動かす。
+代わりに、hook は、人が `cargo install --path crates/dev-checks` でインストールした版だけを動かす。
 インストールしていなければ、hook は何もしない。
-`crates/claude-hooks` を変えても、インストールし直すまで hook は古い版で動く。
-同じ理由で、`claude-hooks` は `.git/config` に書いたコマンドを git に実行させない。
+`crates/dev-checks` を変えても、インストールし直すまで hook は古い版で動く。
+同じ理由で、`dev-checks` は `.git/config` に書いたコマンドを git に実行させない。
 fsmonitor、外部の diff、textconv、filter のように、git がコマンドを実行するキーは多く、止めるキーを並べると漏れが残る。
-そこで、コマンドを動かさないと分かっているキーを並べ、リポジトリの config (local と worktree) にそれ以外のキーがあれば、`claude-hooks` は git を動かさない。
+そこで、コマンドを動かさないと分かっているキーを並べ、リポジトリの config (local と worktree) にそれ以外のキーがあれば、`dev-checks` は git を動かさない。
 このとき hook は何も知らせず、`just status` が理由を表示する。
 submodule の config は確かめないので、`git diff` は submodule の中で git を動かさない。
 ユーザーの global と system の config は、ユーザーが自分で書いたものなので確かめない。
@@ -455,8 +455,8 @@ README、DEVELOPMENT、DECISIONS、guide の文書を、日本語を原本にし
 
 代わりに、英語の `X.md` と日本語の `X.ja.md` のどちらも原本として扱う。
 どちらの言語から追加、変更、削除してもよく、同じ commit でもう片方の文書にも同じ変更を入れる。
-片方の文書だけを変えた commit があると、`just check` が失敗する (`crates/docs-pair`)。
-片方の文書にしか無い誤字を直すときのように、片方だけを変える理由があるときは、commit メッセージに `Docs-Pair-Skip:` の行を書く。
+片方の文書だけを変えた commit があると、`just check` が失敗する (`crates/docs-langs-check`)。
+片方の文書にしか無い誤字を直すときのように、片方だけを変える理由があるときは、commit メッセージに `Docs-Langs-Skip:` の行を書く。
 確かめるのは commit だけで、commit していない変更は確かめない。片方の文書を直している途中でも `just check` を実行できるようにするためである。
 英語の文書を `X.md` にするのは、GitHub がリポジトリの最初の画面に README.md を表示するからである。
 確かめるのは 2 つの文書が同じ commit で変わったことだけなので、訳の中身が合っているかは、読んで確かめるしかない。

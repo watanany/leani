@@ -316,13 +316,13 @@ The stage that collects the targets and the stage that checks and summarizes the
 AI handles only the stage that makes judgments about the collected targets, and the form of its answer is fixed in advance with a JSON schema.
 The input and output of the scripts are kept in files, so they can be checked again later with the same input.
 
-For example, in the skill `leani-test-text`, `just texts` collects the test sentences and writes them to `target/claude-hooks/texts.txt`.
-AI writes its judgment of each sentence to `target/claude-hooks/texts.json`, and `just texts-verify` checks for missing and duplicate judgments, old sentences, and errors in the form.
+For example, in the skill `leani-test-text`, `just test-texts` collects the test sentences and writes them to `target/dev-checks/test-texts.txt`.
+AI writes its judgment of each sentence to `target/dev-checks/test-texts.json`, and `just test-texts-check` checks for missing and duplicate judgments, old sentences, and errors in the form.
 
-`just texts-verify` does not write the sentences that AI fixed back to the source.
+`just test-texts-check` does not write the sentences that AI fixed back to the source.
 If it did, errors in the judgment of AI would go into the source without a person reading them.
 Fixing an `en:` sentence also means changing the name of the test function, and changing the name needs reading the code around it.
-AI fixes the sentences with Edit, and starts again from `just texts`.
+AI fixes the sentences with Edit, and starts again from `just test-texts`.
 
 The yomiyasu lint (`just lint-ja`) is not part of `just check`.
 The lint is in a plugin outside the repository, and its rules and output change with its version.
@@ -336,24 +336,24 @@ However, there are cases where leaving the workflow is fine.
 A refactoring that does not change behavior does not change tests, and a typo that exists in only one language's document is fixed in only that document.
 If the change is refused, AI tries to make the same change in another way that is not refused, and the reason for leaving the workflow is not recorded.
 
-Instead, the hooks (`crates/claude-hooks`) only notify AI.
+Instead, the hooks (`crates/dev-checks`) only notify AI.
 When AI changes a file, the hook gives AI the notices related to that file.
 When AI is about to finish, if there are notices, the hook stops AI once and has it fix them or write the reason for not fixing them in its reply to the user.
 The same notice is not repeated within one session, so after AI decides to continue with a reason, the hook does not stop AI.
 
 ### Rejected: Building and running the code in the working tree from the hooks
 
-If the hooks ran `cargo run -p claude-hooks`, a change to `crates/claude-hooks` would take effect in the hooks right away.
+If the hooks ran `cargo run -p dev-checks`, a change to `crates/dev-checks` would take effect in the hooks right away.
 However, the hooks run outside the sandbox, without asking for permission.
-If the code of `crates/claude-hooks` or of a crate it depends on, or a `build.rs`, is rewritten, the rewritten code runs at the next hook without any confirmation.
+If the code of `crates/dev-checks` or of a crate it depends on, or a `build.rs`, is rewritten, the rewritten code runs at the next hook without any confirmation.
 The same applies when AI rewrites it, so code could run without going through the permission check for Bash.
 
-Instead, the hooks run only the version that a person installed with `cargo install --path crates/claude-hooks`.
+Instead, the hooks run only the version that a person installed with `cargo install --path crates/dev-checks`.
 If it is not installed, the hooks do nothing.
-After `crates/claude-hooks` changes, the hooks keep running the old version until it is installed again.
-For the same reason, `claude-hooks` does not let git run commands written in `.git/config`.
+After `crates/dev-checks` changes, the hooks keep running the old version until it is installed again.
+For the same reason, `dev-checks` does not let git run commands written in `.git/config`.
 Many keys make git run a command, such as fsmonitor, external diff, textconv and filter, so a list of keys to block leaves gaps.
-Instead, `claude-hooks` lists the keys known not to run commands, and does not run git if the repository config (local and worktree) has any other key.
+Instead, `dev-checks` lists the keys known not to run commands, and does not run git if the repository config (local and worktree) has any other key.
 In that case the hooks say nothing, and `just status` shows the reason.
 The config of submodules is not checked, so `git diff` does not run git inside submodules.
 The user's global and system config is not checked, because the user wrote it.
@@ -455,8 +455,8 @@ This is because a fix made only to an English document is lost the next time the
 
 Instead, both the English `X.md` and the Japanese `X.ja.md` are treated as originals.
 Content may be added, changed, or removed from either language, and the same commit makes the same change in the other document.
-If a commit changes only one of the two documents, `just check` fails (`crates/docs-pair`).
-When there is a reason to change only one document, such as fixing a typo that exists in only one of them, write a `Docs-Pair-Skip:` line in the commit message.
+If a commit changes only one of the two documents, `just check` fails (`crates/docs-langs-check`).
+When there is a reason to change only one document, such as fixing a typo that exists in only one of them, write a `Docs-Langs-Skip:` line in the commit message.
 Only commits are checked, not uncommitted changes. This is so that `just check` can run while one document is being edited.
 The English document is `X.md` because GitHub shows README.md on the first page of the repository.
 The check only confirms that the two documents changed in the same commit, so whether the translation matches can only be checked by reading it.

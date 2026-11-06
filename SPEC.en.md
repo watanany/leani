@@ -809,7 +809,7 @@ Not built yet.
 
 - Returns an error naming the unchanged document when a commit changes only one document of a pair (parsing / Checking documents in two languages)
 - Returns Ok when a commit changes both documents of a pair (parsing / Checking documents in two languages)
-- Returns Ok when a commit whose message has a line starting with Docs-Pair-Skip: changes only one document of a pair (parsing / Checking documents in two languages)
+- Returns Ok when a commit whose message has a line starting with Docs-Langs-Skip: changes only one document of a pair (parsing / Checking documents in two languages)
 - Returns an error naming the document when it has no counterpart in the other language (parsing / Checking documents in two languages)
 - Returns Ok when a commit adds the Japanese document for a document that only had the English one (parsing / Checking documents in two languages)
 - Returns Ok when only CLAUDE.md, SPEC.ja.md and SPEC.en.md have no counterpart in the other language (parsing / Checking documents in two languages)
@@ -850,7 +850,7 @@ Not built yet.
 - Returns an error if HEAD differs from the recorded commit (parsing / Checks before merging)
 - Returns Ok without comparing HEAD if there is no recorded commit (parsing / Checks before merging)
 - Returns subjects that do not start with a type such as feat: and subjects with no Japanese characters, in the original order (parsing / Checks of commit subjects)
-- Returns a request to run cargo install --path crates/claude-hooks if a file under crates/claude-hooks, crates/spec or crates/docs-pair, Cargo.toml or Cargo.lock changed (parsing / Guidance after a merge)
+- Returns a request to run cargo install --path crates/dev-checks if a file under crates/dev-checks, crates/spec or crates/docs-langs-check, Cargo.toml or Cargo.lock changed (parsing / Guidance after a merge)
 - Returns None if only other files changed (parsing / Guidance after a merge)
 - Returns the document, the other document and a diff with the added line for a working tree with a change to only the Japanese document (parsing / Documents changed on one side)
 - Returns the document with a text about the commit naming the other document for a commit that changes only the Japanese document (parsing / Documents changed on one side)

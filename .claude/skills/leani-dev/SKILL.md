@@ -36,7 +36,7 @@ description: leani に機能を足す、動作を変える、不具合を直す�
 
 ## hook からの知らせ
 
-`.claude/settings.json` の hook (`crates/claude-hooks`) が、手順から外れたことを知らせる。
+`.claude/settings.json` の hook (`crates/dev-checks`) が、手順から外れたことを知らせる。
 
 - ファイルを変えたとき: そのファイルに関係する知らせが届く
 - 終わろうとしたとき: 知らせがあれば、1 回だけ止められる
@@ -44,7 +44,7 @@ description: leani に機能を足す、動作を変える、不具合を直す�
 知らせは強制ではない。直すか、直さない理由をユーザーへの返事に書いて続ける。
 同じ知らせは、1 つのセッションの中で繰り返さない。
 
-hook は、ユーザーが `cargo install --path crates/claude-hooks` でインストールした版で動く。
-`crates/claude-hooks`、`crates/spec`、`crates/docs-pair` を変えたら、インストールし直すようにユーザーに伝える。
+hook は、ユーザーが `cargo install --path crates/dev-checks` でインストールした版で動く。
+`crates/dev-checks`、`crates/spec`、`crates/docs-langs-check` を変えたら、インストールし直すようにユーザーに伝える。
 `just finish` も、merge で変わったファイルを見て、インストールし直しを頼む文を出す。
 AI が自分でインストールし直さない。

@@ -9,7 +9,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use claude_hooks::{Event, Gap, Notice, Origin, Pair};
+use dev_checks::{Event, Gap, Notice, Origin, Pair};
 use serde_json::json;
 
 fn main() -> ExitCode {
@@ -26,30 +26,34 @@ fn main() -> ExitCode {
             {
                 ["post-edit"] | ["stop"] => hook(&root),
                 ["status"] => status(&root),
-                ["texts"] => claude_hooks::texts(&root).and_then(|lines| {
+                ["test-texts"] => dev_checks::test_texts(&root).and_then(|lines| {
                     lines.iter().for_each(|line| println!("{line}"));
-                    save(&root, "texts.txt", &lines)
+                    save(&root, "test-texts.txt", &lines)
                 }),
-                ["texts-verify"] => texts_verify(&root),
-                ["texts-lint"] => lint(&root).and_then(|script| texts_lint(&root, &script)),
+                ["test-texts-check"] => check_answers(&root),
+                ["test-texts-lint"] => {
+                    lint(&root).and_then(|script| lint_test_texts(&root, &script))
+                }
                 ["lint-ja", files @ ..] if !files.is_empty() => {
                     lint(&root).and_then(|script| lint_ja(&root, &script, files))
                 }
                 ["base"] => {
-                    println!("{}", claude_hooks::BASE);
+                    println!("{}", dev_checks::BASE);
                     Ok(())
                 }
-                ["can-start", name] => claude_hooks::start(&root, name),
-                ["can-finish"] => claude_hooks::finish(&root, None),
-                ["can-finish", "--head", head] => claude_hooks::finish(&root, Some(head)),
+                ["can-start", name] => dev_checks::start(&root, name),
+                ["can-finish"] => dev_checks::finish(&root, None),
+                ["can-finish", "--head", head] => dev_checks::finish(&root, Some(head)),
                 ["after-finish", old, new] => {
-                    claude_hooks::after_finish(&root, old, new).map(|text| {
+                    dev_checks::after_finish(&root, old, new).map(|text| {
                         text.iter().for_each(|t| println!("{t}"));
                     })
                 }
-                ["pairs"] => claude_hooks::pairs(&root).map(|found| show_pairs(&found)),
-                ["pairs", "--verify"] => {
-                    claude_hooks::verify_pairs(&root).and_then(|gaps| show_gaps(&gaps))
+                ["langs-diff"] => {
+                    dev_checks::langs_diff(&root).map(|found| show_langs_diff(&found))
+                }
+                ["glossary-check"] => {
+                    dev_checks::check_glossary(&root).and_then(|gaps| show_gaps(&gaps))
                 }
                 _ => Err(USAGE.to_string()),
             }
@@ -63,13 +67,13 @@ fn main() -> ExitCode {
     }
 }
 
-const USAGE: &str = "使い方: claude-hooks (post-edit | stop | status | texts | base \
+const USAGE: &str = "使い方: dev-checks (post-edit | stop | status | test-texts | base \
      | can-start <名前> | can-finish [--head <commit>] | after-finish <前の commit> <後の commit> \
-     | pairs [--verify] | texts-verify | texts-lint | lint-ja <ファイル…>)";
+     | langs-diff | glossary-check | test-texts-check | test-texts-lint | lint-ja <ファイル…>)";
 
-/// 行を [`claude_hooks::STATE`] の name に書く。
+/// 行を [`dev_checks::STATE`] の name に書く。
 fn save(root: &Path, name: &str, lines: &[String]) -> Result<(), String> {
-    let state = root.join(claude_hooks::STATE);
+    let state = root.join(dev_checks::STATE);
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
     let path = state.join(name);
     fs::write(
@@ -79,24 +83,24 @@ fn save(root: &Path, name: &str, lines: &[String]) -> Result<(), String> {
     .map_err(|e| format!("{}: {e}", path.display()))
 }
 
-/// AI の答え (texts.json) を確かめる。ng の文があれば、一覧を出して 1 で終わる。
-fn texts_verify(root: &Path) -> Result<(), String> {
-    let path = root.join(claude_hooks::STATE).join("texts.json");
+/// AI の答え (test-texts.json) を確かめる。ng の文があれば、一覧を出して 1 で終わる。
+fn check_answers(root: &Path) -> Result<(), String> {
+    let path = root.join(dev_checks::STATE).join("test-texts.json");
     let answer = fs::read_to_string(&path).map_err(|e| {
         format!(
-            "{}: {e}。just texts の文ごとの判断を、スキル leani-test-text の形で書く",
+            "{}: {e}。just test-texts の文ごとの判断を、スキル leani-test-text の形で書く",
             path.display()
         )
     })?;
-    let current = claude_hooks::texts(root)?;
-    let ng = claude_hooks::verify_texts(&current, &answer)?;
+    let current = dev_checks::test_texts(root)?;
+    let ng = dev_checks::check_test_texts(&current, &answer)?;
     if ng.is_empty() {
         println!("{} 個の文が、すべて ok", current.len());
         return Ok(());
     }
     ng.iter().for_each(|n| println!("{n}"));
     Err(format!(
-        "ng の文が {} 個ある。直してから just texts からやり直す",
+        "ng の文が {} 個ある。直してから just test-texts からやり直す",
         ng.len()
     ))
 }
@@ -108,7 +112,7 @@ fn lint(root: &Path) -> Result<std::path::PathBuf, String> {
         .map(Into::into)
         .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".claude")))
         .ok_or("環境変数 HOME が無い")?;
-    let (script, version) = claude_hooks::find_lint(root, given, &config)?;
+    let (script, version) = dev_checks::find_lint(root, given, &config)?;
     println!("yomiyasu の lint: {} (版: {version})", script.display());
     Ok(script)
 }
@@ -118,7 +122,7 @@ fn lint_ja(root: &Path, script: &Path, files: &[&str]) -> Result<(), String> {
     let found = files
         .iter()
         .map(|f| {
-            claude_hooks::lint_file(root, script, Path::new(f)).map(|found| {
+            dev_checks::lint_file(root, script, Path::new(f)).map(|found| {
                 found
                     .iter()
                     .map(|x| format!("{f}:{}: [{}] {}", x.line, x.rule, x.message))
@@ -132,9 +136,9 @@ fn lint_ja(root: &Path, script: &Path, files: &[&str]) -> Result<(), String> {
     Ok(())
 }
 
-/// 足した ja: の文を texts.ja.txt に 1 行ずつ書いて lint にかけ、指摘の行を元の場所に戻して出す。
-fn texts_lint(root: &Path, script: &Path) -> Result<(), String> {
-    let (places, sentences): (Vec<String>, Vec<String>) = claude_hooks::texts(root)?
+/// 足した ja: の文を test-texts.ja.txt に 1 行ずつ書いて lint にかけ、指摘の行を元の場所に戻して出す。
+fn lint_test_texts(root: &Path, script: &Path) -> Result<(), String> {
+    let (places, sentences): (Vec<String>, Vec<String>) = dev_checks::test_texts(root)?
         .iter()
         .filter_map(|line| {
             let (place, text) = line.split_once(": ")?;
@@ -142,21 +146,21 @@ fn texts_lint(root: &Path, script: &Path) -> Result<(), String> {
             Some((place.to_string(), ja.to_string()))
         })
         .unzip();
-    save(root, "texts.ja.txt", &sentences)?;
-    let file = root.join(claude_hooks::STATE).join("texts.ja.txt");
-    let found = claude_hooks::lint_file(root, script, &file)?;
+    save(root, "test-texts.ja.txt", &sentences)?;
+    let file = root.join(dev_checks::STATE).join("test-texts.ja.txt");
+    let found = dev_checks::lint_file(root, script, &file)?;
     found.iter().for_each(|x| {
         let place = usize::try_from(x.line)
             .ok()
             .and_then(|n| places.get(n.wrapping_sub(1)))
-            .map_or("texts.ja.txt", String::as_str);
+            .map_or("test-texts.ja.txt", String::as_str);
         println!("{place}: [{}] {}", x.rule, x.message);
     });
     println!("ja: の文 {} 個、指摘: {} 個", sentences.len(), found.len());
     Ok(())
 }
 
-fn show_pairs(found: &[Pair]) {
+fn show_langs_diff(found: &[Pair]) {
     if found.is_empty() {
         println!("片方だけを変えた文書は無い");
         return;
@@ -196,8 +200,8 @@ fn show_gaps(gaps: &[Gap]) -> Result<(), String> {
 }
 
 fn status(root: &Path) -> Result<(), String> {
-    let tree = claude_hooks::tree(root)?;
-    let found = claude_hooks::all(root, &tree);
+    let tree = dev_checks::tree(root)?;
+    let found = dev_checks::all(root, &tree);
     println!("枝: {}", tree.branch);
     if found.is_empty() {
         println!("開発の手順から外れていない");
@@ -213,8 +217,8 @@ fn hook(root: &Path) -> Result<(), String> {
     std::io::stdin()
         .read_to_string(&mut raw)
         .map_err(|e| e.to_string())?;
-    let given = claude_hooks::input(&raw, root)?;
-    let state = root.join(claude_hooks::STATE);
+    let given = dev_checks::input(&raw, root)?;
+    let state = root.join(dev_checks::STATE);
     fs::create_dir_all(&state).map_err(|e| e.to_string())?;
     let time = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -223,7 +227,7 @@ fn hook(root: &Path) -> Result<(), String> {
     let input = serde_json::from_str::<serde_json::Value>(&raw).unwrap_or_default();
     // git を動かせないときは、作業を止めないように何も返さず、理由をログにだけ残す。
     // 人は just status で理由を読める。
-    let tree = match claude_hooks::tree(root) {
+    let tree = match dev_checks::tree(root) {
         Ok(tree) => tree,
         Err(why) => {
             let log = json!({"time": time, "input": input, "error": why});
@@ -232,8 +236,8 @@ fn hook(root: &Path) -> Result<(), String> {
     };
     // SPEC の確かめは時間がかかるので、AI が終わるときだけ行う。
     let found: Vec<Notice> = match given.event {
-        Event::Stop { active: false } => claude_hooks::all(root, &tree),
-        _ => claude_hooks::notices(&tree),
+        Event::Stop { active: false } => dev_checks::all(root, &tree),
+        _ => dev_checks::notices(&tree),
     };
     let seen_file = state.join(format!("seen-{}", safe(&given.session)));
     let seen: Vec<String> = fs::read_to_string(&seen_file)
@@ -241,7 +245,7 @@ fn hook(root: &Path) -> Result<(), String> {
         .lines()
         .map(str::to_string)
         .collect();
-    let (out, keys) = claude_hooks::reply(&given.event, &found, &seen);
+    let (out, keys) = dev_checks::reply(&given.event, &found, &seen);
     append(
         &seen_file,
         &keys.iter().map(|k| format!("{k}\n")).collect::<String>(),

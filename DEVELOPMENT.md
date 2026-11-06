@@ -43,7 +43,7 @@ cargo nextest run history                  # filter tests by name
 cargo clippy --all-targets -- -D warnings
 cargo fmt --check
 cargo run -p spec -- --check              # check that SPEC.ja.md and SPEC.en.md match the tests
-cargo run -p docs-pair -- --check         # check that the English and Japanese documents are paired
+cargo run -p docs-langs-check -- --check         # check that the English and Japanese documents are paired
 ```
 
 The official way to run the tests is `cargo nextest run`. nextest runs each test in a separate
@@ -72,8 +72,8 @@ If the content of `SPEC.ja.md` or `SPEC.en.md` does not match the tests, the X1 
 - After changing code, read again the doc comment of the changed function, the comments in its callers and callees, and the documentation that describes that behavior. `crates/spec` detects differences between the tests and `SPEC.ja.md` and `SPEC.en.md`, but nothing detects differences between comments and documentation, or between `en:` sentences and `ja:` sentences. Of the descriptions of behavior, write the ones that can be checked with input and output in test sentences, not in comments
 - Work on a branch created from `main-rs` with `just start <branch name>`. When done, merge it into `main-rs` and delete the branch with `just finish`. `just finish` merges only when `just check` passes, there are no uncommitted changes, and the commit subjects are in the Conventional Commits format. Do not create PRs
 - Write commit messages in the Conventional Commits format, in Japanese
-- `.claude/skills/` has development skills (`leani-dev`, `leani-test-text`, `leani-docs-sync`). The hooks in `.claude/settings.json` notify AI when files change without a branch, when code changes without changes to tests, when only one document of a pair changes, and when `SPEC.ja.md` or `SPEC.en.md` does not match the tests. Run `just status` to read the same notices yourself. The hooks run the version installed with `cargo install --path crates/claude-hooks`, and do nothing if it is not installed. After changing `crates/claude-hooks`, `crates/spec`, or `crates/docs-pair`, run this command again
-- In the development skills, the `just` recipes (`texts`, `texts-lint`, `texts-verify`, `pairs`, `pairs-verify`) do the stages that collect the targets and check the results, and AI does only the stage that makes judgments. `just lint-ja <file>` runs the yomiyasu lint on a Japanese document, and shows its findings without the rules that conflict with the rules of this repository
+- `.claude/skills/` has development skills (`leani-dev`, `leani-test-text`, `leani-docs-sync`). The hooks in `.claude/settings.json` notify AI when files change without a branch, when code changes without changes to tests, when only one document of a pair changes, and when `SPEC.ja.md` or `SPEC.en.md` does not match the tests. Run `just status` to read the same notices yourself. The hooks run the version installed with `cargo install --path crates/dev-checks`, and do nothing if it is not installed. After changing `crates/dev-checks`, `crates/spec`, or `crates/docs-langs-check`, run this command again
+- In the development skills, the `just` recipes (`test-texts`, `test-texts-lint`, `test-texts-check`, `langs-diff`, `glossary-check`) do the stages that collect the targets and check the results, and AI does only the stage that makes judgments. `just lint-ja <file>` runs the yomiyasu lint on a Japanese document, and shows its findings without the rules that conflict with the rules of this repository
 
 ## Writing test sentences
 
@@ -104,15 +104,15 @@ An `en:` sentence is the English translation of the `ja:` sentence, and is writt
 
 The crates are split by whether they have side effects.
 
-| crate          | Contents                                                                                                                                                                                                       |
-| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `leani-core`   | Pure functions and constants. The output depends only on the input                                                                                                                                             |
-| `leani-read`   | Reading. Reads environment variables and files, but changes nothing                                                                                                                                            |
-| `leani`        | Side effects. Operates on processes, the terminal, files, and the network                                                                                                                                      |
-| `story`        | `#[story]` given to tests. Returns the function without doing anything                                                                                                                                         |
-| `spec`         | Generates `SPEC.ja.md` and `SPEC.en.md`                                                                                                                                                                        |
-| `docs-pair`    | Checks that the English `X.md` and the Japanese `X.ja.md` are paired                                                                                                                                           |
-| `claude-hooks` | Notifies AI through Claude Code hooks when it leaves the development workflow. Checks the start and the end of a branch for `just start` and `just finish`, and does the fixed steps of the development skills |
+| crate              | Contents                                                                                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `leani-core`       | Pure functions and constants. The output depends only on the input                                                                                                                                             |
+| `leani-read`       | Reading. Reads environment variables and files, but changes nothing                                                                                                                                            |
+| `leani`            | Side effects. Operates on processes, the terminal, files, and the network                                                                                                                                      |
+| `story`            | `#[story]` given to tests. Returns the function without doing anything                                                                                                                                         |
+| `spec`             | Generates `SPEC.ja.md` and `SPEC.en.md`                                                                                                                                                                        |
+| `docs-langs-check` | Checks that the English `X.md` and the Japanese `X.ja.md` are paired                                                                                                                                           |
+| `dev-checks`       | Notifies AI through Claude Code hooks when it leaves the development workflow. Checks the start and the end of a branch for `just start` and `just finish`, and does the fixed steps of the development skills |
 
 The list of modules of each crate is at the top of the `lib.rs` of that crate.
 When adding code, follow these rules.
@@ -146,8 +146,8 @@ The README, DEVELOPMENT, DECISIONS, and guide documents each have two files: the
 
 - You may add, change, or delete content starting from the document in either language. In the same commit, make the same change in the other document
 - When translating, use the word pairs in `glossary.toml`
-- When there is a reason to change only one of the documents (such as fixing a typo that exists in only one), write a `Docs-Pair-Skip: <reason>` line in the commit message
-- `cargo run -p docs-pair -- --check` reports an error for a document that has no document in the other language, and for a commit that changes only one of the documents. It does not check uncommitted changes, so a commit that changes only one document is found when you run `just check` after the commit. Fix it before the merge with `git commit --amend` or `git rebase`
+- When there is a reason to change only one of the documents (such as fixing a typo that exists in only one), write a `Docs-Langs-Skip: <reason>` line in the commit message
+- `cargo run -p docs-langs-check -- --check` reports an error for a document that has no document in the other language, and for a commit that changes only one of the documents. It does not check uncommitted changes, so a commit that changes only one document is found when you run `just check` after the commit. Fix it before the merge with `git commit --amend` or `git rebase`
 - `CLAUDE.md` is written only in Japanese. `SPEC.ja.md` and `SPEC.en.md` are generated by `crates/spec`
 
 ## Documentation

@@ -3085,7 +3085,7 @@ mod checking_documents_in_two_languages {
     //! en: Checking documents in two languages
     //!
     //! 英語の X.md と日本語の X.ja.md は、どちらも原本で、同じ commit で両方を変える
-    //! (crates/docs-pair)。テストごとに一時的な git のリポジトリを作る。
+    //! (crates/docs-langs-check)。テストごとに一時的な git のリポジトリを作る。
     use super::*;
     use std::process::Command;
 
@@ -3147,7 +3147,7 @@ mod checking_documents_in_two_languages {
             &[("README.ja.md", "leani です\n")],
             "docs: 日本語だけ",
         );
-        let err = docs_pair::check(dir.path()).expect_err("片方だけ");
+        let err = docs_langs_check::check(dir.path()).expect_err("片方だけ");
         assert!(err.contains("README.md"), "{err}");
     }
 
@@ -3165,22 +3165,22 @@ mod checking_documents_in_two_languages {
             ],
             "docs: 両方",
         );
-        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+        assert_eq!(docs_langs_check::check(dir.path()), Ok(()));
     }
 
-    /// ja: commit メッセージに Docs-Pair-Skip: で始まる行があると、対の片方だけを変えた commit でも Ok を返す
-    /// en: Returns Ok when a commit whose message has a line starting with Docs-Pair-Skip: changes only one document of a pair
+    /// ja: commit メッセージに Docs-Langs-Skip: で始まる行があると、対の片方だけを変えた commit でも Ok を返す
+    /// en: Returns Ok when a commit whose message has a line starting with Docs-Langs-Skip: changes only one document of a pair
     #[story("X3")]
     #[test]
-    fn returns_ok_when_a_commit_whose_message_has_a_line_starting_with_docs_pair_skip_changes_only_one_document_of_a_pair()
+    fn returns_ok_when_a_commit_whose_message_has_a_line_starting_with_docs_langs_skip_changes_only_one_document_of_a_pair()
      {
         let dir = repo();
         commit(
             dir.path(),
             &[("README.ja.md", "leani です\n")],
-            "docs: 誤字を直す\n\nDocs-Pair-Skip: 英語の文書には同じ誤字が無い",
+            "docs: 誤字を直す\n\nDocs-Langs-Skip: 英語の文書には同じ誤字が無い",
         );
-        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+        assert_eq!(docs_langs_check::check(dir.path()), Ok(()));
     }
 
     /// ja: もう片方の言語の文書が無い文書があると、その文書の名前を含むエラーを返す
@@ -3204,10 +3204,10 @@ mod checking_documents_in_two_languages {
                 "commit",
                 "-q",
                 "-m",
-                "docs: 日本語を消す\n\nDocs-Pair-Skip: 確かめる",
+                "docs: 日本語を消す\n\nDocs-Langs-Skip: 確かめる",
             ],
         );
-        let err = docs_pair::check(dir.path()).expect_err("対が無い");
+        let err = docs_langs_check::check(dir.path()).expect_err("対が無い");
         assert!(err.contains("guide/proof.md"), "{err}");
     }
 
@@ -3220,7 +3220,7 @@ mod checking_documents_in_two_languages {
         let dir = repo();
         commit(dir.path(), &[("guide/proof.md", "proof\n")], "docs: proof");
         commit(dir.path(), &[("guide/proof.ja.md", "証明\n")], "docs: 証明");
-        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+        assert_eq!(docs_langs_check::check(dir.path()), Ok(()));
     }
 
     /// ja: もう片方の言語の文書が無い文書が CLAUDE.md と SPEC.ja.md と SPEC.en.md だけなら Ok を返す
@@ -3239,7 +3239,7 @@ mod checking_documents_in_two_languages {
             ],
             "docs: 対の無い文書",
         );
-        assert_eq!(docs_pair::check(dir.path()), Ok(()));
+        assert_eq!(docs_langs_check::check(dir.path()), Ok(()));
     }
 }
 
@@ -3247,10 +3247,10 @@ mod notices_made_from_the_working_tree {
     //! ja: 作業ツリーから作る知らせ
     //! en: Notices made from the working tree
     //!
-    //! crates/claude-hooks が、開発の手順から外れたことを Claude Code の hook で AI に知らせる。
+    //! crates/dev-checks が、開発の手順から外れたことを Claude Code の hook で AI に知らせる。
     //! 知らせは止めるためではなく、手順に戻ってもらうためのものである。
     use super::*;
-    use claude_hooks::{Notice, Tree, notices};
+    use dev_checks::{Notice, Tree, notices};
 
     fn tree(branch: &str, changed: &[&str]) -> Tree {
         Tree {
@@ -3333,7 +3333,7 @@ mod replies_to_hooks {
     //!
     //! Claude Code が hook に渡す JSON を読み、知らせを JSON で返す。
     use super::*;
-    use claude_hooks::{Notice, input, reply};
+    use dev_checks::{Notice, input, reply};
 
     fn notices() -> Vec<Notice> {
         vec![
@@ -3439,7 +3439,7 @@ diff --git a/tests/test_kernel.py b/tests/test_kernel.py
 +        ja: カーネルの文
 ";
         assert_eq!(
-            claude_hooks::added_texts(diff),
+            dev_checks::added_texts(diff),
             vec![
                 "crates/leani/tests/parsing.rs:10: ja: 新しい文",
                 "crates/leani/tests/parsing.rs:11: en: New sentence",
@@ -3456,7 +3456,7 @@ mod repository_config_checked_before_running_git {
     //! hook は sandbox の外で動くので、`.git/config` に書いたコマンドを git に実行させない。
     //! 動かしてよいキーを並べ、それ以外のキーがあれば git を動かさない。
     use super::*;
-    use claude_hooks::unknown_keys;
+    use dev_checks::unknown_keys;
 
     /// `git config --list --show-scope --name-only -z` の出力の形にする。
     fn listed(entries: &[(&str, &str)]) -> String {
@@ -3517,10 +3517,10 @@ mod checks_before_creating_a_branch {
     //! ja: 枝を切る前の確かめ
     //! en: Checks before creating a branch
     //!
-    //! `just start` が、`git switch -c` の前に `claude-hooks can-start` で確かめる。
+    //! `just start` が、`git switch -c` の前に `dev-checks can-start` で確かめる。
     //! 引数は今の枝の名前である。
     use super::*;
-    use claude_hooks::can_start;
+    use dev_checks::can_start;
 
     /// ja: main-rs には Ok を返す
     /// en: Returns Ok for main-rs
@@ -3562,10 +3562,10 @@ mod checks_before_merging {
     //! ja: merge する前の確かめ
     //! en: Checks before merging
     //!
-    //! `just finish` が、`just check` の前と後に `claude-hooks can-finish` で確かめる。
+    //! `just finish` が、`just check` の前と後に `dev-checks can-finish` で確かめる。
     //! 後では、`just check` の前に記録した commit を渡し、途中で commit が増えていないことを確かめる。
     use super::*;
-    use claude_hooks::{Finish, can_finish};
+    use dev_checks::{Finish, can_finish};
 
     /// merge してよい状態。
     fn ready() -> Finish {
@@ -3697,10 +3697,10 @@ mod checks_of_commit_subjects {
     //! ja: commit の件名の確かめ
     //! en: Checks of commit subjects
     //!
-    //! `claude-hooks can-finish` が、main-rs から足した commit の件名
+    //! `dev-checks can-finish` が、main-rs から足した commit の件名
     //! (`git log --format=%s`) を確かめる。
     use super::*;
-    use claude_hooks::bad_subjects;
+    use dev_checks::bad_subjects;
 
     /// ja: feat: のような型で始まらない件名と、日本語の文字を含まない件名を、元の順に返す
     /// en: Returns subjects that do not start with a type such as feat: and subjects with no Japanese characters, in the original order
@@ -3726,21 +3726,21 @@ mod guidance_after_a_merge {
     //! ja: merge のあとの案内
     //! en: Guidance after a merge
     //!
-    //! hook はインストールした claude-hooks で動くので、hook のコードを変えて merge したら、
+    //! hook はインストールした dev-checks で動くので、hook のコードを変えて merge したら、
     //! ユーザーにインストールし直してもらう。引数は、merge で変わったファイルである。
     use super::*;
-    use claude_hooks::reinstall;
+    use dev_checks::reinstall;
 
-    /// ja: crates/claude-hooks、crates/spec、crates/docs-pair の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/claude-hooks を頼む文を返す
-    /// en: Returns a request to run cargo install --path crates/claude-hooks if a file under crates/claude-hooks, crates/spec or crates/docs-pair, Cargo.toml or Cargo.lock changed
+    /// ja: crates/dev-checks、crates/spec、crates/docs-langs-check の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/dev-checks を頼む文を返す
+    /// en: Returns a request to run cargo install --path crates/dev-checks if a file under crates/dev-checks, crates/spec or crates/docs-langs-check, Cargo.toml or Cargo.lock changed
     #[story("X5")]
     #[test]
-    fn returns_a_request_to_run_cargo_install_path_crates_claude_hooks_if_a_file_under_crates_claude_hooks_crates_spec_or_crates_docs_pair_cargo_toml_or_cargo_lock_changed()
+    fn returns_a_request_to_run_cargo_install_path_crates_dev_checks_if_a_file_under_crates_dev_checks_crates_spec_or_crates_docs_langs_check_cargo_toml_or_cargo_lock_changed()
      {
         [
-            "crates/claude-hooks/src/lib.rs",
+            "crates/dev-checks/src/lib.rs",
             "crates/spec/src/lib.rs",
-            "crates/docs-pair/src/main.rs",
+            "crates/docs-langs-check/src/main.rs",
             "Cargo.toml",
             "Cargo.lock",
         ]
@@ -3748,7 +3748,7 @@ mod guidance_after_a_merge {
         .for_each(|path| {
             let text = reinstall(&["README.md".to_string(), path.to_string()]).expect(path);
             assert!(
-                text.contains("cargo install --path crates/claude-hooks"),
+                text.contains("cargo install --path crates/dev-checks"),
                 "{text}"
             );
         });
@@ -3771,11 +3771,11 @@ mod documents_changed_on_one_side {
     //! ja: 片方だけを変えた文書
     //! en: Documents changed on one side
     //!
-    //! スキル leani-docs-sync が、もう片方の言語に写す変更を集めるために使う (`just pairs`)。
+    //! スキル leani-docs-sync が、もう片方の言語に写す変更を集めるために使う (`just langs-diff`)。
     //! main-rs から作業ツリーまでの変更と、main-rs から足した commit を見る。
     use super::checking_documents_in_two_languages::{commit, git};
     use super::*;
-    use claude_hooks::{Origin, pairs};
+    use dev_checks::{Origin, langs_diff};
 
     /// main-rs に README の対を commit し、枝 topic に移ったリポジトリ。
     pub(super) fn repo() -> tempfile::TempDir {
@@ -3805,7 +3805,7 @@ mod documents_changed_on_one_side {
      {
         let dir = repo();
         fs::write(dir.path().join("README.ja.md"), "証明\n定理\n").expect("write");
-        let found = pairs(dir.path()).expect("pairs");
+        let found = langs_diff(dir.path()).expect("langs_diff");
         assert_eq!(found.len(), 1, "{found:?}");
         assert_eq!(found[0].changed, "README.ja.md");
         assert_eq!(found[0].other, "README.md");
@@ -3825,7 +3825,7 @@ mod documents_changed_on_one_side {
             &[("README.ja.md", "証明\n定理\n")],
             "docs: 日本語だけ",
         );
-        let found = pairs(dir.path()).expect("pairs");
+        let found = langs_diff(dir.path()).expect("langs_diff");
         assert!(
             found
                 .iter()
@@ -3843,7 +3843,7 @@ mod documents_changed_on_one_side {
         let dir = repo();
         commit(dir.path(), &[("guide/x.md", "x\n")], "docs: x");
         commit(dir.path(), &[("guide/x.ja.md", "x\n")], "docs: x の日本語");
-        assert_eq!(pairs(dir.path()).expect("pairs"), vec![]);
+        assert_eq!(langs_diff(dir.path()).expect("langs_diff"), vec![]);
     }
 
     /// ja: 既にある文書を英語、日本語の順に別の commit で変えた枝には、2 つの commit を返す
@@ -3855,7 +3855,7 @@ mod documents_changed_on_one_side {
         let dir = repo();
         commit(dir.path(), &[("README.md", "proof!\n")], "docs: 英語");
         commit(dir.path(), &[("README.ja.md", "証明!\n")], "docs: 日本語");
-        let found = pairs(dir.path()).expect("pairs");
+        let found = langs_diff(dir.path()).expect("langs_diff");
         let commits = found
             .iter()
             .filter(|p| matches!(p.origin, Origin::Commit(_)))
@@ -3868,11 +3868,11 @@ mod glossary_terms_in_translated_documents {
     //! ja: 訳した文書の glossary の語
     //! en: Glossary terms in translated documents
     //!
-    //! `just pairs-verify` が、main-rs から変えた日本語の文書の足した行にある glossary.toml の語ごとに、
+    //! `just glossary-check` が、main-rs から変えた日本語の文書の足した行にある glossary.toml の語ごとに、
     //! 英語の語を英語の文書で探す。消した行の語は調べない。
     use super::documents_changed_on_one_side::repo;
     use super::*;
-    use claude_hooks::{Gap, verify_pairs};
+    use dev_checks::{Gap, check_glossary};
 
     fn write(dir: &Path, name: &str, text: &str) {
         fs::write(dir.join(name), text).expect("write");
@@ -3888,7 +3888,7 @@ mod glossary_terms_in_translated_documents {
         write(dir.path(), "README.ja.md", "証明\n定理の証明\n");
         write(dir.path(), "README.md", "theorem\n");
         assert_eq!(
-            verify_pairs(dir.path()).expect("verify"),
+            check_glossary(dir.path()).expect("verify"),
             vec![Gap::Missing {
                 ja: "README.ja.md".to_string(),
                 en: "README.md".to_string(),
@@ -3907,7 +3907,7 @@ mod glossary_terms_in_translated_documents {
         write(dir.path(), "README.ja.md", "証明\n証明を書く\n");
         write(dir.path(), "README.md", "proof\nwrite it\n");
         assert_eq!(
-            verify_pairs(dir.path()).expect("verify"),
+            check_glossary(dir.path()).expect("verify"),
             vec![Gap::Candidate {
                 ja: "README.ja.md".to_string(),
                 en: "README.md".to_string(),
@@ -3925,7 +3925,7 @@ mod glossary_terms_in_translated_documents {
         let dir = repo();
         write(dir.path(), "README.ja.md", "");
         write(dir.path(), "README.md", "");
-        assert_eq!(verify_pairs(dir.path()).expect("verify"), vec![]);
+        assert_eq!(check_glossary(dir.path()).expect("verify"), vec![]);
     }
 }
 
@@ -3933,11 +3933,11 @@ mod checks_of_answers_about_test_sentences {
     //! ja: テストの文の判断の確かめ
     //! en: Checks of answers about test sentences
     //!
-    //! スキル leani-test-text では、AI が `just texts` の文ごとの判断を
-    //! `target/claude-hooks/texts.json` に書き、`just texts-verify` が確かめる。
-    //! 引数は、その場で集め直した文 (`ファイル:行: 文` の行) と、texts.json の中身である。
+    //! スキル leani-test-text では、AI が `just test-texts` の文ごとの判断を
+    //! `target/dev-checks/test-texts.json` に書き、`just test-texts-check` が確かめる。
+    //! 引数は、その場で集め直した文 (`ファイル:行: 文` の行) と、test-texts.json の中身である。
     use super::*;
-    use claude_hooks::verify_texts;
+    use dev_checks::check_test_texts;
 
     fn current() -> Vec<String> {
         vec![
@@ -3966,7 +3966,7 @@ mod checks_of_answers_about_test_sentences {
             ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す"),
             ng("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
         ]);
-        let found = verify_texts(&current(), &answer.to_string()).expect("verify");
+        let found = check_test_texts(&current(), &answer.to_string()).expect("verify");
         assert_eq!(found.len(), 1, "{found:?}");
         assert!(found[0].contains("parsing.rs:11"), "{found:?}");
         assert!(found[0].contains("直した文"), "{found:?}");
@@ -3983,7 +3983,7 @@ mod checks_of_answers_about_test_sentences {
     fn returns_an_error_with_the_place_of_the_missing_sentence_for_an_answer_that_lacks_a_current_sentence()
      {
         let answer = json!([ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す")]);
-        let err = verify_texts(&current(), &answer.to_string()).expect_err("missing");
+        let err = check_test_texts(&current(), &answer.to_string()).expect_err("missing");
         assert!(err.contains("parsing.rs:11"), "{err}");
     }
 
@@ -3997,7 +3997,7 @@ mod checks_of_answers_about_test_sentences {
             ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す"),
             ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
         ]);
-        let err = verify_texts(&current(), &answer.to_string()).expect_err("twice");
+        let err = check_test_texts(&current(), &answer.to_string()).expect_err("twice");
         assert!(err.contains("parsing.rs:10"), "{err}");
     }
 
@@ -4011,7 +4011,7 @@ mod checks_of_answers_about_test_sentences {
             ok("crates/leani/tests/parsing.rs:10", "ja: 古い文"),
             ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
         ]);
-        let err = verify_texts(&current(), &answer.to_string()).expect_err("stale");
+        let err = check_test_texts(&current(), &answer.to_string()).expect_err("stale");
         assert!(err.contains("parsing.rs:10"), "{err}");
     }
 
@@ -4034,11 +4034,11 @@ mod checks_of_answers_about_test_sentences {
         .for_each(|first| {
             let answer = json!([first, second]);
             assert!(
-                verify_texts(&current(), &answer.to_string()).is_err(),
+                check_test_texts(&current(), &answer.to_string()).is_err(),
                 "{answer}"
             );
         });
-        assert!(verify_texts(&current(), "{}").is_err());
+        assert!(check_test_texts(&current(), "{}").is_err());
     }
 
     /// ja: ng の fixed が、元の文と同じ ja: か en: で始まらない答えと、その後ろに文が無い答えと、元の文と同じ答えには、その場所を含むエラーを返す
@@ -4055,7 +4055,7 @@ mod checks_of_answers_about_test_sentences {
             .for_each(|fixed| {
                 let first = json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い", "fixed": fixed});
                 let answer = json!([first, second]);
-                let err = verify_texts(&current(), &answer.to_string()).expect_err(fixed);
+                let err = check_test_texts(&current(), &answer.to_string()).expect_err(fixed);
                 assert!(err.contains("parsing.rs:10"), "{fixed}: {err}");
             });
     }
@@ -4068,7 +4068,7 @@ mod yomiyasu_picked_from_installed_plugins_json {
     //! `just lint-ja` は、Claude Code に入れた plugin の yomiyasu の lint を元の場所で動かす。
     //! 引数は installed_plugins.json の中身と、リポジトリの直下である。
     use super::*;
-    use claude_hooks::pick_lint;
+    use dev_checks::pick_lint;
 
     fn installed(entries: serde_json::Value) -> String {
         json!({"version": 2, "plugins": {"yomiyasu@yomiyasu": entries, "other@x": []}}).to_string()
@@ -4121,7 +4121,7 @@ mod findings_kept_from_the_yomiyasu_lint_output {
     //!
     //! DEVELOPMENT.ja.md の「文書の書き方」と食い違う規則の指摘を外す。引数は `--json` の出力である。
     use super::*;
-    use claude_hooks::{Finding, kept_findings};
+    use dev_checks::{Finding, kept_findings};
 
     fn finding(rule: &str, line: u64) -> serde_json::Value {
         json!({"rule": rule, "line": line, "severity": "warn", "message": format!("{rule} の指摘"), "snippet": "s"})

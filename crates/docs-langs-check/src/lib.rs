@@ -4,7 +4,7 @@
 //! [`check`] は次の 2 つをエラーにする。
 //!
 //! - もう片方の言語の文書が無い文書
-//! - 対の両方があったのに、片方だけを変えた commit。commit メッセージに `Docs-Pair-Skip:`
+//! - 対の両方があったのに、片方だけを変えた commit。commit メッセージに `Docs-Langs-Skip:`
 //!   で始まる行があれば、エラーにしない
 //!
 //! 確かめるのは commit だけで、commit していない変更は確かめない。片方の言語の文書を
@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// commit メッセージにこの語で始まる行があれば、片方だけを変えてもエラーにしない。
-pub const SKIP: &str = "Docs-Pair-Skip:";
+pub const SKIP: &str = "Docs-Langs-Skip:";
 
 /// リポジトリの直下。cwd によらずに決まるように、この crate の場所から求める。
 pub fn root() -> PathBuf {
@@ -297,7 +297,7 @@ mod tests {
 
     #[test]
     fn finds_nothing_in_a_commit_with_the_skip_line_or_without_a_parent() {
-        let skipped = commit_of("docs: a\n\nDocs-Pair-Skip: 誤字だけ\n", &["README.md"]);
+        let skipped = commit_of("docs: a\n\nDocs-Langs-Skip: 誤字だけ\n", &["README.md"]);
         let first = Commit {
             parent: None,
             ..commit_of("docs: a", &["README.md"])
