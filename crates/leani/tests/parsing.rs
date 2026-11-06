@@ -3089,7 +3089,7 @@ mod checking_documents_in_two_languages {
     use super::*;
     use std::process::Command;
 
-    fn git(dir: &Path, args: &[&str]) {
+    pub(super) fn git(dir: &Path, args: &[&str]) {
         let ok = Command::new("git")
             .arg("-C")
             .arg(dir)
@@ -3113,7 +3113,7 @@ mod checking_documents_in_two_languages {
     }
 
     /// files を書いて、message で commit する。
-    fn commit(dir: &Path, files: &[(&str, &str)], message: &str) {
+    pub(super) fn commit(dir: &Path, files: &[(&str, &str)], message: &str) {
         files.iter().for_each(|(name, text)| {
             let path = dir.join(name);
             fs::create_dir_all(path.parent().expect("parent")).expect("mkdir");
@@ -3510,6 +3510,642 @@ mod repository_config_checked_before_running_git {
             unknown_keys(&list),
             vec!["remote.a.url=b.uploadpack".to_string()]
         );
+    }
+}
+
+mod checks_before_creating_a_branch {
+    //! ja: 枝を切る前の確かめ
+    //! en: Checks before creating a branch
+    //!
+    //! `just start` が、`git switch -c` の前に `claude-hooks can-start` で確かめる。
+    //! 引数は今の枝の名前である。
+    use super::*;
+    use claude_hooks::can_start;
+
+    /// ja: main-rs には Ok を返す
+    /// en: Returns Ok for main-rs
+    #[story("X5")]
+    #[test]
+    fn returns_ok_for_main_rs() {
+        assert_eq!(can_start("main-rs"), Ok(()));
+    }
+
+    /// ja: main には、git switch main-rs を案内するエラーを返す
+    /// en: Returns an error that suggests git switch main-rs for main
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_that_suggests_git_switch_main_rs_for_main() {
+        let err = can_start("main").expect_err("main");
+        assert!(err.contains("git switch main-rs"), "{err}");
+    }
+
+    /// ja: main-rs と main のほかの枝には、その枝の名前を含むエラーを返す
+    /// en: Returns an error naming the branch for a branch other than main-rs and main
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_naming_the_branch_for_a_branch_other_than_main_rs_and_main() {
+        let err = can_start("hooks").expect_err("hooks");
+        assert!(err.contains("hooks"), "{err}");
+    }
+
+    /// ja: detached HEAD を表す空の名前と HEAD には、エラーを返す
+    /// en: Returns an error for an empty name and HEAD, which mean a detached HEAD
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_for_an_empty_name_and_head_which_mean_a_detached_head() {
+        assert!(can_start("").is_err());
+        assert!(can_start("HEAD").is_err());
+    }
+}
+
+mod checks_before_merging {
+    //! ja: merge する前の確かめ
+    //! en: Checks before merging
+    //!
+    //! `just finish` が、`just check` の前と後に `claude-hooks can-finish` で確かめる。
+    //! 後では、`just check` の前に記録した commit を渡し、途中で commit が増えていないことを確かめる。
+    use super::*;
+    use claude_hooks::{Finish, can_finish};
+
+    /// merge してよい状態。
+    fn ready() -> Finish {
+        Finish {
+            branch: "hooks".to_string(),
+            dirty: vec![],
+            untracked: vec![],
+            base_is_ancestor: true,
+            recorded: Some("abc".to_string()),
+            head: "abc".to_string(),
+        }
+    }
+
+    /// ja: 枝の上で、変更が無く、main-rs が HEAD の祖先で、HEAD が記録した commit と同じときは Ok を返す
+    /// en: Returns Ok on a branch with no changes, with main-rs as an ancestor of HEAD and with HEAD equal to the recorded commit
+    #[story("X5")]
+    #[test]
+    fn returns_ok_on_a_branch_with_no_changes_with_main_rs_as_an_ancestor_of_head_and_with_head_equal_to_the_recorded_commit()
+     {
+        assert_eq!(can_finish(&ready()), Ok(()));
+    }
+
+    /// ja: detached HEAD ではエラーを返す
+    /// en: Returns an error on a detached HEAD
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_on_a_detached_head() {
+        let given = Finish {
+            branch: String::new(),
+            ..ready()
+        };
+        assert!(can_finish(&given).is_err());
+    }
+
+    /// ja: main-rs と main の上では、その枝の名前を含むエラーを返す
+    /// en: Returns an error naming the branch on main-rs and main
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_naming_the_branch_on_main_rs_and_main() {
+        ["main-rs", "main"].iter().for_each(|branch| {
+            let given = Finish {
+                branch: branch.to_string(),
+                ..ready()
+            };
+            let err = can_finish(&given).expect_err("base");
+            assert!(err.contains(branch), "{err}");
+        });
+    }
+
+    /// ja: 追跡しているファイルに commit していない変更があるときは、そのファイルの名前を含むエラーを返す
+    /// en: Returns an error naming the file if a tracked file has uncommitted changes
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_naming_the_file_if_a_tracked_file_has_uncommitted_changes() {
+        let given = Finish {
+            dirty: vec!["justfile".to_string()],
+            ..ready()
+        };
+        let err = can_finish(&given).expect_err("dirty");
+        assert!(err.contains("justfile"), "{err}");
+    }
+
+    /// ja: 追跡していないファイルがあるときは、そのファイルの名前を含むエラーを返す
+    /// en: Returns an error naming the file if there is an untracked file
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_naming_the_file_if_there_is_an_untracked_file() {
+        let given = Finish {
+            untracked: vec![".envrc".to_string(), "new.rs".to_string()],
+            ..ready()
+        };
+        let err = can_finish(&given).expect_err("untracked");
+        assert!(err.contains("new.rs"), "{err}");
+        assert!(!err.contains(".envrc"), "{err}");
+    }
+
+    /// ja: 追跡していないファイルが .envrc だけのときは Ok を返す
+    /// en: Returns Ok if the only untracked file is .envrc
+    #[story("X5")]
+    #[test]
+    fn returns_ok_if_the_only_untracked_file_is_envrc() {
+        let given = Finish {
+            untracked: vec![".envrc".to_string()],
+            ..ready()
+        };
+        assert_eq!(can_finish(&given), Ok(()));
+    }
+
+    /// ja: main-rs が HEAD の祖先でないときは、git rebase main-rs を案内するエラーを返す
+    /// en: Returns an error that suggests git rebase main-rs if main-rs is not an ancestor of HEAD
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_that_suggests_git_rebase_main_rs_if_main_rs_is_not_an_ancestor_of_head() {
+        let given = Finish {
+            base_is_ancestor: false,
+            ..ready()
+        };
+        let err = can_finish(&given).expect_err("ancestor");
+        assert!(err.contains("git rebase main-rs"), "{err}");
+    }
+
+    /// ja: HEAD が記録した commit と違うときは、エラーを返す
+    /// en: Returns an error if HEAD differs from the recorded commit
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_if_head_differs_from_the_recorded_commit() {
+        let given = Finish {
+            head: "def".to_string(),
+            ..ready()
+        };
+        assert!(can_finish(&given).is_err());
+    }
+
+    /// ja: 記録した commit が無いときは、HEAD を比べずに Ok を返す
+    /// en: Returns Ok without comparing HEAD if there is no recorded commit
+    #[story("X5")]
+    #[test]
+    fn returns_ok_without_comparing_head_if_there_is_no_recorded_commit() {
+        let given = Finish {
+            recorded: None,
+            head: "def".to_string(),
+            ..ready()
+        };
+        assert_eq!(can_finish(&given), Ok(()));
+    }
+}
+
+mod checks_of_commit_subjects {
+    //! ja: commit の件名の確かめ
+    //! en: Checks of commit subjects
+    //!
+    //! `claude-hooks can-finish` が、main-rs から足した commit の件名
+    //! (`git log --format=%s`) を確かめる。
+    use super::*;
+    use claude_hooks::bad_subjects;
+
+    /// ja: feat: のような型で始まらない件名と、日本語の文字を含まない件名を、元の順に返す
+    /// en: Returns subjects that do not start with a type such as feat: and subjects with no Japanese characters, in the original order
+    #[story("X5")]
+    #[test]
+    fn returns_subjects_that_do_not_start_with_a_type_such_as_feat_and_subjects_with_no_japanese_characters_in_the_original_order()
+     {
+        let log = "\
+feat: 枝を切る
+fix: typo
+枝を切る
+docs(spec): 文書を直す
+chore: 整形する
+";
+        assert_eq!(
+            bad_subjects(log),
+            vec!["fix: typo", "枝を切る", "docs(spec): 文書を直す"]
+        );
+    }
+}
+
+mod guidance_after_a_merge {
+    //! ja: merge のあとの案内
+    //! en: Guidance after a merge
+    //!
+    //! hook はインストールした claude-hooks で動くので、hook のコードを変えて merge したら、
+    //! ユーザーにインストールし直してもらう。引数は、merge で変わったファイルである。
+    use super::*;
+    use claude_hooks::reinstall;
+
+    /// ja: crates/claude-hooks、crates/spec、crates/docs-pair の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/claude-hooks を頼む文を返す
+    /// en: Returns a request to run cargo install --path crates/claude-hooks if a file under crates/claude-hooks, crates/spec or crates/docs-pair, Cargo.toml or Cargo.lock changed
+    #[story("X5")]
+    #[test]
+    fn returns_a_request_to_run_cargo_install_path_crates_claude_hooks_if_a_file_under_crates_claude_hooks_crates_spec_or_crates_docs_pair_cargo_toml_or_cargo_lock_changed()
+     {
+        [
+            "crates/claude-hooks/src/lib.rs",
+            "crates/spec/src/lib.rs",
+            "crates/docs-pair/src/main.rs",
+            "Cargo.toml",
+            "Cargo.lock",
+        ]
+        .iter()
+        .for_each(|path| {
+            let text = reinstall(&["README.md".to_string(), path.to_string()]).expect(path);
+            assert!(
+                text.contains("cargo install --path crates/claude-hooks"),
+                "{text}"
+            );
+        });
+    }
+
+    /// ja: ほかのファイルだけを変えたときは None を返す
+    /// en: Returns None if only other files changed
+    #[story("X5")]
+    #[test]
+    fn returns_none_if_only_other_files_changed() {
+        let changed = [
+            "crates/leani/src/repl.rs".to_string(),
+            "crates/spec-x/Cargo.toml".to_string(),
+        ];
+        assert_eq!(reinstall(&changed), None);
+    }
+}
+
+mod documents_changed_on_one_side {
+    //! ja: 片方だけを変えた文書
+    //! en: Documents changed on one side
+    //!
+    //! スキル leani-docs-sync が、もう片方の言語に写す変更を集めるために使う (`just pairs`)。
+    //! main-rs から作業ツリーまでの変更と、main-rs から足した commit を見る。
+    use super::checking_documents_in_two_languages::{commit, git};
+    use super::*;
+    use claude_hooks::{Origin, pairs};
+
+    /// main-rs に README の対を commit し、枝 topic に移ったリポジトリ。
+    pub(super) fn repo() -> tempfile::TempDir {
+        let dir = tmp();
+        git(dir.path(), &["init", "-q", "-b", "main-rs"]);
+        commit(
+            dir.path(),
+            &[
+                ("README.md", "proof\n"),
+                ("README.ja.md", "証明\n"),
+                (
+                    "glossary.toml",
+                    "[[term]]\nja = \"証明\"\nen = [\"proof\"]\n",
+                ),
+            ],
+            "docs: README",
+        );
+        git(dir.path(), &["switch", "-q", "-c", "topic"]);
+        dir
+    }
+
+    /// ja: 日本語の文書だけを変えた作業ツリーには、その文書ともう片方の文書と、足した行を含む差分を返す
+    /// en: Returns the document, the other document and a diff with the added line for a working tree with a change to only the Japanese document
+    #[story("X3", "X5")]
+    #[test]
+    fn returns_the_document_the_other_document_and_a_diff_with_the_added_line_for_a_working_tree_with_a_change_to_only_the_japanese_document()
+     {
+        let dir = repo();
+        fs::write(dir.path().join("README.ja.md"), "証明\n定理\n").expect("write");
+        let found = pairs(dir.path()).expect("pairs");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].changed, "README.ja.md");
+        assert_eq!(found[0].other, "README.md");
+        assert_eq!(found[0].origin, Origin::Tree);
+        assert!(found[0].diff.contains("+定理"), "{found:?}");
+    }
+
+    /// ja: 日本語の文書だけを変えた commit には、もう片方の文書の名前を含む commit の文を付けて返す
+    /// en: Returns the document with a text about the commit naming the other document for a commit that changes only the Japanese document
+    #[story("X3", "X5")]
+    #[test]
+    fn returns_the_document_with_a_text_about_the_commit_naming_the_other_document_for_a_commit_that_changes_only_the_japanese_document()
+     {
+        let dir = repo();
+        commit(
+            dir.path(),
+            &[("README.ja.md", "証明\n定理\n")],
+            "docs: 日本語だけ",
+        );
+        let found = pairs(dir.path()).expect("pairs");
+        assert!(
+            found
+                .iter()
+                .any(|p| matches!(&p.origin, Origin::Commit(text) if text.contains("README.md"))),
+            "{found:?}"
+        );
+    }
+
+    /// ja: 新しい文書を英語、日本語の順に別の commit で足した枝には、空の一覧を返す
+    /// en: Returns an empty list for a branch that adds a new document in English and then in Japanese in separate commits
+    #[story("X3", "X5")]
+    #[test]
+    fn returns_an_empty_list_for_a_branch_that_adds_a_new_document_in_english_and_then_in_japanese_in_separate_commits()
+     {
+        let dir = repo();
+        commit(dir.path(), &[("guide/x.md", "x\n")], "docs: x");
+        commit(dir.path(), &[("guide/x.ja.md", "x\n")], "docs: x の日本語");
+        assert_eq!(pairs(dir.path()).expect("pairs"), vec![]);
+    }
+
+    /// ja: 既にある文書を英語、日本語の順に別の commit で変えた枝には、2 つの commit を返す
+    /// en: Returns the two commits for a branch that changes an existing document in English and then in Japanese in separate commits
+    #[story("X3", "X5")]
+    #[test]
+    fn returns_the_two_commits_for_a_branch_that_changes_an_existing_document_in_english_and_then_in_japanese_in_separate_commits()
+     {
+        let dir = repo();
+        commit(dir.path(), &[("README.md", "proof!\n")], "docs: 英語");
+        commit(dir.path(), &[("README.ja.md", "証明!\n")], "docs: 日本語");
+        let found = pairs(dir.path()).expect("pairs");
+        let commits = found
+            .iter()
+            .filter(|p| matches!(p.origin, Origin::Commit(_)))
+            .count();
+        assert_eq!(commits, 2, "{found:?}");
+    }
+}
+
+mod glossary_terms_in_translated_documents {
+    //! ja: 訳した文書の glossary の語
+    //! en: Glossary terms in translated documents
+    //!
+    //! `just pairs-verify` が、main-rs から変えた日本語の文書の足した行にある glossary.toml の語ごとに、
+    //! 英語の語を英語の文書で探す。消した行の語は調べない。
+    use super::documents_changed_on_one_side::repo;
+    use super::*;
+    use claude_hooks::{Gap, verify_pairs};
+
+    fn write(dir: &Path, name: &str, text: &str) {
+        fs::write(dir.join(name), text).expect("write");
+    }
+
+    /// ja: 日本語の文書に足した語の英語が英語の文書に無いときは、その語を誤りとして返す
+    /// en: Returns the term as missing if the English document lacks the English of a term added to the Japanese document
+    #[story("X5")]
+    #[test]
+    fn returns_the_term_as_missing_if_the_english_document_lacks_the_english_of_a_term_added_to_the_japanese_document()
+     {
+        let dir = repo();
+        write(dir.path(), "README.ja.md", "証明\n定理の証明\n");
+        write(dir.path(), "README.md", "theorem\n");
+        assert_eq!(
+            verify_pairs(dir.path()).expect("verify"),
+            vec![Gap::Missing {
+                ja: "README.ja.md".to_string(),
+                en: "README.md".to_string(),
+                term: "証明".to_string(),
+            }]
+        );
+    }
+
+    /// ja: 日本語の文書に足した語の英語が、英語の文書にあり英語の差分に無いときは、その語を候補として返す
+    /// en: Returns the term as a candidate if the English of a term added to the Japanese document is in the English document but not in the English diff
+    #[story("X5")]
+    #[test]
+    fn returns_the_term_as_a_candidate_if_the_english_of_a_term_added_to_the_japanese_document_is_in_the_english_document_but_not_in_the_english_diff()
+     {
+        let dir = repo();
+        write(dir.path(), "README.ja.md", "証明\n証明を書く\n");
+        write(dir.path(), "README.md", "proof\nwrite it\n");
+        assert_eq!(
+            verify_pairs(dir.path()).expect("verify"),
+            vec![Gap::Candidate {
+                ja: "README.ja.md".to_string(),
+                en: "README.md".to_string(),
+                term: "証明".to_string(),
+            }]
+        );
+    }
+
+    /// ja: 日本語と英語の両方の文書から語を消したときは、空の一覧を返す
+    /// en: Returns an empty list if a term is removed from both the Japanese and the English documents
+    #[story("X5")]
+    #[test]
+    fn returns_an_empty_list_if_a_term_is_removed_from_both_the_japanese_and_the_english_documents()
+    {
+        let dir = repo();
+        write(dir.path(), "README.ja.md", "");
+        write(dir.path(), "README.md", "");
+        assert_eq!(verify_pairs(dir.path()).expect("verify"), vec![]);
+    }
+}
+
+mod checks_of_answers_about_test_sentences {
+    //! ja: テストの文の判断の確かめ
+    //! en: Checks of answers about test sentences
+    //!
+    //! スキル leani-test-text では、AI が `just texts` の文ごとの判断を
+    //! `target/claude-hooks/texts.json` に書き、`just texts-verify` が確かめる。
+    //! 引数は、その場で集め直した文 (`ファイル:行: 文` の行) と、texts.json の中身である。
+    use super::*;
+    use claude_hooks::verify_texts;
+
+    fn current() -> Vec<String> {
+        vec![
+            "crates/leani/tests/parsing.rs:10: ja: 文を返す".to_string(),
+            "crates/leani/tests/parsing.rs:11: en: Returns a sentence".to_string(),
+        ]
+    }
+
+    fn ok(place: &str, text: &str) -> serde_json::Value {
+        json!({"place": place, "text": text, "verdict": "ok"})
+    }
+
+    fn ng(place: &str, text: &str) -> serde_json::Value {
+        json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い", "fixed": "直した文"})
+    }
+
+    /// ja: 今の文を 1 つずつ持つ答えには、ng の文の一覧を返し、en: の文には関数名か mod の名前も変えることを添える
+    /// en: Returns the list of ng sentences, noting that the function or mod name also changes for an en: sentence, for an answer with each current sentence once
+    #[story("X5")]
+    #[test]
+    fn returns_the_list_of_ng_sentences_noting_that_the_function_or_mod_name_also_changes_for_an_en_sentence_for_an_answer_with_each_current_sentence_once()
+     {
+        let answer = json!([
+            ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す"),
+            ng("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
+        ]);
+        let found = verify_texts(&current(), &answer.to_string()).expect("verify");
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert!(found[0].contains("parsing.rs:11"), "{found:?}");
+        assert!(found[0].contains("直した文"), "{found:?}");
+        assert!(
+            found[0].contains("関数名か mod の名前も変える"),
+            "{found:?}"
+        );
+    }
+
+    /// ja: 今の文が抜けた答えには、抜けた文の場所を含むエラーを返す
+    /// en: Returns an error with the place of the missing sentence for an answer that lacks a current sentence
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_with_the_place_of_the_missing_sentence_for_an_answer_that_lacks_a_current_sentence()
+     {
+        let answer = json!([ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す")]);
+        let err = verify_texts(&current(), &answer.to_string()).expect_err("missing");
+        assert!(err.contains("parsing.rs:11"), "{err}");
+    }
+
+    /// ja: 同じ文を 2 回持つ答えには、その文の場所を含むエラーを返す
+    /// en: Returns an error with the place of the sentence for an answer that has a sentence twice
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_with_the_place_of_the_sentence_for_an_answer_that_has_a_sentence_twice() {
+        let answer = json!([
+            ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す"),
+            ok("crates/leani/tests/parsing.rs:10", "ja: 文を返す"),
+            ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
+        ]);
+        let err = verify_texts(&current(), &answer.to_string()).expect_err("twice");
+        assert!(err.contains("parsing.rs:10"), "{err}");
+    }
+
+    /// ja: 今の文と text が違う答えには、その場所を含むエラーを返す
+    /// en: Returns an error with the place for an answer whose text differs from the current sentence
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_with_the_place_for_an_answer_whose_text_differs_from_the_current_sentence()
+    {
+        let answer = json!([
+            ok("crates/leani/tests/parsing.rs:10", "ja: 古い文"),
+            ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence"),
+        ]);
+        let err = verify_texts(&current(), &answer.to_string()).expect_err("stale");
+        assert!(err.contains("parsing.rs:10"), "{err}");
+    }
+
+    /// ja: verdict が ok と ng のどちらでもない答えと、ng に reason か fixed が無い答えと、ok に reason がある答えには、エラーを返す
+    /// en: Returns an error for an answer with a verdict other than ok and ng, an answer with ng but without reason or fixed, and an answer with ok and a reason
+    #[story("X5")]
+    #[test]
+    fn returns_an_error_for_an_answer_with_a_verdict_other_than_ok_and_ng_an_answer_with_ng_but_without_reason_or_fixed_and_an_answer_with_ok_and_a_reason()
+     {
+        let second = ok("crates/leani/tests/parsing.rs:11", "en: Returns a sentence");
+        let place = "crates/leani/tests/parsing.rs:10";
+        let text = "ja: 文を返す";
+        [
+            json!({"place": place, "text": text, "verdict": "maybe"}),
+            json!({"place": place, "text": text, "verdict": "ng", "reason": "結果が無い"}),
+            json!({"place": place, "text": text, "verdict": "ng", "fixed": "直した文"}),
+            json!({"place": place, "text": text, "verdict": "ok", "reason": "結果が無い"}),
+        ]
+        .into_iter()
+        .for_each(|first| {
+            let answer = json!([first, second]);
+            assert!(
+                verify_texts(&current(), &answer.to_string()).is_err(),
+                "{answer}"
+            );
+        });
+        assert!(verify_texts(&current(), "{}").is_err());
+    }
+}
+
+mod yomiyasu_picked_from_installed_plugins_json {
+    //! ja: installed_plugins.json から選ぶ yomiyasu
+    //! en: Yomiyasu picked from installed_plugins.json
+    //!
+    //! `just lint-ja` は、Claude Code に入れた plugin の yomiyasu の lint を元の場所で動かす。
+    //! 引数は installed_plugins.json の中身と、リポジトリの直下である。
+    use super::*;
+    use claude_hooks::pick_lint;
+
+    fn installed(entries: serde_json::Value) -> String {
+        json!({"version": 2, "plugins": {"yomiyasu@yomiyasu": entries, "other@x": []}}).to_string()
+    }
+
+    /// ja: リポジトリの直下の project の要素があれば、user の要素より先に、その要素の installPath と version を返す
+    /// en: Returns the installPath and version of the project element for the repository root before the user element if there is one
+    #[story("X5")]
+    #[test]
+    fn returns_the_installpath_and_version_of_the_project_element_for_the_repository_root_before_the_user_element_if_there_is_one()
+     {
+        let raw = installed(json!([
+            {"scope": "user", "installPath": "/u/1.0.3", "version": "1.0.3"},
+            {"scope": "project", "projectPath": "/repo", "installPath": "/p/2.4.0", "version": "2.4.0"},
+        ]));
+        assert_eq!(
+            pick_lint(&raw, Path::new("/repo")),
+            Some((Path::new("/p/2.4.0").to_path_buf(), "2.4.0".to_string()))
+        );
+    }
+
+    /// ja: 別のディレクトリの project の要素しか無ければ、user の要素を返す
+    /// en: Returns the user element if the only project element is for another directory
+    #[story("X5")]
+    #[test]
+    fn returns_the_user_element_if_the_only_project_element_is_for_another_directory() {
+        let raw = installed(json!([
+            {"scope": "project", "projectPath": "/other", "installPath": "/p/2.4.0", "version": "2.4.0"},
+            {"scope": "user", "installPath": "/u/1.0.3", "version": "1.0.3"},
+        ]));
+        assert_eq!(
+            pick_lint(&raw, Path::new("/repo")),
+            Some((Path::new("/u/1.0.3").to_path_buf(), "1.0.3".to_string()))
+        );
+    }
+
+    /// ja: yomiyasu の要素が無ければ None を返す
+    /// en: Returns None if there is no yomiyasu element
+    #[story("X5")]
+    #[test]
+    fn returns_none_if_there_is_no_yomiyasu_element() {
+        let raw = json!({"version": 2, "plugins": {"other@x": []}}).to_string();
+        assert_eq!(pick_lint(&raw, Path::new("/repo")), None);
+    }
+}
+
+mod findings_kept_from_the_yomiyasu_lint_output {
+    //! ja: yomiyasu の lint の出力から残す指摘
+    //! en: Findings kept from the yomiyasu lint output
+    //!
+    //! DEVELOPMENT.ja.md の「文書の書き方」と食い違う規則の指摘を外す。引数は `--json` の出力である。
+    use super::*;
+    use claude_hooks::{Finding, kept_findings};
+
+    fn finding(rule: &str, line: u64) -> serde_json::Value {
+        json!({"rule": rule, "line": line, "severity": "warn", "message": format!("{rule} の指摘"), "snippet": "s"})
+    }
+
+    fn expected() -> Vec<Finding> {
+        vec![Finding {
+            line: 5,
+            rule: "negative_parallelism".to_string(),
+            message: "negative_parallelism の指摘".to_string(),
+        }]
+    }
+
+    /// ja: 1.0.3 の形の出力からは、英数字の前後の空白の指摘と、箇条書きの比率の指摘を外して返す
+    /// en: Returns the findings without those on spaces around alphanumerics and on the share of lists for output in the 1.0.3 form
+    #[story("X5")]
+    #[test]
+    fn returns_the_findings_without_those_on_spaces_around_alphanumerics_and_on_the_share_of_lists_for_output_in_the_1_0_3_form()
+     {
+        let raw = json!({
+            "findings": [
+                finding("excess_list", 1),
+                finding("unnatural_halfwidth_space", 3),
+                finding("negative_parallelism", 5),
+            ],
+            "is_clean": false,
+            "metrics": {},
+            "score": 10,
+        });
+        assert_eq!(kept_findings(&raw.to_string()), Ok(expected()));
+    }
+
+    /// ja: 2.4.0 の形の出力からは、箇条書きの比率の指摘を外して返す
+    /// en: Returns the findings without those on the share of lists for output in the 2.4.0 form
+    #[story("X5")]
+    #[test]
+    fn returns_the_findings_without_those_on_the_share_of_lists_for_output_in_the_2_4_0_form() {
+        let raw = json!({
+            "format": "yomiyasu-lint",
+            "format_version": 2,
+            "tool_version": "2.4.0",
+            "findings": [finding("excess_list", 1), finding("negative_parallelism", 5)],
+            "candidate_count": 2,
+        });
+        assert_eq!(kept_findings(&raw.to_string()), Ok(expected()));
     }
 }
 

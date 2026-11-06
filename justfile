@@ -12,6 +12,30 @@ default:
     @echo ''
     @just --list --unsorted
 
+# main-rs から枝を切る。main-rs の上にいなければ、理由を出して止まる
+start name:
+    cargo run -q -p claude-hooks -- can-start {{ quote(name) }}
+    git switch -c {{ quote(name) }}
+
+# just check を実行し、通れば今の枝を main-rs に fast-forward で merge して、枝を消す
+finish:
+    #!/bin/sh
+    set -eu
+    hooks() { cargo run -q -p claude-hooks -- "$@"; }
+    base=$(hooks base)
+    branch=$(git branch --show-current)
+    head=$(git rev-parse HEAD)
+    old=$(git rev-parse "$base")
+    hooks can-finish
+    just check
+    # just check の途中で commit が増えたり、ファイルが変わったりしていないことを確かめる
+    hooks can-finish --head "$head"
+    git switch "$base"
+    git merge --ff-only "$head"
+    # merge していない commit が枝に増えていれば、git は枝を消さずに止まる
+    git branch -d "$branch"
+    hooks after-finish "$old" "$head"
+
 # 整形し、SPEC.ja.md と SPEC.en.md を生成し直す。.claude/ は書き換えない
 fix:
     uv run ruff check --fix-only .
@@ -59,6 +83,27 @@ check-claude:
 status:
     cargo run -q -p claude-hooks -- status
 
-# main-rs から足したテストの文を出す (スキル leani-test-text)
+# main-rs から足したテストの文を出し、target/claude-hooks/texts.txt にも書く (スキル leani-test-text)
 texts:
     cargo run -q -p claude-hooks -- texts
+
+# AI の判断 (target/claude-hooks/texts.json) が今の文と合っているかを確かめ、ng の文を出す (スキル leani-test-text)
+texts-verify:
+    cargo run -q -p claude-hooks -- texts-verify
+
+# main-rs から足した ja: の文を yomiyasu の lint にかける (スキル leani-test-text)
+texts-lint:
+    cargo run -q -p claude-hooks -- texts-lint
+
+# 日本語の文書を yomiyasu の lint にかけ、DEVELOPMENT の決まりと食い違う指摘を外して出す
+[positional-arguments]
+lint-ja +files:
+    cargo run -q -p claude-hooks -- lint-ja "$@"
+
+# 片方の言語だけを変えた文書と、その差分を出す (スキル leani-docs-sync)
+pairs:
+    cargo run -q -p claude-hooks -- pairs
+
+# 日本語の文書に足した glossary.toml の語が、英語の文書にあるかを確かめる (スキル leani-docs-sync)
+pairs-verify:
+    cargo run -q -p claude-hooks -- pairs --verify

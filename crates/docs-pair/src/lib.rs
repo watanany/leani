@@ -141,25 +141,29 @@ fn both_in(root: &Path, parent: &str, path: &str, other: &str) -> Result<bool, S
         .map(|out| out.lines().count() == 2)
 }
 
-/// `root` のリポジトリの文書が対になっているかを確かめる。エラーの文は 1 行に 1 つ。
-pub fn check(root: &Path) -> Result<(), String> {
-    let tracked: Vec<String> = git(root, &["ls-files", "--", "*.md"])?
-        .lines()
-        .map(String::from)
+/// 対の両方があったのに、片方だけを変えた commit。
+#[derive(Debug, PartialEq)]
+pub struct Sided {
+    /// commit の ID。
+    pub id: String,
+    /// 変えた文書。
+    pub changed: String,
+    /// 変えなかった文書。
+    pub other: String,
+    /// エラーの文。
+    pub complaint: String,
+}
+
+/// range の commit のうち、対の両方があったのに片方だけを変えたもの。range は `git log` に
+/// 渡す範囲 (`main-rs..HEAD` など) で、空ならすべての commit を見る。
+pub fn sided_commits(root: &Path, range: &[&str]) -> Result<Vec<Sided>, String> {
+    let args: Vec<&str> = ["log", "--no-merges", "--no-renames", FORMAT, "--name-only"]
+        .into_iter()
+        .chain(range.iter().copied())
+        .chain(["--", "*.md"])
         .collect();
-    let log = git(
-        root,
-        &[
-            "log",
-            "--no-merges",
-            "--no-renames",
-            FORMAT,
-            "--name-only",
-            "--",
-            "*.md",
-        ],
-    )?;
-    let sided = commits(&log)
+    let log = git(root, &args)?;
+    commits(&log)
         .iter()
         .flat_map(|commit| {
             one_sided(commit)
@@ -168,13 +172,29 @@ pub fn check(root: &Path) -> Result<(), String> {
         })
         .map(|(commit, path, other)| {
             let parent = commit.parent.as_deref().unwrap_or_default();
-            both_in(root, parent, &path, &other)
-                .map(|both| both.then(|| complaint(commit, &path, &other)))
+            both_in(root, parent, &path, &other).map(|both| {
+                both.then(|| Sided {
+                    id: commit.id.clone(),
+                    complaint: complaint(commit, &path, &other),
+                    changed: path,
+                    other,
+                })
+            })
         })
-        .collect::<Result<Vec<_>, String>>()?;
+        .filter_map(Result::transpose)
+        .collect()
+}
+
+/// `root` のリポジトリの文書が対になっているかを確かめる。エラーの文は 1 行に 1 つ。
+pub fn check(root: &Path) -> Result<(), String> {
+    let tracked: Vec<String> = git(root, &["ls-files", "--", "*.md"])?
+        .lines()
+        .map(String::from)
+        .collect();
+    let sided = sided_commits(root, &[])?;
     let bad: Vec<String> = unpaired(&tracked)
         .into_iter()
-        .chain(sided.into_iter().flatten())
+        .chain(sided.into_iter().map(|s| s.complaint))
         .collect();
     match bad.is_empty() {
         true => Ok(()),

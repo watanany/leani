@@ -11,7 +11,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 46 件、テスト 494 件。括弧の中はテストの場所
+ストーリー 47 件、テスト 527 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -814,6 +814,10 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - もう片方の言語の文書が無い文書があると、その文書の名前を含むエラーを返す (parsing / 2 つの言語の文書の確認)
 - 英語の文書しか無かった文書に、日本語の文書を足す commit では Ok を返す (parsing / 2 つの言語の文書の確認)
 - もう片方の言語の文書が無い文書が CLAUDE.md と SPEC.ja.md と SPEC.en.md だけなら Ok を返す (parsing / 2 つの言語の文書の確認)
+- 日本語の文書だけを変えた作業ツリーには、その文書ともう片方の文書と、足した行を含む差分を返す (parsing / 片方だけを変えた文書)
+- 日本語の文書だけを変えた commit には、もう片方の文書の名前を含む commit の文を付けて返す (parsing / 片方だけを変えた文書)
+- 新しい文書を英語、日本語の順に別の commit で足した枝には、空の一覧を返す (parsing / 片方だけを変えた文書)
+- 既にある文書を英語、日本語の順に別の commit で変えた枝には、2 つの commit を返す (parsing / 片方だけを変えた文書)
 
 ### X4 AI が開発の手順から外れたときに、そのことを AI に知らせて、手順に戻ってもらいたい
 
@@ -830,3 +834,39 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 既知のキーだけの config には、空の一覧を返す (parsing / git を動かす前に確かめる、リポジトリの config)
 - local と global に filter のキーがある config には、local のキーだけを返す (parsing / git を動かす前に確かめる、リポジトリの config)
 - subsection の名前に = があるキーを含む config には、そのキーの全体を返す (parsing / git を動かす前に確かめる、リポジトリの config)
+
+### X5 開発用のスキルの決まった手順は、AI に任せずにスクリプトで行い、毎回同じ結果にしたい
+
+- main-rs には Ok を返す (parsing / 枝を切る前の確かめ)
+- main には、git switch main-rs を案内するエラーを返す (parsing / 枝を切る前の確かめ)
+- main-rs と main のほかの枝には、その枝の名前を含むエラーを返す (parsing / 枝を切る前の確かめ)
+- detached HEAD を表す空の名前と HEAD には、エラーを返す (parsing / 枝を切る前の確かめ)
+- 枝の上で、変更が無く、main-rs が HEAD の祖先で、HEAD が記録した commit と同じときは Ok を返す (parsing / merge する前の確かめ)
+- detached HEAD ではエラーを返す (parsing / merge する前の確かめ)
+- main-rs と main の上では、その枝の名前を含むエラーを返す (parsing / merge する前の確かめ)
+- 追跡しているファイルに commit していない変更があるときは、そのファイルの名前を含むエラーを返す (parsing / merge する前の確かめ)
+- 追跡していないファイルがあるときは、そのファイルの名前を含むエラーを返す (parsing / merge する前の確かめ)
+- 追跡していないファイルが .envrc だけのときは Ok を返す (parsing / merge する前の確かめ)
+- main-rs が HEAD の祖先でないときは、git rebase main-rs を案内するエラーを返す (parsing / merge する前の確かめ)
+- HEAD が記録した commit と違うときは、エラーを返す (parsing / merge する前の確かめ)
+- 記録した commit が無いときは、HEAD を比べずに Ok を返す (parsing / merge する前の確かめ)
+- feat: のような型で始まらない件名と、日本語の文字を含まない件名を、元の順に返す (parsing / commit の件名の確かめ)
+- crates/claude-hooks、crates/spec、crates/docs-pair の下のファイルか、Cargo.toml か、Cargo.lock を変えたときは、cargo install --path crates/claude-hooks を頼む文を返す (parsing / merge のあとの案内)
+- ほかのファイルだけを変えたときは None を返す (parsing / merge のあとの案内)
+- 日本語の文書だけを変えた作業ツリーには、その文書ともう片方の文書と、足した行を含む差分を返す (parsing / 片方だけを変えた文書)
+- 日本語の文書だけを変えた commit には、もう片方の文書の名前を含む commit の文を付けて返す (parsing / 片方だけを変えた文書)
+- 新しい文書を英語、日本語の順に別の commit で足した枝には、空の一覧を返す (parsing / 片方だけを変えた文書)
+- 既にある文書を英語、日本語の順に別の commit で変えた枝には、2 つの commit を返す (parsing / 片方だけを変えた文書)
+- 日本語の文書に足した語の英語が英語の文書に無いときは、その語を誤りとして返す (parsing / 訳した文書の glossary の語)
+- 日本語の文書に足した語の英語が、英語の文書にあり英語の差分に無いときは、その語を候補として返す (parsing / 訳した文書の glossary の語)
+- 日本語と英語の両方の文書から語を消したときは、空の一覧を返す (parsing / 訳した文書の glossary の語)
+- 今の文を 1 つずつ持つ答えには、ng の文の一覧を返し、en: の文には関数名か mod の名前も変えることを添える (parsing / テストの文の判断の確かめ)
+- 今の文が抜けた答えには、抜けた文の場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
+- 同じ文を 2 回持つ答えには、その文の場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
+- 今の文と text が違う答えには、その場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
+- verdict が ok と ng のどちらでもない答えと、ng に reason か fixed が無い答えと、ok に reason がある答えには、エラーを返す (parsing / テストの文の判断の確かめ)
+- リポジトリの直下の project の要素があれば、user の要素より先に、その要素の installPath と version を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
+- 別のディレクトリの project の要素しか無ければ、user の要素を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
+- yomiyasu の要素が無ければ None を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
+- 1.0.3 の形の出力からは、英数字の前後の空白の指摘と、箇条書きの比率の指摘を外して返す (parsing / yomiyasu の lint の出力から残す指摘)
+- 2.4.0 の形の出力からは、箇条書きの比率の指摘を外して返す (parsing / yomiyasu の lint の出力から残す指摘)

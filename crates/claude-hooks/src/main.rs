@@ -9,7 +9,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use claude_hooks::{Event, Notice};
+use claude_hooks::{Event, Gap, Notice, Origin, Pair};
 use serde_json::json;
 
 fn main() -> ExitCode {
@@ -26,10 +26,32 @@ fn main() -> ExitCode {
             {
                 ["post-edit"] | ["stop"] => hook(&root),
                 ["status"] => status(&root),
-                ["texts"] => claude_hooks::texts(&root).map(|lines| {
+                ["texts"] => claude_hooks::texts(&root).and_then(|lines| {
                     lines.iter().for_each(|line| println!("{line}"));
+                    save(&root, "texts.txt", &lines)
                 }),
-                _ => Err("使い方: claude-hooks (post-edit|stop|status|texts)".to_string()),
+                ["texts-verify"] => texts_verify(&root),
+                ["texts-lint"] => lint(&root).and_then(|script| texts_lint(&root, &script)),
+                ["lint-ja", files @ ..] if !files.is_empty() => {
+                    lint(&root).and_then(|script| lint_ja(&root, &script, files))
+                }
+                ["base"] => {
+                    println!("{}", claude_hooks::BASE);
+                    Ok(())
+                }
+                ["can-start", name] => claude_hooks::start(&root, name),
+                ["can-finish"] => claude_hooks::finish(&root, None),
+                ["can-finish", "--head", head] => claude_hooks::finish(&root, Some(head)),
+                ["after-finish", old, new] => {
+                    claude_hooks::after_finish(&root, old, new).map(|text| {
+                        text.iter().for_each(|t| println!("{t}"));
+                    })
+                }
+                ["pairs"] => claude_hooks::pairs(&root).map(|found| show_pairs(&found)),
+                ["pairs", "--verify"] => {
+                    claude_hooks::verify_pairs(&root).and_then(|gaps| show_gaps(&gaps))
+                }
+                _ => Err(USAGE.to_string()),
             }
         });
     match done {
@@ -37,6 +59,138 @@ fn main() -> ExitCode {
         Err(why) => {
             eprintln!("{why}");
             ExitCode::FAILURE
+        }
+    }
+}
+
+const USAGE: &str = "使い方: claude-hooks (post-edit | stop | status | texts | base \
+     | can-start <名前> | can-finish [--head <commit>] | after-finish <前の commit> <後の commit> \
+     | pairs [--verify] | texts-verify | texts-lint | lint-ja <ファイル…>)";
+
+/// 行を [`claude_hooks::STATE`] の name に書く。
+fn save(root: &Path, name: &str, lines: &[String]) -> Result<(), String> {
+    let state = root.join(claude_hooks::STATE);
+    fs::create_dir_all(&state).map_err(|e| e.to_string())?;
+    let path = state.join(name);
+    fs::write(
+        &path,
+        lines.iter().map(|l| format!("{l}\n")).collect::<String>(),
+    )
+    .map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// AI の答え (texts.json) を確かめる。ng の文があれば、一覧を出して 1 で終わる。
+fn texts_verify(root: &Path) -> Result<(), String> {
+    let path = root.join(claude_hooks::STATE).join("texts.json");
+    let answer = fs::read_to_string(&path).map_err(|e| {
+        format!(
+            "{}: {e}。just texts の文ごとの判断を、スキル leani-test-text の形で書く",
+            path.display()
+        )
+    })?;
+    let current = claude_hooks::texts(root)?;
+    let ng = claude_hooks::verify_texts(&current, &answer)?;
+    if ng.is_empty() {
+        println!("{} 個の文が、すべて ok", current.len());
+        return Ok(());
+    }
+    ng.iter().for_each(|n| println!("{n}"));
+    Err(format!(
+        "ng の文が {} 個ある。直してから just texts からやり直す",
+        ng.len()
+    ))
+}
+
+/// 使う yomiyasu の lint を探し、パスと版を出す。環境変数はここでだけ読む。
+fn lint(root: &Path) -> Result<std::path::PathBuf, String> {
+    let given = std::env::var_os("YOMIYASU_LINT").map(Into::into);
+    let config: std::path::PathBuf = std::env::var_os("CLAUDE_CONFIG_DIR")
+        .map(Into::into)
+        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".claude")))
+        .ok_or("環境変数 HOME が無い")?;
+    let (script, version) = claude_hooks::find_lint(root, given, &config)?;
+    println!("yomiyasu の lint: {} (版: {version})", script.display());
+    Ok(script)
+}
+
+/// ファイルごとに lint を動かし、指摘を `ファイル:行: [規則] 文` の形で出す。
+fn lint_ja(root: &Path, script: &Path, files: &[&str]) -> Result<(), String> {
+    let found = files
+        .iter()
+        .map(|f| {
+            claude_hooks::lint_file(root, script, Path::new(f)).map(|found| {
+                found
+                    .iter()
+                    .map(|x| format!("{f}:{}: [{}] {}", x.line, x.rule, x.message))
+                    .collect::<Vec<_>>()
+            })
+        })
+        .collect::<Result<Vec<_>, String>>()?
+        .concat();
+    found.iter().for_each(|f| println!("{f}"));
+    println!("指摘: {} 個", found.len());
+    Ok(())
+}
+
+/// 足した ja: の文を texts.ja.txt に 1 行ずつ書いて lint にかけ、指摘の行を元の場所に戻して出す。
+fn texts_lint(root: &Path, script: &Path) -> Result<(), String> {
+    let (places, sentences): (Vec<String>, Vec<String>) = claude_hooks::texts(root)?
+        .iter()
+        .filter_map(|line| {
+            let (place, text) = line.split_once(": ")?;
+            let ja = text.strip_prefix("ja: ")?;
+            Some((place.to_string(), ja.to_string()))
+        })
+        .unzip();
+    save(root, "texts.ja.txt", &sentences)?;
+    let file = root.join(claude_hooks::STATE).join("texts.ja.txt");
+    let found = claude_hooks::lint_file(root, script, &file)?;
+    found.iter().for_each(|x| {
+        let place = usize::try_from(x.line)
+            .ok()
+            .and_then(|n| places.get(n.wrapping_sub(1)))
+            .map_or("texts.ja.txt", String::as_str);
+        println!("{place}: [{}] {}", x.rule, x.message);
+    });
+    println!("ja: の文 {} 個、指摘: {} 個", sentences.len(), found.len());
+    Ok(())
+}
+
+fn show_pairs(found: &[Pair]) {
+    if found.is_empty() {
+        println!("片方だけを変えた文書は無い");
+        return;
+    }
+    found.iter().for_each(|p| {
+        let origin = match &p.origin {
+            Origin::Tree => "作業ツリー".to_string(),
+            Origin::NewFile => "追跡していない新しいファイル。全体を読んで訳す".to_string(),
+            Origin::Commit(text) => format!("commit: {text}"),
+        };
+        println!("## {} → {} ({origin})", p.changed, p.other);
+        print!("{}", p.diff);
+        println!();
+    });
+}
+
+/// 誤りがあれば 1 で終わる。候補だけなら 0 で終わる。
+fn show_gaps(gaps: &[Gap]) -> Result<(), String> {
+    gaps.iter().for_each(|g| match g {
+        Gap::Missing { ja, en, term } => println!(
+            "誤り: {ja} に足した行に「{term}」があるのに、{en} に glossary.toml の英語の語が無い"
+        ),
+        Gap::Candidate { ja, en, term } => println!(
+            "候補: {ja} に足した行に「{term}」があるのに、{en} の足した行に glossary.toml の英語の語が無い。\
+             語だけを直した場合や、代名詞にした場合は、そのままでよい"
+        ),
+    });
+    match gaps.iter().any(|g| matches!(g, Gap::Missing { .. })) {
+        true => Err("glossary.toml の英語の語が無い英語の文書がある".to_string()),
+        false => {
+            if gaps.is_empty() {
+                println!("glossary.toml の語は、英語の文書の足した行にある");
+            }
+            Ok(())
         }
     }
 }

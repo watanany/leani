@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-46 stories, 494 tests. In parentheses: where the test is
+47 stories, 527 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -813,6 +813,10 @@ Not built yet.
 - Returns an error naming the document when it has no counterpart in the other language (parsing / Checking documents in two languages)
 - Returns Ok when a commit adds the Japanese document for a document that only had the English one (parsing / Checking documents in two languages)
 - Returns Ok when only CLAUDE.md, SPEC.ja.md and SPEC.en.md have no counterpart in the other language (parsing / Checking documents in two languages)
+- Returns the document, the other document and a diff with the added line for a working tree with a change to only the Japanese document (parsing / Documents changed on one side)
+- Returns the document with a text about the commit naming the other document for a commit that changes only the Japanese document (parsing / Documents changed on one side)
+- Returns an empty list for a branch that adds a new document in English and then in Japanese in separate commits (parsing / Documents changed on one side)
+- Returns the two commits for a branch that changes an existing document in English and then in Japanese in separate commits (parsing / Documents changed on one side)
 
 ### X4 I want the AI to be told when it leaves the development workflow, so that it comes back to the workflow
 
@@ -829,3 +833,39 @@ Not built yet.
 - Returns an empty list for config with only known keys (parsing / Repository config checked before running git)
 - Returns only the local key for config with filter keys in local and global (parsing / Repository config checked before running git)
 - Returns the whole key for config with a key whose subsection name contains = (parsing / Repository config checked before running git)
+
+### X5 I want the fixed steps of the development skills to be done by scripts, not left to the AI, so that they give the same result every time
+
+- Returns Ok for main-rs (parsing / Checks before creating a branch)
+- Returns an error that suggests git switch main-rs for main (parsing / Checks before creating a branch)
+- Returns an error naming the branch for a branch other than main-rs and main (parsing / Checks before creating a branch)
+- Returns an error for an empty name and HEAD, which mean a detached HEAD (parsing / Checks before creating a branch)
+- Returns Ok on a branch with no changes, with main-rs as an ancestor of HEAD and with HEAD equal to the recorded commit (parsing / Checks before merging)
+- Returns an error on a detached HEAD (parsing / Checks before merging)
+- Returns an error naming the branch on main-rs and main (parsing / Checks before merging)
+- Returns an error naming the file if a tracked file has uncommitted changes (parsing / Checks before merging)
+- Returns an error naming the file if there is an untracked file (parsing / Checks before merging)
+- Returns Ok if the only untracked file is .envrc (parsing / Checks before merging)
+- Returns an error that suggests git rebase main-rs if main-rs is not an ancestor of HEAD (parsing / Checks before merging)
+- Returns an error if HEAD differs from the recorded commit (parsing / Checks before merging)
+- Returns Ok without comparing HEAD if there is no recorded commit (parsing / Checks before merging)
+- Returns subjects that do not start with a type such as feat: and subjects with no Japanese characters, in the original order (parsing / Checks of commit subjects)
+- Returns a request to run cargo install --path crates/claude-hooks if a file under crates/claude-hooks, crates/spec or crates/docs-pair, Cargo.toml or Cargo.lock changed (parsing / Guidance after a merge)
+- Returns None if only other files changed (parsing / Guidance after a merge)
+- Returns the document, the other document and a diff with the added line for a working tree with a change to only the Japanese document (parsing / Documents changed on one side)
+- Returns the document with a text about the commit naming the other document for a commit that changes only the Japanese document (parsing / Documents changed on one side)
+- Returns an empty list for a branch that adds a new document in English and then in Japanese in separate commits (parsing / Documents changed on one side)
+- Returns the two commits for a branch that changes an existing document in English and then in Japanese in separate commits (parsing / Documents changed on one side)
+- Returns the term as missing if the English document lacks the English of a term added to the Japanese document (parsing / Glossary terms in translated documents)
+- Returns the term as a candidate if the English of a term added to the Japanese document is in the English document but not in the English diff (parsing / Glossary terms in translated documents)
+- Returns an empty list if a term is removed from both the Japanese and the English documents (parsing / Glossary terms in translated documents)
+- Returns the list of ng sentences, noting that the function or mod name also changes for an en: sentence, for an answer with each current sentence once (parsing / Checks of answers about test sentences)
+- Returns an error with the place of the missing sentence for an answer that lacks a current sentence (parsing / Checks of answers about test sentences)
+- Returns an error with the place of the sentence for an answer that has a sentence twice (parsing / Checks of answers about test sentences)
+- Returns an error with the place for an answer whose text differs from the current sentence (parsing / Checks of answers about test sentences)
+- Returns an error for an answer with a verdict other than ok and ng, an answer with ng but without reason or fixed, and an answer with ok and a reason (parsing / Checks of answers about test sentences)
+- Returns the installPath and version of the project element for the repository root before the user element if there is one (parsing / Yomiyasu picked from installed_plugins.json)
+- Returns the user element if the only project element is for another directory (parsing / Yomiyasu picked from installed_plugins.json)
+- Returns None if there is no yomiyasu element (parsing / Yomiyasu picked from installed_plugins.json)
+- Returns the findings without those on spaces around alphanumerics and on the share of lists for output in the 1.0.3 form (parsing / Findings kept from the yomiyasu lint output)
+- Returns the findings without those on the share of lists for output in the 2.4.0 form (parsing / Findings kept from the yomiyasu lint output)

@@ -282,3 +282,8 @@ en = "I want people who do not read Japanese to be able to read how to use and d
 id = "X4"
 ja = "AI が開発の手順から外れたときに、そのことを AI に知らせて、手順に戻ってもらいたい"
 en = "I want the AI to be told when it leaves the development workflow, so that it comes back to the workflow"
+
+[[story]]
+id = "X5"
+ja = "開発用のスキルの決まった手順は、AI に任せずにスクリプトで行い、毎回同じ結果にしたい"
+en = "I want the fixed steps of the development skills to be done by scripts, not left to the AI, so that they give the same result every time"

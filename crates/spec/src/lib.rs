@@ -228,14 +228,16 @@ pub struct Term {
 }
 
 impl Term {
-    fn used_in(&self, ja: &str) -> bool {
+    /// ja の文にこの語があるか。except の語の中にあるものは数えない。
+    pub fn used_in(&self, ja: &str) -> bool {
         self.except
             .iter()
             .fold(ja.to_string(), |rest, x| rest.replace(x.as_str(), ""))
             .contains(&self.ja)
     }
 
-    fn kept_in(&self, en: &str) -> bool {
+    /// en の文に、この語の英語のどれかがあるか。大文字と小文字を区別しない。
+    pub fn kept_in(&self, en: &str) -> bool {
         let en = en.to_lowercase();
         self.en.iter().any(|w| en.contains(w.as_str()))
     }
