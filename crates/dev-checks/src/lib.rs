@@ -175,9 +175,6 @@ pub fn can_start(branch: &str) -> Result<(), String> {
     }
 }
 
-/// 自分の環境のためのファイル。commit しないので、追跡していなくても merge を止めない。
-pub const PERSONAL: &[&str] = &[".envrc"];
-
 /// merge する前の作業ツリーの状態。
 #[derive(Debug, PartialEq)]
 pub struct Finish {
@@ -185,7 +182,7 @@ pub struct Finish {
     pub branch: String,
     /// 追跡しているファイルのうち、commit していない変更があるもの。
     pub dirty: Vec<String>,
-    /// 追跡していないファイル (`.gitignore` で外したものは含まない)。
+    /// 追跡していないファイル (`.gitignore` と `.git/info/exclude` で外したものは含まない)。
     pub untracked: Vec<String>,
     /// [`BASE`] が `HEAD` の祖先か。祖先なら fast-forward で merge できる。
     pub base_is_ancestor: bool,
@@ -197,12 +194,6 @@ pub struct Finish {
 
 /// 枝を [`BASE`] に merge してよいか。止める理由を、確かめる順に 1 つだけ返す。
 pub fn can_finish(given: &Finish) -> Result<(), String> {
-    let untracked: Vec<&str> = given
-        .untracked
-        .iter()
-        .map(String::as_str)
-        .filter(|path| !PERSONAL.contains(path))
-        .collect();
     match given {
         f if detached(&f.branch) => {
             Err("detached HEAD の上にいる。merge する枝に移る。".to_string())
@@ -214,9 +205,10 @@ pub fn can_finish(given: &Finish) -> Result<(), String> {
             "commit していない変更がある。commit してから `just finish` する: {}",
             f.dirty.join(", ")
         )),
-        _ if !untracked.is_empty() => Err(format!(
-            "追跡していないファイルがある。commit するか消してから `just finish` する: {}",
-            untracked.join(", ")
+        f if !f.untracked.is_empty() => Err(format!(
+            "追跡していないファイルがある。commit するか消してから `just finish` する。\
+             自分だけが使うファイルなら、`.git/info/exclude` に書く: {}",
+            f.untracked.join(", ")
         )),
         f if !f.base_is_ancestor => Err(format!(
             "{BASE} が HEAD の祖先でないので、fast-forward で merge できない。\

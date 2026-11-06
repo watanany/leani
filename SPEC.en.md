@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-47 stories, 529 tests. In parentheses: where the test is
+47 stories, 528 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -846,7 +846,6 @@ Not built yet.
 - Returns an error naming the branch on main-rs and main (parsing / Checks before merging)
 - Returns an error naming the file if a tracked file has uncommitted changes (parsing / Checks before merging)
 - Returns an error naming the file if there is an untracked file (parsing / Checks before merging)
-- Returns Ok if the only untracked file is .envrc (parsing / Checks before merging)
 - Returns an error that suggests git rebase main-rs if main-rs is not an ancestor of HEAD (parsing / Checks before merging)
 - Returns an error if HEAD differs from the recorded commit (parsing / Checks before merging)
 - Returns Ok without comparing HEAD if there is no recorded commit (parsing / Checks before merging)

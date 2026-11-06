@@ -3670,24 +3670,11 @@ mod checks_before_merging {
     #[test]
     fn returns_an_error_naming_the_file_if_there_is_an_untracked_file() {
         let given = Finish {
-            untracked: vec![".envrc".to_string(), "new.rs".to_string()],
+            untracked: vec!["new.rs".to_string()],
             ..ready()
         };
         let err = can_finish(&given).expect_err("untracked");
         assert!(err.contains("new.rs"), "{err}");
-        assert!(!err.contains(".envrc"), "{err}");
-    }
-
-    /// ja: 追跡していないファイルが .envrc だけのときは Ok を返す
-    /// en: Returns Ok if the only untracked file is .envrc
-    #[story("X5")]
-    #[test]
-    fn returns_ok_if_the_only_untracked_file_is_envrc() {
-        let given = Finish {
-            untracked: vec![".envrc".to_string()],
-            ..ready()
-        };
-        assert_eq!(can_finish(&given), Ok(()));
     }
 
     /// ja: main-rs が HEAD の祖先でないときは、git rebase main-rs を案内するエラーを返す

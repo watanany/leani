@@ -11,7 +11,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 47 件、テスト 529 件。括弧の中はテストの場所
+ストーリー 47 件、テスト 528 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -847,7 +847,6 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - main-rs と main の上では、その枝の名前を含むエラーを返す (parsing / merge する前の確かめ)
 - 追跡しているファイルに commit していない変更があるときは、そのファイルの名前を含むエラーを返す (parsing / merge する前の確かめ)
 - 追跡していないファイルがあるときは、そのファイルの名前を含むエラーを返す (parsing / merge する前の確かめ)
-- 追跡していないファイルが .envrc だけのときは Ok を返す (parsing / merge する前の確かめ)
 - main-rs が HEAD の祖先でないときは、git rebase main-rs を案内するエラーを返す (parsing / merge する前の確かめ)
 - HEAD が記録した commit と違うときは、エラーを返す (parsing / merge する前の確かめ)
 - 記録した commit が無いときは、HEAD を比べずに Ok を返す (parsing / merge する前の確かめ)
