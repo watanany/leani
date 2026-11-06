@@ -408,6 +408,7 @@ const KEYWORDS: &[&str] = &[
 const CRATES: &[&str] = &[
     "alloc",
     "chrono",
+    "claude_hooks",
     "core",
     "crossterm",
     "docs_pair",

@@ -24,7 +24,7 @@ pub fn root() -> PathBuf {
 
 /// 対を求めない文書。`CLAUDE.md` は Claude Code が決まった名前で読み、`SPEC.ja.md` と
 /// `SPEC.en.md` は `crates/spec` が両方を生成する。
-fn exempt(path: &str) -> bool {
+pub fn exempt(path: &str) -> bool {
     matches!(path, "CLAUDE.md" | "SPEC.ja.md" | "SPEC.en.md") || path.starts_with(".claude/")
 }
 

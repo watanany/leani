@@ -1,0 +1,13 @@
+[package]
+name = "claude-hooks"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+docs-pair = { path = "../docs-pair" }
+serde_json = "1"
+spec = { path = "../spec" }
+
+[lints]
+workspace = true

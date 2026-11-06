@@ -3243,6 +3243,212 @@ mod checking_documents_in_two_languages {
     }
 }
 
+mod notices_made_from_the_working_tree {
+    //! ja: 作業ツリーから作る知らせ
+    //! en: Notices made from the working tree
+    //!
+    //! crates/claude-hooks が、開発の手順から外れたことを Claude Code の hook で AI に知らせる。
+    //! 知らせは止めるためではなく、手順に戻ってもらうためのものである。
+    use super::*;
+    use claude_hooks::{Notice, Tree, notices};
+
+    fn tree(branch: &str, changed: &[&str]) -> Tree {
+        Tree {
+            branch: branch.to_string(),
+            changed: changed.iter().map(|path| path.to_string()).collect(),
+        }
+    }
+
+    /// ja: main-rs でコードとテストを変えた作業ツリーには、枝を切る知らせだけを返す
+    /// en: Returns only a notice to create a branch for a working tree on main-rs with changes to code and tests
+    #[story("X4")]
+    #[test]
+    fn returns_only_a_notice_to_create_a_branch_for_a_working_tree_on_main_rs_with_changes_to_code_and_tests()
+     {
+        let found = notices(&tree(
+            "main-rs",
+            &["crates/leani/src/repl.rs", "crates/leani/tests/parsing.rs"],
+        ));
+        assert_eq!(
+            found,
+            vec![Notice::OnBase {
+                branch: "main-rs".to_string()
+            }]
+        );
+    }
+
+    /// ja: 枝でテストを変えずにコードを変えた作業ツリーには、テストを先に書く知らせを返す
+    /// en: Returns a notice to write tests first for a working tree on a branch with changes to code but not to tests
+    #[story("X4")]
+    #[test]
+    fn returns_a_notice_to_write_tests_first_for_a_working_tree_on_a_branch_with_changes_to_code_but_not_to_tests()
+     {
+        let found = notices(&tree("hooks", &["crates/leani-core/src/pure.rs"]));
+        assert_eq!(found, vec![Notice::CodeWithoutTest]);
+    }
+
+    /// ja: 枝でコードとテストを変えた作業ツリーには、空の一覧を返す
+    /// en: Returns an empty list for a working tree on a branch with changes to code and tests
+    #[story("X4")]
+    #[test]
+    fn returns_an_empty_list_for_a_working_tree_on_a_branch_with_changes_to_code_and_tests() {
+        let found = notices(&tree(
+            "hooks",
+            &["src/leani/kernel.py", "tests/test_kernel.py"],
+        ));
+        assert_eq!(found, vec![]);
+    }
+
+    /// ja: 枝で対の文書の片方だけを変えた作業ツリーには、もう片方の文書の名前を含む知らせを返す
+    /// en: Returns a notice naming the other document for a working tree on a branch with a change to only one document of a pair
+    #[story("X4")]
+    #[test]
+    fn returns_a_notice_naming_the_other_document_for_a_working_tree_on_a_branch_with_a_change_to_only_one_document_of_a_pair()
+     {
+        let found = notices(&tree("hooks", &["guide/proof.ja.md", "CLAUDE.md"]));
+        assert_eq!(
+            found,
+            vec![Notice::OneSided {
+                changed: "guide/proof.ja.md".to_string(),
+                other: "guide/proof.md".to_string(),
+            }]
+        );
+        assert!(found[0].text().contains("guide/proof.md"), "{found:?}");
+    }
+
+    /// ja: main-rs で . で始まるファイルだけを変えた作業ツリーには、空の一覧を返す
+    /// en: Returns an empty list for a working tree on main-rs with changes only to files whose names start with a dot
+    #[story("X4")]
+    #[test]
+    fn returns_an_empty_list_for_a_working_tree_on_main_rs_with_changes_only_to_files_whose_names_start_with_a_dot()
+     {
+        let found = notices(&tree("main-rs", &[".envrc", ".claude/settings.json"]));
+        assert_eq!(found, vec![]);
+    }
+}
+
+mod replies_to_hooks {
+    //! ja: hook への応答
+    //! en: Replies to hooks
+    //!
+    //! Claude Code が hook に渡す JSON を読み、知らせを JSON で返す。
+    use super::*;
+    use claude_hooks::{Notice, input, reply};
+
+    fn notices() -> Vec<Notice> {
+        vec![
+            Notice::CodeWithoutTest,
+            Notice::OneSided {
+                changed: "README.ja.md".to_string(),
+                other: "README.md".to_string(),
+            },
+        ]
+    }
+
+    fn stop(active: bool) -> String {
+        json!({"session_id": "s", "hook_event_name": "Stop", "stop_hook_active": active})
+            .to_string()
+    }
+
+    /// ja: ファイルを変えた PostToolUse の入力には、そのファイルに関係する知らせだけを含む応答を返す
+    /// en: Returns a reply with only the notices about the file for PostToolUse input that edits the file
+    #[story("X4")]
+    #[test]
+    fn returns_a_reply_with_only_the_notices_about_the_file_for_posttooluse_input_that_edits_the_file()
+     {
+        let raw = json!({
+            "session_id": "s",
+            "hook_event_name": "PostToolUse",
+            "tool_name": "Edit",
+            "tool_input": {"file_path": "/repo/README.ja.md"},
+        })
+        .to_string();
+        let given = input(&raw, Path::new("/repo")).expect("input");
+        let (out, _) = reply(&given.event, &notices(), &[]);
+        let out: serde_json::Value = serde_json::from_str(&out.expect("reply")).expect("json");
+        let context = out["hookSpecificOutput"]["additionalContext"]
+            .as_str()
+            .expect("additionalContext");
+        assert!(context.contains("README.md"), "{context}");
+        assert!(
+            !context.contains(&Notice::CodeWithoutTest.text()),
+            "{context}"
+        );
+    }
+
+    /// ja: Stop の入力には、知らせを理由にして止める応答を返す
+    /// en: Returns a reply that blocks with the notices as the reason for Stop input
+    #[story("X4")]
+    #[test]
+    fn returns_a_reply_that_blocks_with_the_notices_as_the_reason_for_stop_input() {
+        let given = input(&stop(false), Path::new("/repo")).expect("input");
+        let (out, _) = reply(&given.event, &notices(), &[]);
+        let out: serde_json::Value = serde_json::from_str(&out.expect("reply")).expect("json");
+        assert_eq!(out["decision"], "block");
+        let reason = out["reason"].as_str().expect("reason");
+        assert!(reason.contains(&Notice::CodeWithoutTest.text()), "{reason}");
+        assert!(reason.contains("README.md"), "{reason}");
+    }
+
+    /// ja: stop_hook_active が true の Stop の入力には、知らせがあっても None を返す
+    /// en: Returns None for Stop input with stop_hook_active true even with notices
+    #[story("X4")]
+    #[test]
+    fn returns_none_for_stop_input_with_stop_hook_active_true_even_with_notices() {
+        let given = input(&stop(true), Path::new("/repo")).expect("input");
+        assert_eq!(reply(&given.event, &notices(), &[]), (None, vec![]));
+    }
+
+    /// ja: 同じセッションで一度返した知らせには、二度目に None を返す
+    /// en: Returns None the second time for notices already returned in the same session
+    #[story("X4")]
+    #[test]
+    fn returns_none_the_second_time_for_notices_already_returned_in_the_same_session() {
+        let given = input(&stop(false), Path::new("/repo")).expect("input");
+        let (first, seen) = reply(&given.event, &notices(), &[]);
+        assert!(first.is_some());
+        assert_eq!(reply(&given.event, &notices(), &seen), (None, vec![]));
+    }
+}
+
+mod test_sentences_collected_from_a_diff {
+    //! ja: diff から集めるテストの文
+    //! en: Test sentences collected from a diff
+    //!
+    //! スキル leani-test-text が、見直す文を集めるために使う。
+    use super::*;
+
+    /// ja: 足した ja: と en: の行を、ファイルの名前と行の番号を付けて返す
+    /// en: Returns the added ja: and en: lines with the file name and the line number
+    #[story("X4")]
+    #[test]
+    fn returns_the_added_ja_and_en_lines_with_the_file_name_and_the_line_number() {
+        let diff = "\
+diff --git a/crates/leani/tests/parsing.rs b/crates/leani/tests/parsing.rs
+--- a/crates/leani/tests/parsing.rs
++++ b/crates/leani/tests/parsing.rs
+@@ -10,2 +10,3 @@ mod x {
+-    /// ja: 古い文
++    /// ja: 新しい文
++    /// en: New sentence
++    #[story(\"X4\")]
+diff --git a/tests/test_kernel.py b/tests/test_kernel.py
+--- a/tests/test_kernel.py
++++ b/tests/test_kernel.py
+@@ -40,0 +41 @@ def describe_x():
++        ja: カーネルの文
+";
+        assert_eq!(
+            claude_hooks::added_texts(diff),
+            vec![
+                "crates/leani/tests/parsing.rs:10: ja: 新しい文",
+                "crates/leani/tests/parsing.rs:11: en: New sentence",
+                "tests/test_kernel.py:41: ja: カーネルの文",
+            ]
+        );
+    }
+}
+
 mod detecting_lake_projects {
     //! ja: Lake プロジェクトの判定
     //! en: Detecting Lake projects

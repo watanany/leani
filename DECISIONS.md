@@ -316,6 +316,19 @@ The stage that collects the targets and the stage that checks and summarizes the
 AI handles only the stage that makes judgments about the collected targets, and the form of its answer is fixed in advance with a JSON schema.
 The input and output of the scripts are kept in files, so they can be checked again later with the same input.
 
+### Rejected: Forcing the development workflow with hooks
+
+Claude Code hooks can also refuse a change before AI makes it to a file.
+One option is to refuse the change when AI tries to change code without changing tests, or tries to change files on `main-rs`.
+However, there are cases where leaving the workflow is fine.
+A refactoring that does not change behavior does not change tests, and a typo that exists in only one language's document is fixed in only that document.
+If the change is refused, AI tries to make the same change in another way that is not refused, and the reason for leaving the workflow is not recorded.
+
+Instead, the hooks (`crates/claude-hooks`) only notify AI.
+When AI changes a file, the hook gives AI the notices related to that file.
+When AI is about to finish, if there are notices, the hook stops AI once and has it fix them or write the reason for not fixing them in its reply to the user.
+The same notice is not repeated within one session, so after AI decides to continue with a reason, the hook does not stop AI.
+
 ### Rejected: Putting the code in one crate
 
 Another option is to put the code in one crate, and divide the modules by whether they have side effects.

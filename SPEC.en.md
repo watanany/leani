@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-45 stories, 481 tests. In parentheses: where the test is
+46 stories, 491 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -813,3 +813,16 @@ Not built yet.
 - Returns an error naming the document when it has no counterpart in the other language (parsing / Checking documents in two languages)
 - Returns Ok when a commit adds the Japanese document for a document that only had the English one (parsing / Checking documents in two languages)
 - Returns Ok when only CLAUDE.md, SPEC.ja.md and SPEC.en.md have no counterpart in the other language (parsing / Checking documents in two languages)
+
+### X4 I want the AI to be told when it leaves the development workflow, so that it comes back to the workflow
+
+- Returns only a notice to create a branch for a working tree on main-rs with changes to code and tests (parsing / Notices made from the working tree)
+- Returns a notice to write tests first for a working tree on a branch with changes to code but not to tests (parsing / Notices made from the working tree)
+- Returns an empty list for a working tree on a branch with changes to code and tests (parsing / Notices made from the working tree)
+- Returns a notice naming the other document for a working tree on a branch with a change to only one document of a pair (parsing / Notices made from the working tree)
+- Returns an empty list for a working tree on main-rs with changes only to files whose names start with a dot (parsing / Notices made from the working tree)
+- Returns a reply with only the notices about the file for PostToolUse input that edits the file (parsing / Replies to hooks)
+- Returns a reply that blocks with the notices as the reason for Stop input (parsing / Replies to hooks)
+- Returns None for Stop input with stop_hook_active true even with notices (parsing / Replies to hooks)
+- Returns None the second time for notices already returned in the same session (parsing / Replies to hooks)
+- Returns the added ja: and en: lines with the file name and the line number (parsing / Test sentences collected from a diff)

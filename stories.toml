@@ -277,3 +277,8 @@ en = "I want people who do not read Japanese to be able to read the list of what
 id = "X3"
 ja = "日本語を読まない人にも、leani の使い方と開発の決まりを読んでもらいたい"
 en = "I want people who do not read Japanese to be able to read how to use and develop leani"
+
+[[story]]
+id = "X4"
+ja = "AI が開発の手順から外れたときに、そのことを AI に知らせて、手順に戻ってもらいたい"
+en = "I want the AI to be told when it leaves the development workflow, so that it comes back to the workflow"

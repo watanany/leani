@@ -172,6 +172,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "claude-hooks"
+version = "0.1.0"
+dependencies = [
+ "docs-pair",
+ "serde_json",
+ "spec",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -495,6 +504,7 @@ name = "leani"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "claude-hooks",
  "crossterm",
  "docs-pair",
  "leani",
