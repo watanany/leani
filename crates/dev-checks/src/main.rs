@@ -13,7 +13,7 @@ use dev_checks::{Event, Gap, Notice, Origin, Pair};
 use serde_json::json;
 
 fn main() -> ExitCode {
-    // hook はリポジトリの直下で動かす (.claude/hooks/claude-hooks.sh)。
+    // hook はリポジトリの直下で動かす (.claude/hooks/dev-checks.sh)。
     let done = std::env::current_dir()
         .map_err(|e| e.to_string())
         .and_then(|root| {

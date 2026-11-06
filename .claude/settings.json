@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/claude-hooks.sh\" post-edit",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/dev-checks.sh\" post-edit",
             "timeout": 180
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/claude-hooks.sh\" stop",
+            "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/hooks/dev-checks.sh\" stop",
             "timeout": 180
           }
         ]
