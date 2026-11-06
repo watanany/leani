@@ -545,10 +545,11 @@ pub fn all(root: &Path, tree: &Tree) -> Vec<Notice> {
     notices(tree).into_iter().chain(spec).collect()
 }
 
-/// [`BASE`] から足したテストの文。
+/// [`BASE`] から足したテストの文。[`BASE`] から作業ツリーまでの差分と、追跡していない
+/// テストのファイルの全体から集める。追跡していないファイルは `git diff` に出ないためである。
 pub fn test_texts(root: &Path) -> Result<Vec<String>, String> {
     guard(root)?;
-    git(
+    let tracked = git(
         root,
         &[
             "diff",
@@ -562,7 +563,40 @@ pub fn test_texts(root: &Path) -> Result<Vec<String>, String> {
             "tests",
         ],
     )
-    .map(|diff| added_texts(&diff))
+    .map(|diff| added_texts(&diff))?;
+    let untracked = git(
+        root,
+        &[
+            "ls-files",
+            "-z",
+            "--others",
+            "--exclude-standard",
+            "--",
+            "crates/leani/tests",
+            "tests",
+        ],
+    )?
+    .split('\0')
+    .filter(|file| !file.is_empty())
+    .map(|file| {
+        std::fs::read_to_string(root.join(file))
+            .map(|content| file_texts(file, &content))
+            .map_err(|e| format!("{file}: {e}"))
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+    Ok(tracked
+        .into_iter()
+        .chain(untracked.into_iter().flatten())
+        .collect())
+}
+
+/// ファイルの全体から、`ja:` と `en:` の行を `ファイル:行: 文` の形で返す。
+fn file_texts(file: &str, content: &str) -> Vec<String> {
+    content
+        .lines()
+        .enumerate()
+        .filter_map(|(i, line)| sentence(line).map(|s| format!("{file}:{}: {s}", i + 1)))
+        .collect()
 }
 
 /// 今の枝の名前。detached HEAD なら空の文字列。[`guard`] のあとに呼ぶ。

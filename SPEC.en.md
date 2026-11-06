@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-47 stories, 528 tests. In parentheses: where the test is
+47 stories, 529 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -836,6 +836,7 @@ Not built yet.
 
 ### X5 I want the fixed steps of the development skills to be done by scripts, not left to the AI, so that they give the same result every time
 
+- Returns the ja: and en: lines in an untracked test file with the file name and the line number (parsing / Test sentences added from main-rs)
 - Returns Ok for main-rs (parsing / Checks before creating a branch)
 - Returns an error that suggests git switch main-rs for main (parsing / Checks before creating a branch)
 - Returns an error naming the branch for a branch other than main-rs and main (parsing / Checks before creating a branch)

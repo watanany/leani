@@ -3449,6 +3449,42 @@ diff --git a/tests/test_kernel.py b/tests/test_kernel.py
     }
 }
 
+mod test_sentences_added_from_main_rs {
+    //! ja: main-rs から足したテストの文
+    //! en: Test sentences added from main-rs
+    //!
+    //! `just test-texts` が、main-rs からの差分と、追跡していないテストのファイルから集める。
+    use super::checking_documents_in_two_languages::{commit, git};
+    use super::*;
+    use dev_checks::test_texts;
+
+    /// ja: 追跡していないテストのファイルにある ja: と en: の行を、ファイルの名前と行の番号を付けて返す
+    /// en: Returns the ja: and en: lines in an untracked test file with the file name and the line number
+    #[story("X5")]
+    #[test]
+    fn returns_the_ja_and_en_lines_in_an_untracked_test_file_with_the_file_name_and_the_line_number()
+     {
+        let dir = tmp();
+        git(dir.path(), &["init", "-q", "-b", "main-rs"]);
+        commit(dir.path(), &[("README.md", "x\n")], "docs: README");
+        git(dir.path(), &["switch", "-q", "-c", "topic"]);
+        let tests = dir.path().join("crates/leani/tests");
+        fs::create_dir_all(&tests).expect("mkdir");
+        fs::write(
+            tests.join("new.rs"),
+            "mod x {\n    /// ja: 新しい文\n    /// en: New sentence\n}\n",
+        )
+        .expect("write");
+        assert_eq!(
+            test_texts(dir.path()).expect("test_texts"),
+            vec![
+                "crates/leani/tests/new.rs:2: ja: 新しい文",
+                "crates/leani/tests/new.rs:3: en: New sentence",
+            ]
+        );
+    }
+}
+
 mod repository_config_checked_before_running_git {
     //! ja: git を動かす前に確かめる、リポジトリの config
     //! en: Repository config checked before running git
