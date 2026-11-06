@@ -58,6 +58,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 addopts = "-q"
 
+[tool.ruff]
+# vendor/ は外から取り込んだコードなので、lint も整形もしない (just yomiyasu-update で入れ替える)。
+extend-exclude = ["vendor"]
+
 [tool.ruff.lint]
 # 有効にしなかったルール。どれも一般には推奨されるが、このリポジトリの方針を優先する。
 #   RET505-508       return や raise のあとの else。分岐は明示的に else で書く

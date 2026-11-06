@@ -11,7 +11,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 
     cargo run -p spec
 
-ストーリー 47 件、テスト 528 件。括弧の中はテストの場所
+ストーリー 47 件、テスト 527 件。括弧の中はテストの場所
 (層 / describe)。
 
 ## A. 式を試す
@@ -866,8 +866,7 @@ leani が誰の何を助けるか (`stories.toml`) に、それを確かめて�
 - 今の文と text が違う答えには、その場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
 - verdict が ok と ng のどちらでもない答えと、ng に reason か fixed が無い答えと、ok に reason がある答えには、エラーを返す (parsing / テストの文の判断の確かめ)
 - ng の fixed が、元の文と同じ ja: か en: で始まらない答えと、その後ろに文が無い答えと、元の文と同じ答えには、その場所を含むエラーを返す (parsing / テストの文の判断の確かめ)
-- リポジトリの直下の project の要素があれば、user の要素より先に、その要素の installPath と version を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
-- 別のディレクトリの project の要素しか無ければ、user の要素を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
-- yomiyasu の要素が無ければ None を返す (parsing / installed_plugins.json から選ぶ yomiyasu)
-- 1.0.3 の形の出力からは、英数字の前後の空白の指摘と、箇条書きの比率の指摘を外して返す (parsing / yomiyasu の lint の出力から残す指摘)
-- 2.4.0 の形の出力からは、箇条書きの比率の指摘を外して返す (parsing / yomiyasu の lint の出力から残す指摘)
+- ref と commit の行があれば、ref と commit の先頭の 7 文字を返す (parsing / vendor/yomiyasu/SOURCE から読む版)
+- commit の行が無ければ None を返す (parsing / vendor/yomiyasu/SOURCE から読む版)
+- 日本語のファイルにかけると、規則と行の付いた指摘を返す (parsing / vendor に置いた yomiyasu の lint)
+- 箇条書きの比率の指摘を外して返す (parsing / yomiyasu の lint の出力から残す指摘)

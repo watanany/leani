@@ -960,27 +960,23 @@ pub fn check_test_texts(current: &[String], answer: &str) -> Result<Vec<String>,
     }
 }
 
-/// installed_plugins.json の中の、yomiyasu の plugin のキー。
-const YOMIYASU: &str = "yomiyasu@yomiyasu";
+/// リポジトリに置いた yomiyasu の lint のディレクトリ。`just yomiyasu-update` で入れ替える。
+pub const LINT_DIR: &str = "vendor/yomiyasu";
 
-/// installed_plugins.json の中身 (raw) から、yomiyasu の plugin の場所 (installPath) と版を選ぶ。
-/// リポジトリの直下 (root) の project の要素を、user の要素より先に選ぶ。
-pub fn pick_lint(raw: &str, root: &Path) -> Option<(PathBuf, String)> {
-    let value: Value = serde_json::from_str(raw).ok()?;
-    let entries = value.get("plugins")?.get(YOMIYASU)?.as_array()?;
-    let text = |e: &Value, key: &str| e.get(key).and_then(Value::as_str).map(str::to_string);
-    let scoped = |scope: &str| {
-        entries.iter().find(|e| {
-            text(e, "scope").as_deref() == Some(scope)
-                && match scope {
-                    "project" => text(e, "projectPath").map(PathBuf::from).as_deref() == Some(root),
-                    _ => true,
-                }
-        })
+/// [`LINT_DIR`] の `SOURCE` の中身 (raw) から `ref` と `commit` の値を読み、
+/// 版を `ref (commit の先頭の 7 文字)` の形で返す。
+pub fn lint_version(raw: &str) -> Option<String> {
+    let value = |key: &str| {
+        raw.lines()
+            .find_map(|line| line.strip_prefix(key)?.strip_prefix('='))
+            .map(str::trim)
     };
-    scoped("project")
-        .or_else(|| scoped("user"))
-        .and_then(|e| Some((PathBuf::from(text(e, "installPath")?), text(e, "version")?)))
+    match (value("ref"), value("commit")) {
+        (Some(name), Some(commit)) => {
+            Some(format!("{name} ({})", commit.get(..7).unwrap_or(commit)))
+        }
+        _ => None,
+    }
 }
 
 /// yomiyasu の lint の指摘のうち、leani-dev で使うもの。
@@ -993,14 +989,12 @@ pub struct Finding {
 
 /// DEVELOPMENT.ja.md の決まりと食い違うので、外す規則。
 const IGNORED_RULES: &[&str] = &[
-    // 「文書の書き方」の「英数字の前後には半角の空白を入れる」と食い違う (1.0.3 だけにある)。
-    "unnatural_halfwidth_space",
     // 箇条書きと表のほうが読みやすい所は、そのまま残す (ユーザーの指示)。
     "excess_list",
 ];
 
 /// yomiyasu の lint の `--json` の出力 (raw) から、[`IGNORED_RULES`] を除いた指摘を返す。
-/// 1.0.3 と 2.4.0 で形が違うので、どちらにもある `findings` の `rule`、`line`、`message` だけを読む。
+/// 版によって形が変わるので、`findings` の `rule`、`line`、`message` だけを読む。
 pub fn kept_findings(raw: &str) -> Result<Vec<Finding>, String> {
     let value: Value = serde_json::from_str(raw).map_err(|e| format!("lint の出力: {e}"))?;
     let findings = value
@@ -1031,26 +1025,18 @@ pub fn kept_findings(raw: &str) -> Result<Vec<Finding>, String> {
         .collect()
 }
 
-/// 使う yomiyasu の lint のスクリプトと版。given は環境変数 `YOMIYASU_LINT` の値で、あればそれを使う。
-/// 無ければ、Claude Code の設定のディレクトリ (config) の `plugins/installed_plugins.json` から選ぶ。
-pub fn find_lint(
-    root: &Path,
-    given: Option<PathBuf>,
-    config: &Path,
-) -> Result<(PathBuf, String), String> {
-    let installed = config.join("plugins/installed_plugins.json");
-    match given {
-        Some(path) => Ok((path, "不明".to_string())),
-        None => std::fs::read_to_string(&installed)
-            .ok()
-            .and_then(|raw| pick_lint(&raw, root))
-            .map(|(dir, version)| (dir.join("scripts/yomiyasu_lint.py"), version))
-            .ok_or(format!(
-                "yomiyasu の lint が見つからない。{} に {YOMIYASU} が無い。\
-                 plugin を入れるか、環境変数 YOMIYASU_LINT にスクリプトのパスを書く",
-                installed.display()
-            )),
-    }
+/// 使う yomiyasu の lint のスクリプトと版。[`LINT_DIR`] に置いたものを使う。
+pub fn find_lint(root: &Path) -> Result<(PathBuf, String), String> {
+    let dir = root.join(LINT_DIR);
+    let source = dir.join("SOURCE");
+    std::fs::read_to_string(&source)
+        .ok()
+        .and_then(|raw| lint_version(&raw))
+        .map(|version| (dir.join("yomiyasu_lint.py"), version))
+        .ok_or(format!(
+            "{}: ref と commit を読めない。just yomiyasu-update <タグ> で取り込み直す",
+            source.display()
+        ))
 }
 
 /// yomiyasu の lint (script) を 1 つのファイルに動かし、[`kept_findings`] を返す。

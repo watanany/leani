@@ -105,14 +105,9 @@ fn check_answers(root: &Path) -> Result<(), String> {
     ))
 }
 
-/// 使う yomiyasu の lint を探し、パスと版を出す。環境変数はここでだけ読む。
+/// 使う yomiyasu の lint のパスと版を出す。
 fn lint(root: &Path) -> Result<std::path::PathBuf, String> {
-    let given = std::env::var_os("YOMIYASU_LINT").map(Into::into);
-    let config: std::path::PathBuf = std::env::var_os("CLAUDE_CONFIG_DIR")
-        .map(Into::into)
-        .or_else(|| std::env::var_os("HOME").map(|h| Path::new(&h).join(".claude")))
-        .ok_or("環境変数 HOME が無い")?;
-    let (script, version) = dev_checks::find_lint(root, given, &config)?;
+    let (script, version) = dev_checks::find_lint(root)?;
     println!("yomiyasu の lint: {} (版: {version})", script.display());
     Ok(script)
 }

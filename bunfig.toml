@@ -3,6 +3,7 @@
 # - SPEC.ja.md と SPEC.en.md: crates/spec が生成する
 # - src/leani/abbrev.json: Lean から写したデータ
 # - pyproject.toml: uv が書き戻す
+# - vendor/: 外から取り込んだコード
 [fmt]
 ignorePatterns = [
   ".claude/**",
@@ -10,4 +11,5 @@ ignorePatterns = [
   "SPEC.en.md",
   "src/leani/abbrev.json",
   "pyproject.toml",
+  "vendor/**",
 ]

@@ -324,9 +324,13 @@ AI は文ごとの判断を `target/dev-checks/test-texts.json` に書き、`jus
 `en:` の文を直すときはテストの関数名も変えるが、関数名を変えるには周りのコードを読む必要がある。
 直すのは AI が Edit で行い、`just test-texts` からやり直す。
 
+yomiyasu の lint は、Claude Code の plugin のものを使わずに、`vendor/yomiyasu/` に置く。
+lint の規則と出力は、版によって変わる。plugin の lint を使うと、同じ commit でも、入れた plugin の版によって結果が変わる。
+yomiyasu は今も更新されているので、`just yomiyasu-update <タグ>` で、lint を GitHub の別の版に入れ替える。
+入れ替えたあとに `just check` を実行すると、`just lint-ja` が新しい版の出力を読めるかをテストが確かめる。
+
 yomiyasu の lint (`just lint-ja`) は、`just check` に入れない。
-lint はリポジトリの外の plugin にあり、版によって規則と出力が変わる。
-`just check` に入れると、同じ commit でも、入れた plugin の版によって結果が変わる。
+lint の指摘は直す候補で、誤りではない。文脈を読んで、直さないと決める指摘もある。
 
 ### 不採用: hook で開発の手順を強制する
 

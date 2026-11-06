@@ -4084,57 +4084,62 @@ mod checks_of_answers_about_test_sentences {
     }
 }
 
-mod yomiyasu_picked_from_installed_plugins_json {
-    //! ja: installed_plugins.json から選ぶ yomiyasu
-    //! en: Yomiyasu picked from installed_plugins.json
+mod version_read_from_vendor_yomiyasu_source {
+    //! ja: vendor/yomiyasu/SOURCE から読む版
+    //! en: Version read from vendor/yomiyasu/SOURCE
     //!
-    //! `just lint-ja` は、Claude Code に入れた plugin の yomiyasu の lint を元の場所で動かす。
-    //! 引数は installed_plugins.json の中身と、リポジトリの直下である。
+    //! `just yomiyasu-update` は、取り込んだ yomiyasu の ref と commit を SOURCE に書く。
     use super::*;
-    use dev_checks::pick_lint;
+    use dev_checks::lint_version;
 
-    fn installed(entries: serde_json::Value) -> String {
-        json!({"version": 2, "plugins": {"yomiyasu@yomiyasu": entries, "other@x": []}}).to_string()
-    }
-
-    /// ja: リポジトリの直下の project の要素があれば、user の要素より先に、その要素の installPath と version を返す
-    /// en: Returns the installPath and version of the project element for the repository root before the user element if there is one
+    /// ja: ref と commit の行があれば、ref と commit の先頭の 7 文字を返す
+    /// en: Returns the ref and the first 7 characters of the commit if there are ref and commit lines
     #[story("X5")]
     #[test]
-    fn returns_the_installpath_and_version_of_the_project_element_for_the_repository_root_before_the_user_element_if_there_is_one()
-     {
-        let raw = installed(json!([
-            {"scope": "user", "installPath": "/u/1.0.3", "version": "1.0.3"},
-            {"scope": "project", "projectPath": "/repo", "installPath": "/p/2.4.0", "version": "2.4.0"},
-        ]));
-        assert_eq!(
-            pick_lint(&raw, Path::new("/repo")),
-            Some((Path::new("/p/2.4.0").to_path_buf(), "2.4.0".to_string()))
+    fn returns_the_ref_and_the_first_7_characters_of_the_commit_if_there_are_ref_and_commit_lines()
+    {
+        let raw = "repo=https://github.com/nanaism/yomiyasu\nref=v2.5.0\ncommit=29d67ccb05e370b5958d72920a9cd1aa829dee80\n";
+        assert_eq!(lint_version(raw), Some("v2.5.0 (29d67cc)".to_string()));
+    }
+
+    /// ja: commit の行が無ければ None を返す
+    /// en: Returns None if there is no commit line
+    #[story("X5")]
+    #[test]
+    fn returns_none_if_there_is_no_commit_line() {
+        assert_eq!(lint_version("ref=v2.5.0\n"), None);
+    }
+}
+
+mod yomiyasu_lint_in_vendor {
+    //! ja: vendor に置いた yomiyasu の lint
+    //! en: Yomiyasu lint in vendor
+    //!
+    //! `just yomiyasu-update` で版を入れ替えたあとも、`just lint-ja` が出力を読めることを確かめる。
+    use super::*;
+    use dev_checks::{find_lint, lint_file};
+
+    /// ja: 日本語のファイルにかけると、規則と行の付いた指摘を返す
+    /// en: Returns findings with rules and lines when run on a Japanese file
+    #[story("X5")]
+    #[test]
+    fn returns_findings_with_rules_and_lines_when_run_on_a_japanese_file() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = tmp();
+        let file = dir.path().join("a.md");
+        fs::write(
+            &file,
+            "# 手順\n\nleani は REPL ではなく、証明を書く道具だ。\n",
+        )
+        .expect("write");
+        let (script, _) = find_lint(&root).expect("find_lint");
+        let found = lint_file(&root, &script, &file).expect("lint_file");
+        assert!(
+            found
+                .iter()
+                .any(|f| f.rule == "negative_parallelism" && f.line == 3),
+            "{found:?}"
         );
-    }
-
-    /// ja: 別のディレクトリの project の要素しか無ければ、user の要素を返す
-    /// en: Returns the user element if the only project element is for another directory
-    #[story("X5")]
-    #[test]
-    fn returns_the_user_element_if_the_only_project_element_is_for_another_directory() {
-        let raw = installed(json!([
-            {"scope": "project", "projectPath": "/other", "installPath": "/p/2.4.0", "version": "2.4.0"},
-            {"scope": "user", "installPath": "/u/1.0.3", "version": "1.0.3"},
-        ]));
-        assert_eq!(
-            pick_lint(&raw, Path::new("/repo")),
-            Some((Path::new("/u/1.0.3").to_path_buf(), "1.0.3".to_string()))
-        );
-    }
-
-    /// ja: yomiyasu の要素が無ければ None を返す
-    /// en: Returns None if there is no yomiyasu element
-    #[story("X5")]
-    #[test]
-    fn returns_none_if_there_is_no_yomiyasu_element() {
-        let raw = json!({"version": 2, "plugins": {"other@x": []}}).to_string();
-        assert_eq!(pick_lint(&raw, Path::new("/repo")), None);
     }
 }
 
@@ -4158,34 +4163,15 @@ mod findings_kept_from_the_yomiyasu_lint_output {
         }]
     }
 
-    /// ja: 1.0.3 の形の出力からは、英数字の前後の空白の指摘と、箇条書きの比率の指摘を外して返す
-    /// en: Returns the findings without those on spaces around alphanumerics and on the share of lists for output in the 1.0.3 form
+    /// ja: 箇条書きの比率の指摘を外して返す
+    /// en: Returns the findings without those on the share of lists
     #[story("X5")]
     #[test]
-    fn returns_the_findings_without_those_on_spaces_around_alphanumerics_and_on_the_share_of_lists_for_output_in_the_1_0_3_form()
-     {
-        let raw = json!({
-            "findings": [
-                finding("excess_list", 1),
-                finding("unnatural_halfwidth_space", 3),
-                finding("negative_parallelism", 5),
-            ],
-            "is_clean": false,
-            "metrics": {},
-            "score": 10,
-        });
-        assert_eq!(kept_findings(&raw.to_string()), Ok(expected()));
-    }
-
-    /// ja: 2.4.0 の形の出力からは、箇条書きの比率の指摘を外して返す
-    /// en: Returns the findings without those on the share of lists for output in the 2.4.0 form
-    #[story("X5")]
-    #[test]
-    fn returns_the_findings_without_those_on_the_share_of_lists_for_output_in_the_2_4_0_form() {
+    fn returns_the_findings_without_those_on_the_share_of_lists() {
         let raw = json!({
             "format": "yomiyasu-lint",
             "format_version": 2,
-            "tool_version": "2.4.0",
+            "tool_version": "2.5.0",
             "findings": [finding("excess_list", 1), finding("negative_parallelism", 5)],
             "candidate_count": 2,
         });

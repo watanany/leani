@@ -73,7 +73,7 @@ Python のコードの整形は `just fix` で行う。
 - 作業は、`just start <枝の名前>` で `main-rs` から切った枝で行う。終わったら `just finish` で `main-rs` に merge し、枝を消す。`just finish` は、`just check` が通り、commit していない変更が無く、commit の件名が Conventional Commits の形のときだけ merge する。PR は作らない
 - commit メッセージは Conventional Commits の形で、日本語で書く
 - `.claude/skills/` に開発用のスキル (`leani-dev`、`leani-test-text`、`leani-docs-sync`) がある。`.claude/settings.json` の hook は、枝を切らずにファイルを変えたとき、テストを変えずにコードを変えたとき、対の文書の片方だけを変えたとき、`SPEC.ja.md` か `SPEC.en.md` がテストと合っていないときに、AI に知らせる。`just status` を実行すると、人も同じ知らせを読める。hook は `cargo install --path crates/dev-checks` でインストールした版で動き、インストールしていなければ何もしない。`crates/dev-checks`、`crates/spec`、`crates/docs-langs-check` を変えたら、このコマンドを再実行する
-- 開発用のスキルのうち、対象を集める段と結果を確かめる段は `just` のレシピ (`test-texts`、`test-texts-lint`、`test-texts-check`、`langs-diff`、`glossary-check`) が行い、AI は判断する段だけを行う。`just lint-ja <ファイル>` は、日本語の文書を yomiyasu の lint にかけ、このリポジトリの決まりと食い違う規則の指摘を外して出す
+- 開発用のスキルのうち、対象を集める段と結果を確かめる段は `just` のレシピ (`test-texts`、`test-texts-lint`、`test-texts-check`、`langs-diff`、`glossary-check`) が行い、AI は判断する段だけを行う。`just lint-ja <ファイル>` は、日本語の文書を yomiyasu の lint にかけ、このリポジトリの決まりと食い違う規則の指摘を外して出す。yomiyasu の lint は `vendor/yomiyasu/` に置いてあり、`just yomiyasu-update <タグ>` で GitHub の別の版に入れ替える
 
 ## テストの文の書き方
 

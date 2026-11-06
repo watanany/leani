@@ -10,7 +10,7 @@ layer). The number of items changes only when a story or a test is added or remo
 
     cargo run -p spec
 
-47 stories, 528 tests. In parentheses: where the test is
+47 stories, 527 tests. In parentheses: where the test is
 (layer / describe).
 
 ## A. Try expressions
@@ -865,8 +865,7 @@ Not built yet.
 - Returns an error with the place for an answer whose text differs from the current sentence (parsing / Checks of answers about test sentences)
 - Returns an error for an answer with a verdict other than ok and ng, an answer with ng but without reason or fixed, and an answer with ok and a reason (parsing / Checks of answers about test sentences)
 - Returns an error with the place for an answer with ng whose fixed does not start with the same ja: or en: as the sentence, has no sentence after it, or equals the sentence (parsing / Checks of answers about test sentences)
-- Returns the installPath and version of the project element for the repository root before the user element if there is one (parsing / Yomiyasu picked from installed_plugins.json)
-- Returns the user element if the only project element is for another directory (parsing / Yomiyasu picked from installed_plugins.json)
-- Returns None if there is no yomiyasu element (parsing / Yomiyasu picked from installed_plugins.json)
-- Returns the findings without those on spaces around alphanumerics and on the share of lists for output in the 1.0.3 form (parsing / Findings kept from the yomiyasu lint output)
-- Returns the findings without those on the share of lists for output in the 2.4.0 form (parsing / Findings kept from the yomiyasu lint output)
+- Returns the ref and the first 7 characters of the commit if there are ref and commit lines (parsing / Version read from vendor/yomiyasu/SOURCE)
+- Returns None if there is no commit line (parsing / Version read from vendor/yomiyasu/SOURCE)
+- Returns findings with rules and lines when run on a Japanese file (parsing / Yomiyasu lint in vendor)
+- Returns the findings without those on the share of lists (parsing / Findings kept from the yomiyasu lint output)

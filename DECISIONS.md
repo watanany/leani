@@ -324,9 +324,13 @@ If it did, errors in the judgment of AI would go into the source without a perso
 Fixing an `en:` sentence also means changing the name of the test function, and changing the name needs reading the code around it.
 AI fixes the sentences with Edit, and starts again from `just test-texts`.
 
+The yomiyasu lint is in `vendor/yomiyasu/`, and the lint of the Claude Code plugin is not used.
+The rules and output of the lint change with its version. With the plugin lint, the same commit could give different results depending on the version of the installed plugin.
+yomiyasu is still being updated, so `just yomiyasu-update <tag>` replaces the lint with another version from GitHub.
+After the replacement, `just check` runs a test that checks that `just lint-ja` can read the output of the new version.
+
 The yomiyasu lint (`just lint-ja`) is not part of `just check`.
-The lint is in a plugin outside the repository, and its rules and output change with its version.
-If it were part of `just check`, the same commit could give different results depending on the version of the installed plugin.
+The findings of the lint are candidates for fixes, not errors. After reading the context, some findings are left as they are.
 
 ### Rejected: Forcing the development workflow with hooks
 

@@ -100,6 +100,10 @@ test-texts-lint:
 lint-ja +files:
     cargo run -q -p dev-checks -- lint-ja "$@"
 
+# vendor/yomiyasu/ の yomiyasu の lint を、GitHub の版 (タグか commit) に入れ替える。ネットワークを使う
+yomiyasu-update ref:
+    sh tools/yomiyasu-update.sh {{ quote(ref) }}
+
 # 片方の言語だけを変えた文書と、その差分を出す (スキル leani-docs-sync)
 langs-diff:
     cargo run -q -p dev-checks -- langs-diff
